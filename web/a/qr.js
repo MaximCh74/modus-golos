@@ -1,0 +1,51 @@
+'use strict';
+// QR-форма: один экран, одна кнопка. Филиал — из QR (/q/<код>). Без входа — анонимно, с трекинг-ссылкой.
+(async function () {
+  const root = document.getElementById('root');
+  const code = decodeURIComponent(location.pathname.split('/')[2] || '');
+  let branch = null;
+  try { branch = await API.get('/api/public/branch/' + encodeURIComponent(code)); }
+  catch (e) { root.replaceChildren(h('div', { class: 'wrap' }, h('div', { class: 'card card-bad' }, 'QR-код не распознан: ' + e.message))); return; }
+  const me = await API.me();
+  let type = 'problem';
+
+  const btnProblem = h('button', { type: 'button', class: 'btn on' }, 'Проблема');
+  const btnIdea = h('button', { type: 'button', class: 'btn' }, 'Идея');
+  const text = h('textarea', { name: 'text', required: true, placeholder: 'Что происходит? Если есть идея, как исправить — напишите.' });
+  const mic = h('button', { type: 'button', class: 'btn mic', title: 'Голосовой ввод появится на этапе 3', disabled: true }, '🎤');
+  const file = h('input', { type: 'file', name: 'file', accept: 'image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt' });
+  const submit = h('button', { type: 'submit', class: 'btn btn-primary btn-big' }, 'Отправить');
+  const form = h('form', { class: 'card' },
+    h('div', { class: 'type-switch' }, btnProblem, btnIdea),
+    h('div', { class: 'row' }, h('div', { class: 'spacer' }, text), mic),
+    h('div', { class: 'mt8' }, field('Фото или файл (необязательно)', file)),
+    submit,
+    me ? h('div', { class: 'hint mt8' }, 'Вы вошли как ' + me.name + ' — обращение будет привязано к вам и даст баллы.')
+       : h('div', { class: 'hint mt8' }, 'Без входа обращение анонимное. Категорию и ответственного подставит система.'));
+  btnProblem.addEventListener('click', () => { type = 'problem'; btnProblem.classList.add('on'); btnIdea.classList.remove('on'); });
+  btnIdea.addEventListener('click', () => { type = 'suggestion'; btnIdea.classList.add('on'); btnProblem.classList.remove('on'); });
+
+  root.replaceChildren(h('div', { class: 'wrap' },
+    h('div', { class: 'hero' }, h('div', { class: 'brand' }, 'Обратная связь', h('small', {}, 'ГК «Модус Трейд» · демо')), h('div', { class: 'h1' }, 'Филиал: ' + branch.name)),
+    form));
+
+  form.addEventListener('submit', async ev => {
+    ev.preventDefault();
+    const fd = new FormData();
+    fd.set('type', type); fd.set('text', text.value); fd.set('branch_code', branch.code);
+    if (file.files && file.files[0]) fd.set('file', file.files[0]);
+    submit.disabled = true;
+    try {
+      const r = await API.postForm('/api/public/appeals', fd);
+      root.replaceChildren(h('div', { class: 'wrap' },
+        h('div', { class: 'card card-ok' },
+          h('div', { class: 'h1' }, 'Обращение ' + r.number + ' принято'),
+          h('p', {}, 'Спасибо! Его увидит ответственный, а вы сможете следить за статусом по ссылке.'),
+          h('a', { href: r.track_url, class: 'btn btn-primary btn-big' }, 'Следить за статусом'),
+          h('p', { class: 'hint' }, 'Сохраните ссылку: ', h('code', {}, location.origin + r.track_url), r.logged_in ? '' : ' — без входа это единственный способ увидеть ответ.'),
+          r.logged_in ? h('p', { class: 'small' }, 'Обращение привязано к вам: ', h('a', { href: '/app#/appeal/' + r.id }, 'открыть в приложении'))
+                      : h('p', { class: 'small' }, h('a', { href: '/login?next=' + encodeURIComponent('/app') }, 'Войти, чтобы получать баллы за идеи'))),
+        h('a', { href: location.pathname, class: 'btn' }, 'Отправить ещё одно')));
+    } catch (e) { toast(e.message, 'bad'); submit.disabled = false; }
+  });
+})();
