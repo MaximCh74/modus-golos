@@ -75,9 +75,7 @@ input[type=file] { font: inherit; font-size: 14px; }
 .st-done { background: #e3f4ea; color: #1f6f3f; }
 .st-closed { background: #e9ecf1; color: #4a5260; }
 .st-rejected { background: #ececec; color: #555b66; }
-.st-rejected::before { content: '✕ '; }
 .tag-overdue { background: #fdebd3; color: #8a4b00; }
-.tag-overdue::before { content: '⚠ '; }
 .tag-unassigned { background: #f1e9fb; color: #5b3f8e; }
 .tag-anon { background: #e9ecf1; color: #4a5260; }
 .tag-type { background: var(--bg-soft); color: var(--ink); font-weight: 500; }
@@ -227,24 +225,14 @@ details.card > summary { cursor: pointer; font-weight: 700; color: var(--navy); 
 .summary-ai a:hover { color: var(--red); border-bottom-color: var(--red); }
 .lines { display: flex; gap: 8px; flex-wrap: wrap; }
 .lines a { text-decoration: none; }
-.map { position: relative; width: 100%; aspect-ratio: 900 / 520; border-radius: var(--radius); overflow: hidden; border: 1px solid var(--line-soft); background: #dde7f3; }
+.map { position: relative; width: 100%; aspect-ratio: 900 / 579; border-radius: var(--radius); overflow: hidden; border: 1px solid var(--line-soft); background: #e9eff6; }
 .map-bg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 .map-layer { position: absolute; inset: 0; }
-.marker { position: absolute; transform: translate(-50%, -100%); cursor: pointer; text-align: center; }
-.marker .pin { width: 26px; height: 26px; border-radius: 50%; background: var(--red); color: #fff; display: flex; align-items: center; justify-content: center; margin: 0 auto; box-shadow: 0 2px 6px rgba(8, 39, 66, .35); font-size: 11px; border: 2px solid #fff; }
-.marker.prod .pin { background: var(--navy); }
-.marker.warn .pin { box-shadow: 0 0 0 4px rgba(228, 0, 0, .25); }
-.marker.site .pin { width: 16px; height: 16px; background: #fff; color: var(--red); border: 2px solid var(--red); font-size: 9px; }
-.marker .mlabel { font-size: 11px; background: rgba(255,255,255,.9); border-radius: 6px; padding: 1px 6px; margin-top: 2px; white-space: nowrap; color: var(--ink); }
-.marker.site .mlabel { font-size: 10px; }
-.marker.blink .pin { animation: blink .6s 6; }
-.lg-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--red); vertical-align: middle; }
-.lg-dot.site { background: #fff; border: 2px solid var(--red); width: 8px; height: 8px; }
 .league td.score b { color: var(--navy); font-size: 18px; }
 .profile-head { display: flex; gap: 16px; align-items: center; }
 .stat { text-align: center; } .stat b { display: block; font-size: 24px; color: var(--navy); }
 .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-@media (max-width: 480px) { .stats { grid-template-columns: repeat(2, 1fr); } .marker .mlabel { display: none; } }
+@media (max-width: 480px) { .stats { grid-template-columns: repeat(2, 1fr); } }
 .w70 { width: 70px !important; }
 #queue-table .card { overflow-x: auto; }
 .split > * { min-width: 0; }
@@ -253,3 +241,44 @@ details.card > summary { cursor: pointer; font-weight: 700; color: var(--navy); 
 .tbl.compact td { padding: 4px; }
 tr.muted td { opacity: .6; }
 .offline-logo { height: 42px; }
+
+/* этап 6: иконки (Lucide, currentColor), команда директора, стартовая с картой, карта в новой рамке */
+.ic { vertical-align: -3px; flex: none; }
+.ict { display: inline-flex; align-items: center; gap: 6px; }
+.btn .ic, .btn .ict { pointer-events: none; }
+.bell .ic { vertical-align: -4px; }
+.st-rejected::before, .tag-overdue::before { content: ''; display: inline-block; width: 11px; height: 11px; margin: 0 4px -1px 0; background-repeat: no-repeat; background-size: contain; }
+.st-rejected::before { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23555b66' stroke-width='2.5' stroke-linecap='round'%3E%3Cpath d='M18 6 6 18'/%3E%3Cpath d='m6 6 12 12'/%3E%3C/svg%3E"); }
+.tag-overdue::before { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238a4b00' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z'/%3E%3Cpath d='M12 9v4'/%3E%3Cpath d='M12 17h.01'/%3E%3C/svg%3E"); }
+.command { border-left: 4px solid var(--navy); }
+.command .cmd-text { min-height: 44px; }
+.cmd-rec { padding: 10px 0; border-bottom: 1px dashed var(--line-soft); }
+.cmd-rec:last-of-type { border-bottom: 0; }
+.cmd-msg { min-height: 54px; font-size: 14px; margin-top: 6px; }
+.marker { position: absolute; transform: translate(-50%, -100%); cursor: pointer; text-align: center; border: 0; background: none; padding: 0; font: inherit; color: var(--ink); }
+.marker .pin { display: block; color: var(--red); line-height: 0; margin: 0 auto; filter: drop-shadow(0 2px 3px rgba(8, 39, 66, .3)); }
+.marker .pin .ic { stroke: #fff; }
+.marker.prod .pin { color: var(--red); }
+.marker.sel .pin, .marker:hover .pin { color: var(--red-dark); transform: scale(1.15); transform-origin: 50% 100%; }
+.marker.warn .pin .ic { stroke: #fff; filter: drop-shadow(0 0 2px var(--red)); }
+.marker .mlabel { display: block; font-size: 11px; background: rgba(255, 255, 255, .92); border-radius: 6px; padding: 1px 6px; margin-top: -2px; white-space: nowrap; color: var(--ink); line-height: 1.3; }
+.marker .mlabel b { color: var(--navy); display: block; }
+.marker .mlabel span { color: var(--muted); font-size: 10px; }
+.marker .mlabel .warn-ic { color: var(--warn); vertical-align: -2px; margin-left: 3px; }
+.marker.blink .pin { animation: blink .6s 6; }
+.marker.site { transform: translate(-50%, -50%); }
+.sdot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: #8a95a6; border: 1.5px solid #fff; box-shadow: 0 0 0 1px #8a95a6; }
+.sdot.lg { width: 8px; height: 8px; }
+.marker.site .mlabel { display: inline-block; font-size: 10px; margin-left: 4px; vertical-align: middle; }
+.lg-pin { color: var(--red); stroke: #fff; }
+.home-top { position: static; }
+.home-line { font-weight: 700; color: var(--navy); font-size: 16px; }
+.home-grid { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 16px; align-items: start; margin-top: 12px; }
+.city-buttons { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.city-buttons .btn.on { background: var(--navy); color: #fff; border-color: var(--navy); }
+.city-card .h1 { margin: 0; }
+.qr-box { display: grid; grid-template-columns: 150px 1fr; gap: 12px; align-items: start; }
+.qr-box img { width: 150px; height: 150px; background: #fff; border: 1px solid var(--line-soft); border-radius: var(--radius); }
+.qr-box .small { word-break: break-all; }
+@media (max-width: 900px) { .home-grid { grid-template-columns: 1fr; } .home-line { font-size: 14px; } }
+@media (max-width: 480px) { .home-top { flex-wrap: wrap; } .home-line { order: 3; width: 100%; } .marker .mlabel span { display: none; } .marker .pin .ic { width: 24px; height: 24px; } .qr-box { grid-template-columns: 120px 1fr; } .qr-box img { width: 120px; height: 120px; } }

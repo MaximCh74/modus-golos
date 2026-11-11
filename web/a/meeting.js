@@ -6,7 +6,7 @@ const KIND_LABEL = { decision: 'Решения', task: 'Поручения', ide
 const TASK_ST = { draft: 'Черновик', assigned: 'Назначено', in_progress: 'В работе', done: 'Выполнено' };
 
 function add(el, ...kids) { for (const k of kids.flat(Infinity)) if (k !== null && k !== undefined && k !== false) el.append(k); return el; }
-function back(href, label) { return h('a', { href, class: 'small' }, '← ' + (label || 'Назад')); }
+function back(href, label) { return h('a', { href, class: 'small ict' }, icon('arrow-left', { size: 14 }), label || 'Назад'); }
 function fmtDue(d) { if (!d) return ''; const [y, m, dd] = d.split('-'); return dd + '.' + m + '.' + y; }
 function aiBadge(m) {
   if (!m) return null;
@@ -22,7 +22,7 @@ async function meetingStart(opts) {
   const [list, ai] = await Promise.all([API.get('/api/meetings'), API.get('/api/ai/status')]);
   const title = h('input', { type: 'text', placeholder: 'Название встречи (необязательно), например «Планёрка продаж»' });
   const canRecord = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder);
-  const recBtn = h('button', { class: 'btn btn-primary btn-big', disabled: !canRecord }, '● Начать запись');
+  const recBtn = h('button', { class: 'btn btn-primary btn-big', disabled: !canRecord }, iconText('mic', 'Начать запись'));
   const file = h('input', { type: 'file', accept: 'audio/*,video/*,.m4a,.mp3,.wav,.ogg,.webm,.opus,.mp4,.mov,.mkv', class: 'hidden' });
   const uploadBtn = h('button', { class: 'btn btn-outline btn-big', onclick: () => file.click() }, 'Загрузить аудио или видеозвонок');
   const ta = h('textarea', { placeholder: 'Вставьте текст расшифровки — для отладки без микрофона. Формат «Имя: реплика» помогает разбору.' });
@@ -175,13 +175,13 @@ function itemRow(m, i, kind, staff, save, refresh) {
   }
   if (kind === 'idea') {
     if (edit) {
-      const sel = h('select', { class: 'mi-sel' }, h('option', { value: '' }, '— категория не определена —'), DICTS.categories.map(c => h('option', { value: c.id, selected: c.id === i.category_id }, c.name + (c.responsible ? ' → ' + c.responsible : ' → вакансия'))));
+      const sel = h('select', { class: 'mi-sel' }, h('option', { value: '' }, '— категория не определена —'), DICTS.categories.map(c => h('option', { value: c.id, selected: c.id === i.category_id }, c.name + (c.responsible ? ': ' + c.responsible : ': вакансия'))));
       sel.addEventListener('change', async () => { await save(i, { category_id: sel.value ? Number(sel.value) : null }, 'Категория сохранена'); refresh(); });
       add(meta, h('span', { class: 'muted' }, 'Категория:'), sel);
     } else add(meta, h('span', {}, h('b', {}, 'Категория: '), i.category || h('span', { class: 'muted' }, 'не определена')));
     if (i.voiced_by) meta.append(h('span', { class: 'muted' }, 'озвучил(а): ' + i.voiced_by));
     meta.append(tag('tag-director', i.director_decision ? 'Директор: ' + i.director_decision_label : 'уйдёт директору на решение'));
-    if (i.created_appeal_number) meta.append(h('a', { href: '#/appeal/' + i.created_appeal_id }, '→ ' + i.created_appeal_number));
+    if (i.created_appeal_number) meta.append(h('a', { href: '#/appeal/' + i.created_appeal_id, class: 'ict' }, icon('arrow-right', { size: 14 }), i.created_appeal_number));
     if (i.director_comment) meta.append(h('span', { class: 'small' }, 'Причина: ' + i.director_comment));
     for (const f of i.flag_labels) meta.append(tag('tag-flag', f));
   }
@@ -228,7 +228,7 @@ function addItemRow(id, kind, staff, refresh) {
     }
     try { await API.post('/api/meetings/' + id + '/items', payload); toast('Добавлено'); refresh(); } catch (e) { toast(e.message, 'bad'); }
   } }, 'Добавить');
-  det.append(h('summary', {}, '+ добавить пункт'), h('div', { class: 'mt8' }, text), h('div', { class: 'row mt8' }, extra, btn));
+  det.append(h('summary', {}, 'Добавить пункт'), h('div', { class: 'mt8' }, text), h('div', { class: 'row mt8' }, extra, btn));
   if (kind === 'linked') ensureAppealsCache();
   return det;
 }
@@ -266,7 +266,7 @@ async function decisionsScreen(opts) {
     d.pending.length ? d.pending.map(i => i.source === 'appeal' ? appealDecisionCard(i, () => decisionsScreen(opts)) : ideaCard(i, () => decisionsScreen(opts))) : h('div', { class: 'card muted' }, 'Нет идей, ожидающих решения'),
     d.decided.length ? h('div', { class: 'h2' }, 'Решено') : null,
     d.decided.length ? h('div', { class: 'card list' }, d.decided.map(i => h('div', { class: 'item' }, h('div', { class: 'row' }, tag(i.director_decision === 'accepted' ? 'st-done' : 'st-rejected', i.director_decision_label),
-      h('span', { class: 'small muted' }, '«' + i.meeting_title + '» · ' + fmtDate(i.decided_at) + (i.decided_by_name ? ' · ' + i.decided_by_name : '')), i.created_appeal_number ? h('a', { href: '#/appeal/' + i.created_appeal_id, class: 'small' }, '→ ' + i.created_appeal_number) : null),
+      h('span', { class: 'small muted' }, '«' + i.meeting_title + '» · ' + fmtDate(i.decided_at) + (i.decided_by_name ? ' · ' + i.decided_by_name : '')), i.created_appeal_number ? h('a', { href: '#/appeal/' + i.created_appeal_id, class: 'small ict' }, icon('arrow-right', { size: 14 }), i.created_appeal_number) : null),
       h('div', { class: 'small' }, i.text), i.director_comment ? h('div', { class: 'small muted' }, 'Причина: ' + i.director_comment) : null))) : null));
 }
 
@@ -285,16 +285,16 @@ function appealDecisionCard(i, refresh) {
   return h('div', { class: 'card ' + (i.over_threshold ? 'card-warn' : 'card-info') },
     h('div', { class: 'row' }, tag('tag-type', 'из обращения'), h('a', { href: '#/appeal/' + i.appeal_id }, h('b', {}, i.number)), h('span', { class: 'small muted' }, [i.category, i.branch, i.responsible ? 'ведёт ' + i.responsible : null].filter(Boolean).join(' · ')), h('div', { class: 'spacer' }), waitTag(i)),
     h('p', {}, i.text),
-    h('div', { class: 'small' }, h('b', {}, 'Что требуется: '), i.request), i.supports ? h('div', { class: 'small muted' }, '👍 У меня так же: ' + i.supports) : null,
+    h('div', { class: 'small' }, h('b', {}, 'Что требуется: '), i.request), i.supports ? h('div', { class: 'small muted' }, iconText('thumbs-up', 'У меня так же: ' + i.supports)) : null,
     comment, reason, h('div', { class: 'row mt8' }, accept, rejectBtn));
 }
 
 function ideaCard(i, refresh) {
-  const sel = h('select', {}, h('option', { value: '' }, '— категория (нужна для маршрутизации) —'), DICTS.categories.map(c => h('option', { value: c.id, selected: c.id === i.category_id }, c.name + (c.responsible ? ' → ' + c.responsible : ' → вакансия'))));
+  const sel = h('select', {}, h('option', { value: '' }, '— категория (нужна для маршрутизации) —'), DICTS.categories.map(c => h('option', { value: c.id, selected: c.id === i.category_id }, c.name + (c.responsible ? ': ' + c.responsible : ': вакансия'))));
   const reason = h('textarea', { class: 'hidden', placeholder: 'Причина отклонения — её увидит ведущий совещания (обязательно)' });
   const accept = h('button', { class: 'btn btn-sm btn-ok', onclick: async () => {
     accept.disabled = true;
-    try { const r = await API.post('/api/director/ideas/' + i.id + '/accept', { category_id: sel.value ? Number(sel.value) : null }); toast('Принято → обращение ' + r.appeal.number + ' у ' + (r.appeal.responsible || 'администратора')); refresh(); }
+    try { const r = await API.post('/api/director/ideas/' + i.id + '/accept', { category_id: sel.value ? Number(sel.value) : null }); toast('Принято: обращение ' + r.appeal.number + ' у ' + (r.appeal.responsible || 'администратора')); refresh(); }
     catch (e) { toast(e.message, 'bad'); accept.disabled = false; }
   } }, 'Принять');
   const rejectBtn = h('button', { class: 'btn btn-sm btn-danger', onclick: async () => {
@@ -304,7 +304,7 @@ function ideaCard(i, refresh) {
   return h('div', { class: 'card card-info' },
     h('div', { class: 'row' }, tag('tag-type', i.type === 'problem' ? 'Проблема' : 'Идея'), h('span', { class: 'small muted' }, 'с совещания «' + i.meeting_title + '» · ' + (i.meeting_creator || '') + (i.voiced_by ? ' · озвучил(а) ' + i.voiced_by : '')), h('div', { class: 'spacer' }), waitTag(i)),
     h('p', {}, i.text),
-    h('div', { class: 'row small' }, h('span', { class: 'muted' }, 'Категория → ответственный:'), sel),
+    h('div', { class: 'row small' }, h('span', { class: 'muted' }, 'Категория и ответственный:'), sel),
     reason, h('div', { class: 'row mt8' }, accept, rejectBtn));
 }
 

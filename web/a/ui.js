@@ -76,8 +76,9 @@ function eventText(e) {
     case 'director_requested': return 'Вынесено на решение директора' + (p.text ? ': ' + p.text : '');
     case 'director_decided': return 'Директор ' + (p.decision === 'accepted' ? 'принял' : 'отклонил') + ' предложение' + (p.text ? ': ' + p.text : '');
     case 'progress': return 'Как идут дела: ' + p.text;
+    case 'director_requested_news': return 'Директор запросил новости: ' + p.text;
     case 'thanked': return '«Спасибо» от коллеги — уже ' + p.count;
-    case 'priority_changed': return 'Приоритет: ' + (PRIO[p.from] || p.from) + ' → ' + (PRIO[p.to] || p.to) + (p.reason === 'supports' ? ' (по числу «У меня так же»)' : ' (ответственный)');
+    case 'priority_changed': return 'Приоритет изменён с «' + (PRIO[p.from] || p.from) + '» на «' + (PRIO[p.to] || p.to) + '»' + (p.reason === 'supports' ? ' (по числу «У меня так же»)' : ' (ответственный)');
     case 'rebriefed': return 'Пересказ «Коротко» обновлён' + (p.clarifications ? ' с учётом уточнений' : '');
     case 'ai_classified': return p.category ? 'Категория определена ' + (p.engine === 'openai' ? 'ИИ' : 'по ключевым словам (без ИИ)') + ': ' + p.category + (p.confidence ? ' (' + Math.round(p.confidence * 100) + ' %)' : '')
       : 'Категория не определена ' + (p.engine === 'openai' ? 'ИИ' : 'по ключевым словам') + ' — передано администратору';
@@ -112,11 +113,11 @@ const Voice = {
   attach(btn, textarea, opts) {
     opts = opts || {};
     let rec = null, chunks = [], stream = null, timer = null, t0 = 0;
-    const idle = () => { btn.textContent = '🎤'; btn.classList.remove('recording'); btn.disabled = false; btn.title = 'Голосовой ввод: нажмите и говорите, нажмите ещё раз — стоп'; };
+    const idle = () => { btn.replaceChildren(icon('mic', { size: 20 })); btn.classList.remove('recording'); btn.disabled = false; btn.title = 'Голосовой ввод: нажмите и говорите, нажмите ещё раз — стоп'; };
     if (!this.supported()) { btn.disabled = true; btn.title = 'Голосовой ввод доступен по HTTPS (адрес туннеля) или на localhost'; return; }
     idle();
     btn.addEventListener('click', async () => {
-      if (rec && rec.state === 'recording') { clearInterval(timer); rec.stop(); btn.disabled = true; btn.textContent = '…'; return; }
+      if (rec && rec.state === 'recording') { clearInterval(timer); rec.stop(); btn.disabled = true; btn.replaceChildren('…'); return; }
       try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); } catch (e) { toast('Нет доступа к микрофону: ' + e.message, 'bad'); return; }
       const mime = this.pick();
       rec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
@@ -141,11 +142,11 @@ const Voice = {
       let hinted = false;
       timer = setInterval(() => {
         const s = Math.round((Date.now() - t0) / 1000);
-        btn.textContent = '■ ' + s;
+        btn.replaceChildren(icon('square', { size: 14, fill: true }), ' ' + s);
         if (s >= 150 && !hinted) { hinted = true; toast('Осталось 30 секунд записи'); }
-        if (s >= 180 && rec.state === 'recording') { clearInterval(timer); rec.stop(); btn.disabled = true; btn.textContent = '…'; toast('Запись остановлена: лимит 3 минуты'); }
+        if (s >= 180 && rec.state === 'recording') { clearInterval(timer); rec.stop(); btn.disabled = true; btn.replaceChildren('…'); toast('Запись остановлена: лимит 3 минуты'); }
       }, 500);
-      btn.textContent = '■ 0';
+      btn.replaceChildren(icon('square', { size: 14, fill: true }), ' 0');
       btn.title = 'Идёт запись — нажмите, чтобы остановить';
     });
   },
@@ -158,7 +159,7 @@ function similarBlock(r, opts) {
   const items = r.items.map(i => h('div', { class: 'item' },
     h('div', { class: 'row' }, h('b', {}, i.number), i.category ? h('span', { class: 'small muted' }, i.category) : null, h('span', { class: 'small muted' }, Math.round(i.score * 100) + ' %'),
       h('div', { class: 'spacer' }),
-      opts.canSupport ? h('button', { class: 'btn btn-sm', onclick: async ev => { ev.preventDefault(); try { await API.post('/api/appeals/' + i.id + '/support'); toast('«У меня так же» учтено — автору ' + i.number + ' начислены баллы'); if (opts.onSupported) opts.onSupported(i); } catch (e) { toast(e.message, 'bad'); } } }, '👍 У меня так же') : null),
+      opts.canSupport ? h('button', { class: 'btn btn-sm', onclick: async ev => { ev.preventDefault(); try { await API.post('/api/appeals/' + i.id + '/support'); toast('«У меня так же» учтено — автору ' + i.number + ' начислены баллы'); if (opts.onSupported) opts.onSupported(i); } catch (e) { toast(e.message, 'bad'); } } }, iconText('thumbs-up', 'У меня так же')) : null),
     h('div', { class: 'small' }, i.text)));
   return h('div', { class: 'card card-warn' }, h('b', {}, 'Похоже, об этом уже сообщали'), h('div', { class: 'hint' }, note + '. Если это то же самое — отметьте «У меня так же» вместо нового обращения' + (opts.canSupport ? '' : ' (нужен вход)') + '.'),
     h('div', { class: 'list mt8' }, items),
@@ -169,7 +170,7 @@ function similarBlock(r, opts) {
 // Аватарка: своя картинка или инициалы на фирменном фоне; анонимным — нейтральная иконка.
 function avatarEl(u, size) {
   const cls = 'avatar' + (size === 'sm' ? ' avatar-sm' : size === 'lg' ? ' avatar-lg' : '');
-  if (!u) return h('span', { class: cls + ' avatar-anon', title: 'Анонимно' }, '•');
+  if (!u) return h('span', { class: cls + ' avatar-anon', title: 'Анонимно' }, icon('user', { size: size === 'lg' ? 36 : 14 }));
   if (u.avatar) return h('img', { class: cls, src: u.avatar, alt: u.name || '' });
   const parts = String(u.name || '?').split(' ');
   const ini = (parts[0][0] || '') + (parts[1] ? parts[1][0] : '');
@@ -227,20 +228,20 @@ function chips(options, onPick) {
 // Озвучка сводки директора: OpenAI TTS с кэшем на сервере; если недоступно — голос браузера (если есть русский).
 let _summaryAudio = null;
 async function speakSummary(btn, sentences) {
-  if (_summaryAudio && !_summaryAudio.paused) { _summaryAudio.pause(); _summaryAudio = null; btn.textContent = '🔊 Озвучить'; return; }
-  btn.disabled = true; btn.textContent = '…';
+  if (_summaryAudio && !_summaryAudio.paused) { _summaryAudio.pause(); _summaryAudio = null; btn.replaceChildren(iconText('volume', 'Озвучить')); return; }
+  btn.disabled = true; btn.replaceChildren('…');
   try {
     const r = await fetch('/api/panel/director-summary/audio', { credentials: 'same-origin' });
     if (!r.ok) throw new Error('tts ' + r.status);
     const blob = await r.blob();
     _summaryAudio = new Audio(URL.createObjectURL(blob));
-    _summaryAudio.onended = () => { btn.textContent = '🔊 Озвучить'; };
+    _summaryAudio.onended = () => { btn.replaceChildren(iconText('volume', 'Озвучить')); };
     await _summaryAudio.play();
-    btn.textContent = '⏹ Стоп'; btn.title = 'Озвучка OpenAI' + (r.headers.get('X-TTS-Source') === 'cache' ? ' (из кэша)' : '');
+    btn.replaceChildren(iconText('square', 'Стоп')); btn.title = 'Озвучка OpenAI' + (r.headers.get('X-TTS-Source') === 'cache' ? ' (из кэша)' : '');
   } catch (e) {
     const ru = window.speechSynthesis && speechSynthesis.getVoices().find(v => v.lang && v.lang.toLowerCase().startsWith('ru'));
-    if (ru) { const u = new SpeechSynthesisUtterance(sentences.map(s => s.text).join(' ')); u.lang = 'ru-RU'; u.voice = ru; u.onend = () => { btn.textContent = '🔊 Озвучить'; }; speechSynthesis.cancel(); speechSynthesis.speak(u); btn.textContent = '⏹ Стоп'; btn.title = 'голос браузера: ' + ru.name; }
-    else { toast('Озвучка недоступна: нет ключа и русского голоса в браузере', 'bad'); btn.textContent = '🔊 Озвучить'; }
+    if (ru) { const u = new SpeechSynthesisUtterance(sentences.map(s => s.text).join(' ')); u.lang = 'ru-RU'; u.voice = ru; u.onend = () => { btn.replaceChildren(iconText('volume', 'Озвучить')); }; speechSynthesis.cancel(); speechSynthesis.speak(u); btn.replaceChildren(iconText('square', 'Стоп')); btn.title = 'голос браузера: ' + ru.name; }
+    else { toast('Озвучка недоступна: нет ключа и русского голоса в браузере', 'bad'); btn.replaceChildren(iconText('volume', 'Озвучить')); }
   }
   btn.disabled = false;
 }

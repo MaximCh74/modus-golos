@@ -12,7 +12,7 @@
   const btnProblem = h('button', { type: 'button', class: 'btn on' }, 'Проблема');
   const btnIdea = h('button', { type: 'button', class: 'btn' }, 'Идея');
   const text = h('textarea', { name: 'text', required: true, placeholder: 'Что происходит? Если есть идея, как исправить — напишите.' });
-  const mic = h('button', { type: 'button', class: 'btn mic' }, '🎤');
+  const mic = h('button', { type: 'button', class: 'btn mic', title: 'Голосовой ввод' });
   let inputMode = 'text';
   const understood = h('div', {});
   Voice.attach(mic, text, { public: !me, onText: async () => {
