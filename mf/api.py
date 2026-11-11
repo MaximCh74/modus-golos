@@ -15,7 +15,8 @@ from pydantic import BaseModel
 
 from . import ai, appeals, auth, db, meetings, realtime
 from .ai import llm, similar, stt
-from .config import LLM_MODEL, PUBLIC_URL, UPLOAD_DIR
+from . import config
+from .config import LLM_MODEL, PUBLIC_URL
 
 router = APIRouter()
 
@@ -72,7 +73,7 @@ async def save_attachment(appeal_id: int, upload: UploadFile | None) -> dict | N
         raise HTTPException(415, "Допустимы изображения, PDF, Word, Excel и текст")
     ext = Path(upload.filename).suffix.lower()[:8]
     stored = f"{appeal_id}-{secrets.token_hex(8)}{ext}"
-    (UPLOAD_DIR / stored).write_bytes(data)
+    (config.UPLOAD_DIR / stored).write_bytes(data)
     aid = db.ex("INSERT INTO attachments(appeal_id, filename, stored, mime, size, created_at) VALUES(?,?,?,?,?,?)",
                 (appeal_id, Path(upload.filename).name[:120], stored, mime, len(data), db.now_iso()))
     return {"id": aid, "filename": upload.filename, "size": len(data)}
@@ -85,16 +86,24 @@ async def health():
     return {"ok": True, "time": db.now_iso(), "appeals": db.one("SELECT COUNT(*) AS n FROM appeals")["n"]}
 
 
+@router.get("/public/rules")
+async def public_rules():
+    """«Как начисляются баллы» — простыми словами, доступно всем без входа (ТЗ v2 §2.7)."""
+    cfg = appeals.points_cfg()
+    rewards = db.q("SELECT title, description, cost_points FROM rewards WHERE active=1 ORDER BY id")
+    return {"points": cfg, "rewards": rewards, "director_wait_days": appeals.director_wait_days()}
+
+
 @router.get("/public/branches")
 async def public_branches(request: Request):
     base = base_url(request)
     return [{**b, "qr_url": f"{base}/q/{b['code']}", "qr_svg": f"/api/public/qr/{b['code']}.svg"}
-            for b in db.q("SELECT id, code, name, city, country FROM branches ORDER BY is_hq DESC, name")]
+            for b in db.q("SELECT id, code, name, city, country, kind FROM branches ORDER BY is_hq DESC, kind, name")]
 
 
 @router.get("/public/branch/{code}")
 async def public_branch(code: str):
-    b = db.one("SELECT id, code, name, city, country FROM branches WHERE code=?", (code.upper(),))
+    b = db.one("SELECT id, code, name, city, country, kind FROM branches WHERE code=?", (code.upper(),))
     if not b:
         raise HTTPException(404, "Филиал не найден — QR-код не распознан")
     return b
@@ -113,7 +122,7 @@ async def public_qr(code: str, request: Request):
 
 @router.post("/public/appeals")
 async def public_create(request: Request, type: str = Form(...), text: str = Form(...), branch_code: str = Form(...),
-                        file: UploadFile | None = File(None)):
+                        file: UploadFile | None = File(None), site_city: str = Form("")):
     """QR-форма: один экран, без входа. Категорию и приоритет ставит ИИ (mf/ai: LLM, без ключа — словарь ключевых слов);
     «Без ответственного» — только при вакансии категории или если ни ИИ, ни словарь не уверены (ТЗ §7).
     Если в браузере уже есть демо-вход — обращение привязывается к пользователю и даёт баллы."""
@@ -126,7 +135,8 @@ async def public_create(request: Request, type: str = Form(...), text: str = For
     user = auth.current(request)
     cls = await classify(text, type)
     a = appeals.create(type=type, text=text, category_id=cls["category_id"], priority=cls.get("priority") or "medium",
-                       branch_id=branch["id"], author=user, is_anonymous=user is None, source="qr", ai=cls)
+                       branch_id=branch["id"], author=user, is_anonymous=user is None, source="qr", ai=cls,
+                       site_city=site_city if branch["kind"] == "field" else None)
     await save_attachment(a["id"], file)
     return {"id": a["id"], "number": a["number"], "tracking_token": a["tracking_token"],
             "track_url": f"/t/{a['tracking_token']}", "logged_in": user is not None,
@@ -209,7 +219,7 @@ async def dicts(request: Request):
     out = {
         "categories": db.q("SELECT c.id, c.name, c.responsible_user_id, c.sla_first_response_hours AS sla, u.name AS responsible "
                            "FROM categories c LEFT JOIN users u ON u.id=c.responsible_user_id ORDER BY c.id"),
-        "branches": db.q("SELECT id, code, name, city, country, lat, lng, is_hq FROM branches ORDER BY is_hq DESC, name"),
+        "branches": db.q("SELECT id, code, name, city, country, lat, lng, is_hq, kind FROM branches ORDER BY is_hq DESC, kind, name"),
         "departments": db.q("SELECT id, name FROM departments ORDER BY id"),
         "statuses": appeals.STATUSES, "types": appeals.TYPES, "priorities": appeals.PRIORITIES, "transitions": appeals.TRANSITIONS,
     }
@@ -321,7 +331,7 @@ async def attachment(att_id: int, request: Request, t: str | None = None):
     allowed = (t and secrets.compare_digest(t, a["tracking_token"])) or (user and appeals.can_view(a, user))
     if not allowed:
         raise HTTPException(403, "Нет доступа к файлу")
-    return FileResponse(UPLOAD_DIR / att["stored"], media_type=att["mime"], filename=att["filename"])
+    return FileResponse(config.UPLOAD_DIR / att["stored"], media_type=att["mime"], filename=att["filename"])
 
 
 # ---------- панель ----------
@@ -380,6 +390,25 @@ async def panel_clarify(appeal_id: int, body: Text, request: Request):
     return appeals.view(appeals.request_clarification(appeal_id, user, body.text), user)
 
 
+@router.post("/panel/appeals/{appeal_id}/director")
+async def panel_request_director(appeal_id: int, body: Text, request: Request):
+    """«Нужно решение директора» (ТЗ v2 §2.1): предложение попадает в «На решение» вместе с идеями совещаний."""
+    user = auth.require(request, *appeals.STAFF)
+    _manage(appeal_id, user)
+    return appeals.view(appeals.request_director(appeal_id, user, body.text), user)
+
+
+class DirectorDecision(BaseModel):
+    decision: str
+    comment: str | None = None
+
+
+@router.post("/director/appeals/{appeal_id}/decide")
+async def director_decide(appeal_id: int, body: DirectorDecision, request: Request):
+    user = auth.require(request, "director", "admin")
+    return appeals.view(appeals.director_decide(appeal_id, user, body.decision, body.comment), user)
+
+
 @router.get("/panel/summary")
 async def panel_summary(request: Request, days: int = 30, branch_id: int | None = None):
     user = auth.require(request, *appeals.STAFF)
@@ -403,9 +432,10 @@ async def ai_status(request: Request):
 
 # ---------- совещания (ТЗ §6.2) ----------
 
-MAX_AUDIO = 60 * 1024 * 1024
 AUDIO_EXT = {"audio/webm": ".webm", "video/webm": ".webm", "audio/ogg": ".ogg", "audio/mp4": ".m4a", "video/mp4": ".mp4", "audio/mpeg": ".mp3",
-             "audio/wav": ".wav", "audio/x-wav": ".wav", "audio/x-m4a": ".m4a", "audio/aac": ".aac", "audio/flac": ".flac", "audio/3gpp": ".3gp"}
+             "audio/wav": ".wav", "audio/x-wav": ".wav", "audio/x-m4a": ".m4a", "audio/aac": ".aac", "audio/flac": ".flac", "audio/3gpp": ".3gp",
+             "video/quicktime": ".mov", "video/x-matroska": ".mkv", "video/x-msvideo": ".avi"}   # записи видеозвонков: берём звуковую дорожку
+MAX_AUDIO = 300 * 1024 * 1024   # видеозвонок на час — сотни мегабайт; удаляется сразу после расшифровки
 
 
 @router.post("/meetings")
@@ -417,12 +447,12 @@ async def create_meeting(request: Request, background: BackgroundTasks, title: s
     if audio and audio.filename:
         data = await audio.read(MAX_AUDIO + 1)
         if len(data) > MAX_AUDIO:
-            raise HTTPException(413, "Запись больше 60 МБ — разбейте на части")
+            raise HTTPException(413, "Запись больше 300 МБ — разбейте на части")
         if len(data) < 1000:
             raise HTTPException(422, "Запись пустая — попробуйте ещё раз")
         mime = (audio.content_type or "").split(";")[0].strip()
         ext = AUDIO_EXT.get(mime) or Path(audio.filename).suffix.lower()[:6] or ".bin"
-        audio_path = meetings.AUDIO_DIR / f"{secrets.token_hex(8)}{ext}"
+        audio_path = config.AUDIO_DIR / f"{secrets.token_hex(8)}{ext}"
         audio_path.write_bytes(data)
     elif len(transcript.strip()) < 20:
         raise HTTPException(422, "Нужна запись или текст расшифровки (хотя бы пара фраз)")
@@ -433,8 +463,19 @@ async def create_meeting(request: Request, background: BackgroundTasks, title: s
 
 
 @router.get("/meetings")
-async def list_meetings(request: Request):
-    return meetings.list_for(auth.require(request, *appeals.STAFF))
+async def list_meetings(request: Request, overdue: str = ""):
+    return meetings.list_for(auth.require(request, *appeals.STAFF), overdue_only=parse_bool(overdue))
+
+
+@router.get("/tasks/overdue")
+async def tasks_overdue(request: Request):
+    return meetings.overdue_summary(auth.require(request, *appeals.STAFF))
+
+
+@router.post("/panel/check-tasks")
+async def panel_check_tasks(request: Request):
+    auth.require(request, "director", "admin")
+    return meetings.check_tasks()
 
 
 @router.get("/meetings/{meeting_id}")
@@ -528,12 +569,12 @@ async def _transcribe_upload(audio: UploadFile | None, language: str | None) -> 
         raise HTTPException(422, "Нет аудио")
     data = await audio.read(MAX_AUDIO + 1)
     if len(data) > MAX_AUDIO:
-        raise HTTPException(413, "Запись больше 60 МБ")
+        raise HTTPException(413, "Запись больше 300 МБ")
     if len(data) < 1000:
         raise HTTPException(422, "Запись пустая — попробуйте ещё раз")
     mime = (audio.content_type or "").split(";")[0].strip()
     ext = AUDIO_EXT.get(mime) or Path(audio.filename).suffix.lower()[:6] or ".bin"
-    path = meetings.AUDIO_DIR / f"v-{secrets.token_hex(8)}{ext}"
+    path = config.AUDIO_DIR / f"v-{secrets.token_hex(8)}{ext}"
     path.write_bytes(data)
     import asyncio
     try:

@@ -15,5 +15,6 @@
     h('div', { class: 'lbl mt16' }, 'Главный вход'), h('div', { class: 'h1' }, 'QR-коды филиалов — без установки'),
     h('p', { class: 'hint' }, 'Сканируйте с телефона: откроется форма «Проблема / Идея» для этого филиала. Филиалы демонстрационные.'),
     h('div', { class: 'qr-grid' }, branches.map(b => h('a', { href: '/q/' + b.code, class: 'card' }, h('img', { src: b.qr_svg, alt: 'QR ' + b.name }), h('b', {}, b.name), h('div', { class: 'small muted' }, b.qr_url)))),
+    h('p', { class: 'small' }, h('a', { href: '/rules' }, 'Как начисляются баллы'), ' — прозрачные правила вместо разовых премий.'),
     h('div', { class: 'dev' }, 'разработано ', h('b', {}, 'Cyber QALQAN Systems'), ' · стиль — по сайту заказчика, данные синтетические')));
 })();

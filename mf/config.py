@@ -23,11 +23,22 @@ def _load_env(path: Path) -> None:
 
 _load_env(ROOT / ".env")
 
-DATA_DIR = Path(os.environ.get("MF_DATA_DIR") or (ROOT / "var")).resolve()
-DATA_DIR.mkdir(parents=True, exist_ok=True)
-UPLOAD_DIR = DATA_DIR / "uploads"
-UPLOAD_DIR.mkdir(exist_ok=True)
-DB_PATH = DATA_DIR / "mf.db"
+DATA_DIR = UPLOAD_DIR = DB_PATH = AUDIO_DIR = None   # задаются в set_data_dir()
+
+
+def set_data_dir(path) -> None:
+    """Папка с базой, вложениями и временным аудио. Тесты вызывают для каждого модуля со своей чистой папкой."""
+    global DATA_DIR, UPLOAD_DIR, DB_PATH, AUDIO_DIR
+    DATA_DIR = Path(path).resolve()
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    UPLOAD_DIR = DATA_DIR / "uploads"
+    UPLOAD_DIR.mkdir(exist_ok=True)
+    AUDIO_DIR = DATA_DIR / "audio"
+    AUDIO_DIR.mkdir(exist_ok=True)
+    DB_PATH = DATA_DIR / "mf.db"
+
+
+set_data_dir(os.environ.get("MF_DATA_DIR") or (ROOT / "var"))
 PUBLIC_URL = os.environ.get("MF_PUBLIC_URL", "").rstrip("/")
 LLM_MODEL = os.environ.get("MF_LLM_MODEL", "gpt-4o-mini")
 

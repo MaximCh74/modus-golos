@@ -189,6 +189,7 @@ async function appealCard(id) {
     a.attachments.length ? h('div', { class: 'small mt8' }, 'Вложения: ', a.attachments.map(f => h('a', { href: '/api/attachments/' + f.id, target: '_blank' }, f.filename + ' '))) : null,
     a.points ? h('div', { class: 'small mt8' }, '⭐ Начислено баллов: ' + a.points) : null,
     h('div', { class: 'row mt8' }, h('span', { class: 'small muted' }, '👍 У меня так же: ' + a.supports), supportBtn, a.supported_by_me ? h('span', { class: 'small muted' }, '(вы поддержали)') : null));
+  const director = a.director_decision ? h('div', { class: 'card ' + (a.director_decision === 'pending' ? 'card-info' : a.director_decision === 'accepted' ? 'card-ok' : 'card-bad') }, h('b', {}, 'Решение директора: ' + a.director_decision_label), h('div', { class: 'small mt8' }, 'Что требуется: ' + a.director_request_text), a.director_comment ? h('div', { class: 'small' }, 'Комментарий: ' + a.director_comment) : null) : null;
   const result = a.status === 'done' || (a.status === 'closed' && a.resolution_text)
     ? h('div', { class: 'card card-ok' }, h('b', {}, 'Что сделали'), h('p', { class: 'pre' }, a.resolution_text))
     : a.status === 'rejected' ? h('div', { class: 'card card-bad' }, h('b', {}, 'Отклонено — причина'), h('p', { class: 'pre' }, a.resolution_text)) : null;
@@ -201,7 +202,7 @@ async function appealCard(id) {
     } }, 'Ответить');
     answer = h('div', { class: 'card card-warn' }, h('b', {}, 'Ответственный просит уточнить'), h('p', { class: 'pre' }, a.pending_question), ta, h('div', { class: 'mt8' }, btn));
   }
-  root.replaceChildren(h('div', { class: 'wrap' }, h('a', { href: '#/', class: 'small' }, '← Назад'), card, result, answer,
+  root.replaceChildren(h('div', { class: 'wrap' }, h('a', { href: '#/', class: 'small' }, '← Назад'), card, director, result, answer,
     a.can_manage ? h('div', { class: 'card card-info small' }, 'Вы можете вести это обращение: ', h('a', { href: '/panel#/appeal/' + id }, 'открыть в панели')) : null,
     h('div', { class: 'card' }, h('div', { class: 'h2' }, 'История'), history(a.events))));
 }
@@ -228,7 +229,7 @@ async function notifications() {
 async function points() {
   const d = await API.get('/api/me/points');
   root.replaceChildren(h('div', { class: 'wrap' }, h('a', { href: '#/', class: 'small' }, '← Назад'), h('div', { class: 'h1' }, 'Мои баллы'),
-    h('div', { class: 'card' }, h('div', { class: 'big' }, String(d.balance)), h('div', { class: 'hint' }, 'Принято к рассмотрению +' + d.rules.accepted + ' · реализовано +' + d.rules.done + ' · «У меня так же» +' + d.rules.support + ' (до +' + d.rules.support_cap + ' на обращение). За отправку, отклонённые, отзывы и анонимные — нет.')),
+    h('div', { class: 'card' }, h('div', { class: 'big' }, String(d.balance)), h('div', { class: 'hint' }, 'Принято к рассмотрению +' + d.rules.accepted + ' · реализовано +' + d.rules.done + ' · «У меня так же» +' + d.rules.support + ' (до +' + d.rules.support_cap + ' на обращение). За отправку, отклонённые, отзывы и анонимные — нет. ', h('a', { href: '/rules', target: '_blank' }, 'Как начисляются баллы →'))),
     h('div', { class: 'card list' }, d.ledger.length ? d.ledger.map(l => h('div', { class: 'item', onclick: () => { if (l.appeal_id) location.hash = '#/appeal/' + l.appeal_id; } },
       h('div', { class: 'row' }, h('b', {}, '+' + l.amount), h('span', {}, l.number || ''), h('span', { class: 'small muted' }, l.reason_label), h('div', { class: 'spacer' }), h('span', { class: 'small muted' }, fmtDate(l.created_at))))) : h('div', { class: 'muted' }, 'Начислений пока нет'))));
 }

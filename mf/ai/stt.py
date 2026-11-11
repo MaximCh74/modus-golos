@@ -124,17 +124,37 @@ def _local(path: Path, language: str | None) -> dict:
             "engine": f"faster-whisper:{WHISPER_MODEL}", "seconds": round(time.time() - t0, 1)}
 
 
+VIDEO_EXT = {".mp4", ".mov", ".mkv", ".avi", ".webm"}
+
+
+def extract_audio(path: Path) -> Path:
+    """Запись видеозвонка → m4a (ffmpeg, без видео): для whisper-1 (лимит 25 МБ) и на случай, если декодер не возьмёт контейнер."""
+    import subprocess
+    out = path.with_suffix(".extracted.m4a")
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(path), "-vn", "-ac", "1", "-ar", "16000", "-b:a", "48k", str(out)], check=True, timeout=600)
+    return out
+
+
 def _openai(path: Path, language: str | None) -> dict:
     if not os.environ.get("OPENAI_API_KEY"):
         raise STTError("OPENAI_API_KEY не задан — облачный STT недоступен")
     from openai import OpenAI
     t0 = time.time()
+    tmp = None
+    if path.suffix.lower() in VIDEO_EXT or path.stat().st_size > 24 * 1024 * 1024:
+        try:
+            tmp = extract_audio(path)
+            path = tmp
+        except Exception as e:   # noqa: BLE001
+            raise STTError(f"не удалось извлечь звук: {e}") from e
     with open(path, "rb") as f:
         kwargs = {"model": "whisper-1", "file": f, "response_format": "verbose_json"}
         if language:
             kwargs["language"] = language
         r = OpenAI().audio.transcriptions.create(**kwargs)
     text = "\n".join(s.text.strip() if hasattr(s, "text") else s["text"].strip() for s in (getattr(r, "segments", None) or [])) or r.text
+    if tmp:
+        tmp.unlink(missing_ok=True)
     return {"text": text, "language": getattr(r, "language", None) or language, "duration": round(float(getattr(r, "duration", 0) or 0), 1),
             "engine": "openai:whisper-1", "seconds": round(time.time() - t0, 1)}
 

@@ -1,7 +1,9 @@
-"""Тестовые данные (ТЗ v1.1, раздел 10): 20 обращений из docs/source/Датасет.docx с теми же номерами, типами,
-категориями, приоритетами и статусами; «дальнейшие действия» датасета записаны событиями истории.
-Филиалы, пользователи, награды и баллы — ДЕМОНСТРАЦИОННЫЕ (в датасете филиалов нет; заменить после кастдева).
-Повторный seed: python3 -m mf.seed --force (сносит базу — журналы append-only)."""
+"""Тестовые данные (ТЗ v1.1 §10, ТЗ v2 по кастдеву): 20 обращений датасета организаторов с теми же номерами, типами,
+категориями, приоритетами, статусами и ответственными; «дальнейшие действия» датасета записаны событиями истории.
+Города — реальные офисы заказчика по первому интервью (Омск, Самара, Тюмень, Астана, Павлодар) плюс «Объект» для
+командированных; пользователи, награды и баллы — ДЕМОНСТРАЦИОННЫЕ, имена вымышленные.
+A-021…A-028 — синтетические обращения по мотивам кастдева (номенклатура и 1С в разных городах, два предложения,
+ждущие решения директора). Повторный seed: python3 -m mf.seed --force (сносит базу — журналы append-only)."""
 from __future__ import annotations
 
 import json
@@ -11,14 +13,17 @@ from datetime import timedelta
 
 from . import db
 
-BRANCHES = [  # code, name, city, country, lat, lng, hq
-    ("OMSK", "Омск — головной офис", "Омск", "Россия", 54.9885, 73.3242, 1),
-    ("PVL", "Павлодар", "Павлодар", "Казахстан", 52.2873, 76.9674, 0),
-    ("AST", "Астана", "Астана", "Казахстан", 51.1694, 71.4491, 0),
-    ("NSK", "Новосибирск", "Новосибирск", "Россия", 55.0084, 82.9357, 0),
+BRANCHES = [  # code, name, city, country, lat, lng, hq, kind (office | production | field)
+    ("OMSK", "Омск — головной офис", "Омск", "Россия", 54.9885, 73.3242, 1, "office"),
+    ("SAM", "Самара", "Самара", "Россия", 53.1959, 50.1002, 0, "office"),
+    ("TMN", "Тюмень", "Тюмень", "Россия", 57.1530, 65.5343, 0, "office"),
+    ("AST", "Астана — офис", "Астана", "Казахстан", 51.1694, 71.4491, 0, "office"),
+    ("PVL", "Павлодар — производство", "Павлодар", "Казахстан", 52.2873, 76.9674, 0, "production"),
+    ("FIELD", "Объект (командировка)", None, "Казахстан", None, None, 0, "field"),
 ]
 DEPARTMENTS = ["Продажи", "Закупки", "Проектирование", "Бухгалтерия", "IT", "Сервис", "Администрация", "HR",
-               "Руководство", "Проектный офис"]   # id 1..10
+               "Руководство", "Проектный офис", "Отдел развития", "Производство"]   # id 1..12
+DEV_DEPARTMENT = 11
 USERS = [  # id, name, role, branch, dept, manager, position
     (1, "Виктор Орлов", "director", "OMSK", 9, None, "Директор"),
     (2, "Олег Савельев", "responsible", "OMSK", 9, 1, "Руководитель направления"),
@@ -28,7 +33,7 @@ USERS = [  # id, name, role, branch, dept, manager, position
     (6, "Сауле Абишева", "employee", "PVL", 4, 7, "Бухгалтер"),
     (7, "Марина Соколова", "responsible", "OMSK", 4, 2, "Руководитель бухгалтерии"),
     (8, "Тимур Ахметов", "responsible", "AST", 3, 2, "Руководитель проектирования"),
-    (9, "Алексей Волков", "responsible", "NSK", 10, 2, "Руководитель проектов"),
+    (9, "Алексей Волков", "responsible", "TMN", 10, 2, "Руководитель проектов"),
     (10, "Наталья Петрова", "responsible", "OMSK", 8, 2, "HR, внутренние коммуникации и обучение"),
     (11, "Сергей Иванов", "responsible", "OMSK", 7, 2, "Административный руководитель"),
     (12, "Анна Громова", "responsible", "OMSK", 3, 8, "Ответственный за номенклатуру"),
@@ -36,30 +41,36 @@ USERS = [  # id, name, role, branch, dept, manager, position
     (14, "Елена Фролова", "responsible", "OMSK", 9, 2, "Ответственный за процессы"),
     (15, "Игорь Лебедев", "admin", "OMSK", 5, 1, "Администратор системы"),
     (16, "Данияр Сейткали", "employee", "PVL", 2, 5, "Сотрудник закупок"),
-    (17, "Ольга Миронова", "employee", "OMSK", 2, 5, "Сотрудник закупок"),
+    (17, "Ольга Миронова", "employee", "TMN", 2, 5, "Сотрудник закупок"),
     (18, "Асель Касымова", "employee", "AST", 3, 8, "Инженер-проектировщик"),
-    (19, "Павел Кузнецов", "employee", "NSK", 4, 7, "Бухгалтер"),
-    (20, "Жанна Токтарова", "employee", "PVL", 1, 4, "Менеджер по продажам"),
-    (21, "Максим Белов", "employee", "NSK", 1, 4, "Менеджер по продажам"),
+    (19, "Павел Кузнецов", "employee", "SAM", 4, 7, "Бухгалтер"),
+    (20, "Жанна Токтарова", "employee", "AST", 1, 4, "Менеджер по продажам"),
+    (21, "Максим Белов", "employee", "SAM", 1, 4, "Менеджер по продажам"),
     (22, "Айдана Ермекова", "employee", "AST", 10, 9, "Координатор проекта"),
     (23, "Кирилл Смирнов", "employee", "OMSK", 10, 9, "Руководитель проекта"),
     (24, "Динара Омарова", "employee", "PVL", 7, 11, "Сотрудник офиса"),
+    # ТЗ v2: отдел развития (путь предложения к директору) и ответственный за 1С; производство в Павлодаре
+    (25, "Гульнара Сейтжанова", "responsible", "OMSK", 11, 1, "Руководитель отдела развития"),
+    (26, "Бауыржан Сапаров", "responsible", "OMSK", 5, 2, "Ответственный за 1С"),
+    (27, "Серик Нурмагамбетов", "employee", "PVL", 12, 8, "Мастер участка"),
 ]
-# 18 категорий датасета: id, название, ответственный (None — вакансия «Администратор документов», сценарий 2), SLA первого ответа, ч
+# 18 категорий датасета + «1С и автоматизация» по кастдеву; «Каталог и данные» → «Номенклатура и спецификации» (уточнена по кастдеву).
+# id, название, ответственный (None — вакансия «Администратор документов», сценарий 2), SLA первого ответа, ч
 CATEGORIES = [
-    (1, "Межотдельное взаимодействие", 5, 48), (2, "Информационная прозрачность", 2, 72), (3, "Каталог и данные", 12, 24),
+    (1, "Межотдельное взаимодействие", 5, 48), (2, "Информационная прозрачность", 2, 72), (3, "Номенклатура и спецификации", 12, 24),
     (4, "Обучение", 10, 72), (5, "Документооборот", 7, 48), (6, "Регламенты", 14, 72), (7, "Интеграции и IT", 3, 24),
     (8, "Знания и наставничество", 7, 72), (9, "Договорная работа", 13, 24), (10, "Задачи и коммуникации", 4, 48),
     (11, "Оперативность", 2, 24), (12, "Коммуникации", 3, 72), (13, "Проектная деятельность", 9, 48),
     (14, "Планирование ресурсов", 8, 72), (15, "Постановка задач", 2, 48), (16, "Корпоративная среда", 11, 72),
     (17, "Хранение документов", None, 48), (18, "Прозрачность результатов", 5, 72),
+    (19, "1С и автоматизация", 26, 24),
 ]
-REWARDS = [  # демо-примеры, состав определяет компания
+REWARDS = [  # демо-примеры, состав определяет компания; первой — привычная заказчику форма поощрения, теперь по понятным правилам
+    ("Премия за внедрённую идею", "Денежная премия автору предложения, которое реализовано; размер — по решению директора", 200),
     ("Дополнительный выходной", "Один оплачиваемый день отдыха по согласованию с руководителем", 300),
     ("Сертификат на обучение", "Курс или конференция по профилю на выбор", 250),
     ("Мерч компании", "Набор фирменной атрибутики", 100),
     ("Скидка у партнёра", "Скидка в партнёрской сети", 150),
-    ("Денежный бонус", "Премия по решению директора", 500),
 ]
 
 
@@ -143,10 +154,45 @@ APPEALS = [
      "Предлагаю публиковать краткий обзор завершённых внутренних улучшений, чтобы сотрудники видели результат направленных предложений.",
      None, None, []),
 ]
-SUPPORTS = {"A-003": [22], "A-007": [17, 20], "A-012": [20, 22, 23]}
+# ТЗ v2: синтетические обращения по мотивам кастдева — номенклатура и 1С в разных городах (кластер «Номенклатура в 1С»),
+# командированный на объекте (филиал FIELD + город объекта), два предложения, ждущие решения директора дольше порога.
+# number, type, category, author, priority, status, hours ago, text, solution, responsible override, history, extra
+CUSTDEV_APPEALS = [
+    ("A-021", "problem", 3, 23, "high", "review", 200,
+     "В спецификациях проектов номенклатура из 1С часто устаревшая: позиции уже сняты с производства, а в справочнике ещё активны. Приходится перепроверять каждую строку вручную.",
+     None, None, [(6, 12, "status_changed", st("new", "review", "Смотрим, как помечать снятые позиции в справочнике"))], {}),
+    ("A-022", "problem", 3, 27, "medium", "new", 150,
+     "На производстве карточки позиций в 1С без габаритов и веса, при комплектации заказов пересчитываем по каталогам поставщиков.",
+     None, None, [], {}),
+    ("A-023", "problem", 3, 20, "high", "new", 120,
+     "В коммерческие предложения попадают позиции с разными названиями одного и того же товара из 1С, клиент путается, потом переделываем.",
+     None, None, [], {}),
+    ("A-024", "problem", 3, 17, "medium", "review", 96,
+     "Одна и та же номенклатура заведена в 1С дважды с разными артикулами, остатки по складу не сходятся при сверке.",
+     None, None, [(8, 12, "status_changed", st("new", "review", "Проверяем дубли по артикулам"))], {}),
+    ("A-025", "problem", 3, 16, "high", "new", 60,
+     "На объекте в Атырау спецификация из 1С не совпадает с тем, что приехало: часть позиций переименована в справочнике уже после отгрузки.",
+     None, None, [], {"branch": "FIELD", "site_city": "Атырау", "source": "qr"}),
+    ("A-026", "problem", 19, 19, "medium", "new", 40,
+     "Выгрузка актов из 1С в Битрикс24 падает, когда в номенклатуре есть позиции без единиц измерения — каждый раз правим вручную.",
+     None, None, [], {}),
+    ("A-027", "suggestion", 3, 22, "medium", "review", 320,
+     "Предлагаю единый регламент заведения позиций в 1С: обязательные поля, ответственный за справочник, проверка дублей раз в месяц.",
+     "Регламент заведения позиций и ежемесячная проверка дублей.", 25,
+     [(5, 25, "status_changed", st("new", "review", "Предложение требует ресурсов — выносим директору"))],
+     {"director_request": "Нужны две недели работы специалиста по 1С и доступ к справочнику", "director_requested_hours_ago": 12 * 24}),
+    ("A-028", "suggestion", 19, 23, "medium", "review", 260,
+     "Предлагаю связать 1С с каталогом проектирования, чтобы спецификации проверялись на актуальность позиций автоматически.",
+     None, 25,
+     [(4, 25, "status_changed", st("new", "review", "Нужен бюджет на доработку 1С — выносим директору"))],
+     {"director_request": "Бюджет на доработку конфигурации 1С, ориентировочно 2–3 недели подрядчика", "director_requested_hours_ago": 9 * 24}),
+]
+SUPPORTS = {"A-003": [22], "A-007": [17, 20], "A-012": [20, 22, 23], "A-021": [18, 27], "A-023": [21], "A-027": [12, 18]}
 SETTINGS = {
     "points": {"accepted": 10, "done": 50, "support": 2, "support_cap": 20},
     "league_weights": {"done": 0.5, "considered": 0.3, "speed": 0.2},
+    "director_wait_days": 7,         # «ждёт решения дольше порога» — подсветка в «На решение» и счётчик у директора
+    "dev_department_head_id": 25,    # предложения по умолчанию уходят руководителю отдела развития
 }
 
 
@@ -161,9 +207,9 @@ def run(force: bool = False) -> None:
     c = db.conn()
     now = db.now()
     branch_ids = {}
-    for code, name, city, country, lat, lng, hq in BRANCHES:
-        branch_ids[code] = db.ex("INSERT INTO branches(code, name, city, country, lat, lng, is_hq) VALUES(?,?,?,?,?,?,?)",
-                                 (code, name, city, country, lat, lng, hq))
+    for code, name, city, country, lat, lng, hq, kind in BRANCHES:
+        branch_ids[code] = db.ex("INSERT INTO branches(code, name, city, country, lat, lng, is_hq, kind) VALUES(?,?,?,?,?,?,?,?)",
+                                 (code, name, city, country, lat, lng, hq, kind))
     for i, name in enumerate(DEPARTMENTS, 1):
         db.ex("INSERT INTO departments(id, name) VALUES(?,?)", (i, name))
     for uid, name, role, br, dept, mgr, pos in USERS:
@@ -187,7 +233,8 @@ def run(force: bool = False) -> None:
                   (uid, f"+{amount} баллов за {number}", "/app#/points", db.iso(at), db.iso(at)))
 
     ids = {}
-    for number, typ, cat, author, prio, status, hours, text, solution, resp_override, history in APPEALS:
+    for number, typ, cat, author, prio, status, hours, text, solution, resp_override, history, *rest in APPEALS + CUSTDEV_APPEALS:
+        extra = rest[0] if rest else {}
         created = now - timedelta(hours=hours)
         author_u = users[author]
         responsible = resp_override if resp_override else cats[cat]
@@ -198,15 +245,21 @@ def run(force: bool = False) -> None:
             if kind == "status_changed" and payload["to"] in ("done", "closed", "rejected"):
                 closed_at = created + timedelta(hours=h)
         resolution = next((p.get("text") for _, _, k, p in history if k == "status_changed" and p["to"] in ("done", "rejected")), None)
+        source = extra.get("source", "app")
         aid = db.ex("""INSERT INTO appeals(number, type, category_id, branch_id, department_id, text, proposed_solution, priority, status,
-                       responsible_id, is_anonymous, source, tracking_token, resolution_text, created_at, updated_at, first_response_at, closed_at)
-                       VALUES(?,?,?,?,?,?,?,?,?,?,0,'app',?,?,?,?,?,?)""",
-                    (number, typ, cat, branch_ids[author_u[3]], author_u[4], text, solution, prio, status, responsible,
+                       responsible_id, is_anonymous, source, tracking_token, resolution_text, created_at, updated_at, first_response_at, closed_at, site_city)
+                       VALUES(?,?,?,?,?,?,?,?,?,?,0,?,?,?,?,?,?,?,?)""",
+                    (number, typ, cat, branch_ids[extra.get("branch", author_u[3])], author_u[4], text, solution, prio, status, responsible, source,
                      secrets.token_urlsafe(24), resolution, db.iso(created), db.iso(created), db.iso(first_resp) if first_resp else None,
-                     db.iso(closed_at) if closed_at else None))
+                     db.iso(closed_at) if closed_at else None, extra.get("site_city")))
         ids[number] = aid
         c.execute("INSERT INTO appeal_authors(appeal_id, user_id) VALUES(?,?)", (aid, author))
-        event(aid, author, "created", {"source": "app", "type": typ, "anonymous": False}, created)
+        event(aid, author, "created", {"source": source, "type": typ, "anonymous": False, **({"synthetic": "custdev"} if extra else {})}, created)
+        if extra.get("director_request"):
+            req_at = now - timedelta(hours=extra["director_requested_hours_ago"])
+            c.execute("UPDATE appeals SET director_request_text=?, director_requested_at=?, director_requested_by=?, director_decision='pending' WHERE id=?",
+                      (extra["director_request"], db.iso(req_at), responsible, aid))
+            event(aid, responsible, "director_requested", {"text": extra["director_request"]}, req_at)
         if responsible:
             event(aid, None, "assigned", {"responsible_id": responsible, "responsible": users[responsible][1], "auto": True}, created)
         else:

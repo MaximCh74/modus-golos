@@ -17,10 +17,12 @@
   let similarShown = false, anyway = false;
   const simBox = h('div', {});
   const file = h('input', { type: 'file', name: 'file', accept: 'image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt' });
+  const site = h('input', { type: 'text', name: 'site_city', placeholder: 'Например: Атырау, объект ТЭЦ-2', maxlength: 80 });
   const submit = h('button', { type: 'submit', class: 'btn btn-primary btn-big' }, 'Отправить');
   const form = h('form', { class: 'card' },
     h('div', { class: 'type-switch' }, btnProblem, btnIdea),
     h('div', { class: 'row' }, h('div', { class: 'spacer' }, text), mic),
+    branch.kind === 'field' ? field('Город / объект (необязательно)', site, 'Без геолокации — чтобы не запрашивать разрешений') : null,
     h('div', { class: 'mt8' }, field('Фото или файл (необязательно)', file)),
     simBox,
     submit,
@@ -30,7 +32,7 @@
   btnIdea.addEventListener('click', () => { type = 'suggestion'; btnIdea.classList.add('on'); btnProblem.classList.remove('on'); });
 
   root.replaceChildren(h('div', { class: 'wrap' },
-    h('div', { class: 'hero dots' }, h('div', { class: 'brand' }, h('img', { src: '/a/img/logo.svg', alt: 'Модус Трейд' })), h('div', { class: 'lbl mt16' }, 'Обратная связь'), h('div', { class: 'h1' }, 'Филиал: ' + branch.name)),
+    h('div', { class: 'hero dots' }, h('div', { class: 'brand' }, h('img', { src: '/a/img/logo.svg', alt: 'Модус Трейд' })), h('div', { class: 'lbl mt16' }, 'Обратная связь'), h('div', { class: 'h1' }, (branch.kind === 'field' ? '' : 'Филиал: ') + branch.name)),
     form));
 
   form.addEventListener('submit', async ev => {
@@ -51,6 +53,7 @@
     }
     const fd = new FormData();
     fd.set('type', type); fd.set('text', text.value); fd.set('branch_code', branch.code);
+    if (branch.kind === 'field') fd.set('site_city', site.value);
     if (file.files && file.files[0]) fd.set('file', file.files[0]);
     submit.disabled = true;
     try {
@@ -65,7 +68,7 @@
           h('a', { href: r.track_url, class: 'btn btn-primary btn-big' }, 'Следить за статусом'),
           h('p', { class: 'hint' }, 'Сохраните ссылку: ', h('code', {}, location.origin + r.track_url), r.logged_in ? '' : ' — без входа это единственный способ увидеть ответ.'),
           r.logged_in ? h('p', { class: 'small' }, 'Обращение привязано к вам: ', h('a', { href: '/app#/appeal/' + r.id }, 'открыть в приложении'))
-                      : h('p', { class: 'small' }, h('a', { href: '/login?next=' + encodeURIComponent('/app') }, 'Войти, чтобы получать баллы за идеи'))),
+                      : h('p', { class: 'small' }, h('a', { href: '/login?next=' + encodeURIComponent('/app') }, 'Войти, чтобы получать баллы за идеи'), ' · ', h('a', { href: '/rules' }, 'как начисляются баллы'))),
         h('a', { href: location.pathname, class: 'btn btn-outline' }, 'Отправить ещё одно')));
     } catch (e) { toast(e.message, 'bad'); submit.disabled = false; }
   });

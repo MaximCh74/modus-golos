@@ -73,6 +73,8 @@ function eventText(e) {
     case 'clarification_answered': return 'Ответ автора: ' + p.text;
     case 'escalated': return 'Просрочено: нет первого ответа при SLA ' + p.sla_hours + ' ч — уведомлён руководитель';
     case 'discussed_at_meeting': return 'Обсуждено на совещании' + (p.meeting_title ? ' «' + p.meeting_title + '»' : '') + (p.text ? ': ' + p.text : '');
+    case 'director_requested': return 'Вынесено на решение директора' + (p.text ? ': ' + p.text : '');
+    case 'director_decided': return 'Директор ' + (p.decision === 'accepted' ? 'принял' : 'отклонил') + ' предложение' + (p.text ? ': ' + p.text : '');
     case 'ai_classified': return p.category ? 'Категория определена ' + (p.engine === 'openai' ? 'ИИ' : 'по ключевым словам (без ИИ)') + ': ' + p.category + (p.confidence ? ' (' + Math.round(p.confidence * 100) + ' %)' : '')
       : 'Категория не определена ' + (p.engine === 'openai' ? 'ИИ' : 'по ключевым словам') + ' — передано администратору';
     case 'supported': return '«У меня так же» — уже ' + p.count;

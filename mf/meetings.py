@@ -14,11 +14,9 @@ from fastapi import HTTPException
 
 from . import appeals, db, realtime
 from .ai import fallback, llm, names, stt
-from .config import DATA_DIR
+from . import config
 
 log = logging.getLogger("mf.meetings")
-AUDIO_DIR = DATA_DIR / "audio"
-AUDIO_DIR.mkdir(exist_ok=True)
 
 KINDS = {"decision": "Решение", "task": "Поручение", "idea": "Идея", "linked": "Связанное обращение"}
 STATUSES = {"processing": "Обрабатывается", "review": "На проверке", "sent": "Отправлено", "failed": "Ошибка"}
@@ -114,6 +112,7 @@ def _items(meeting_id: int) -> list[dict]:
         r["flag_labels"] = [FLAGS.get(f, f) for f in r["flags"]]
         r["kind_label"] = KINDS.get(r["kind"], r["kind"])
         r["task_status_label"] = TASK_STATUSES.get(r["task_status"]) if r["task_status"] else None
+        r["overdue"] = bool(r["kind"] == "task" and r["due_date"] and r["due_date"] < db.now().date().isoformat() and r["task_status"] in ("assigned", "in_progress"))
         r["director_decision_label"] = DECISIONS.get(r["director_decision"]) if r["director_decision"] else None
         if r["linked_appeal_text"]:
             r["linked_appeal_text"] = appeals.short(r["linked_appeal_text"], 100)
@@ -143,8 +142,10 @@ def _counts(items: list[dict]) -> dict:
     live = [i for i in items if not i["removed"]]
     tasks = [i for i in live if i["kind"] == "task"]
     ideas = [i for i in live if i["kind"] == "idea"]
+    today = db.now().date().isoformat()
     return {"decisions": sum(1 for i in live if i["kind"] == "decision"), "tasks": len(tasks),
-            "tasks_done": sum(1 for i in tasks if i["task_status"] == "done"), "ideas": len(ideas),
+            "tasks_done": sum(1 for i in tasks if i["task_status"] == "done"),
+            "tasks_overdue": sum(1 for i in tasks if i["due_date"] and i["due_date"] < today and i["task_status"] in ("assigned", "in_progress")), "ideas": len(ideas),
             "ideas_accepted": sum(1 for i in ideas if i["director_decision"] == "accepted"),
             "ideas_pending": sum(1 for i in ideas if i["director_decision"] == "pending"),
             "ideas_rejected": sum(1 for i in ideas if i["director_decision"] == "rejected"),
@@ -152,7 +153,7 @@ def _counts(items: list[dict]) -> dict:
             "flags": sum(len(i["flags"]) for i in live if i["kind"] == "task")}
 
 
-def list_for(user: dict) -> list[dict]:
+def list_for(user: dict, overdue_only: bool = False) -> list[dict]:
     where, params = "", ()
     if user["role"] == "responsible":
         where, params = " WHERE m.created_by=?", (user["id"],)
@@ -165,6 +166,8 @@ def list_for(user: dict) -> list[dict]:
                     "stage": m["stage"], "created_at": m["created_at"], "sent_at": m["sent_at"], "creator": m["creator"], "branch": m["branch"],
                     "summary_line": appeals.short(m["summary"] or "", 140) if m["summary"] else None, "demo": bool(m["demo"]),
                     "fallback": m["llm_engine"] == fallback.ENGINE, "error": m["error"], "counts": _counts(items)})
+    if overdue_only:
+        out = [m for m in out if m["counts"]["tasks_overdue"]]
     return out
 
 
@@ -454,12 +457,21 @@ def director_ideas(user: dict) -> dict:
                    WHERE i.kind='idea' AND i.removed=0 AND i.director_decision IS NOT NULL AND m.status='sent'
                    ORDER BY CASE i.director_decision WHEN 'pending' THEN 0 ELSE 1 END, i.id DESC""")
     for r in rows:
+        r["source"] = "meeting"
         r["flags"] = json.loads(r["flags"] or "[]")
         r["flag_labels"] = [FLAGS.get(f, f) for f in r["flags"]]
         r["director_decision_label"] = DECISIONS.get(r["director_decision"], r["director_decision"])
         cat = db.one("SELECT u.name FROM categories c LEFT JOIN users u ON u.id=c.responsible_user_id WHERE c.id=?", (r["category_id"],)) if r["category_id"] else None
         r["category_responsible"] = cat["name"] if cat else None
-    return {"pending": [r for r in rows if r["director_decision"] == "pending"], "decided": [r for r in rows if r["director_decision"] != "pending"][:30]}
+        sent = db.parse(r["sent_at"])
+        r["wait_days"] = round((db.now() - sent).total_seconds() / 86400, 1) if sent and r["director_decision"] == "pending" else None
+    items = rows + appeals.director_queue()   # ТЗ v2: предложения из обращений («Нужно решение директора») — в той же очереди
+    th = appeals.director_wait_days()
+    for r in items:
+        r["over_threshold"] = bool(r.get("wait_days") is not None and r["wait_days"] >= th)
+    pending = sorted([r for r in items if r["director_decision"] == "pending"], key=lambda r: -(r.get("wait_days") or 0))
+    decided = sorted([r for r in items if r["director_decision"] != "pending"], key=lambda r: r.get("decided_at") or "", reverse=True)[:30]
+    return {"pending": pending, "decided": decided, "threshold_days": th, "over_threshold": sum(1 for r in pending if r["over_threshold"])}
 
 
 def _idea(item_id: int) -> dict:
@@ -481,7 +493,8 @@ def accept_idea(item_id: int, user: dict, category_id: int | None = None) -> dic
     users = db.q("SELECT id, name FROM users WHERE active=1")
     voiced = names.match(i["voiced_by"], users)["user"] if i["voiced_by"] else None
     author = db.one("SELECT * FROM users WHERE id=?", (voiced["id"] if voiced else i["created_by"],))
-    a = appeals.create(type=i["type"] or "suggestion", text=i["text"], category_id=cid, author=author, source="meeting", meeting_id=i["meeting_id"])
+    a = appeals.create(type=i["type"] or "suggestion", text=i["text"], category_id=cid, author=author, source="meeting", meeting_id=i["meeting_id"],
+                       route_by_category=True)   # директор уже решил — сразу исполнителю по категории, минуя отдел развития
     db.ex("UPDATE meeting_items SET director_decision='accepted', decided_at=?, decided_by=?, created_appeal_id=?, category_id=? WHERE id=?",
           (db.now_iso(), user["id"], a["id"], cid, item_id))
     appeals.add_event(a["id"], user["id"], "comment", {"text": f"Идея принята директором на совещании «{i['title']}»"})
@@ -502,3 +515,44 @@ def reject_idea(item_id: int, user: dict, reason: str) -> dict:
     for uid in {i["created_by"], voiced["id"] if voiced else None} - {user["id"], None}:
         appeals.notify(uid, f"Директор отклонил идею с совещания «{i['title']}»: {appeals.short(reason, 100)}", f"/panel#/meetings/{i['meeting_id']}")
     return {"item_id": item_id, "decision": "rejected", "reason": reason}
+
+
+# ---------- контроль поручений (ТЗ v2 §2.4) ----------
+
+def check_tasks() -> dict:
+    """Раз в минуту из фонового цикла: за день до срока — напоминание исполнителю; после срока — метка «Просрочено»
+    и уведомление тому, кто проводил совещание. Каждое поручение напоминается и помечается один раз."""
+    today = db.now().date()
+    tomorrow = (today + timedelta(days=1)).isoformat()
+    reminded = overdue = 0
+    rows = db.q("""SELECT i.*, m.title, m.created_by FROM meeting_items i JOIN meetings m ON m.id=i.meeting_id
+                   WHERE i.kind='task' AND i.removed=0 AND m.status='sent' AND i.due_date IS NOT NULL AND i.task_status IN ('assigned','in_progress')""")
+    for t in rows:
+        if t["due_date"] == tomorrow and not t["reminded_at"] and t["assignee_id"]:
+            db.ex("UPDATE meeting_items SET reminded_at=? WHERE id=?", (db.now_iso(), t["id"]))
+            appeals.notify(t["assignee_id"], f"Завтра срок поручения с совещания «{t['title']}»: {appeals.short(t['text'], 90)}", "/app#/tasks")
+            reminded += 1
+        if t["due_date"] < today.isoformat() and not t["overdue_at"]:
+            db.ex("UPDATE meeting_items SET overdue_at=? WHERE id=?", (db.now_iso(), t["id"]))
+            who = db.one("SELECT name FROM users WHERE id=?", (t["assignee_id"],)) if t["assignee_id"] else None
+            appeals.notify(t["created_by"], f"Просрочено поручение ({who['name'] if who else 'без исполнителя'}, срок {t['due_date']}): {appeals.short(t['text'], 80)}",
+                           f"/panel#/meetings/{t['meeting_id']}")
+            if t["assignee_id"]:
+                appeals.notify(t["assignee_id"], f"Поручение просрочено (срок {t['due_date']}): {appeals.short(t['text'], 90)}", "/app#/tasks")
+            overdue += 1
+    if overdue:
+        realtime.publish_roles(("director", "admin"), {"type": "tasks_overdue", "count": overdue})
+    return {"reminded": reminded, "overdue": overdue}
+
+
+def overdue_summary(user: dict) -> dict:
+    """Строка для главной директора: «Поручения с совещаний: просрочено N» (ответственному — по его совещаниям)."""
+    today = db.now().date().isoformat()
+    where = "" if user["role"] in ("director", "admin") else " AND m.created_by=?"
+    params = () if not where else (user["id"],)
+    row = db.one(f"""SELECT COUNT(*) AS n FROM meeting_items i JOIN meetings m ON m.id=i.meeting_id
+                     WHERE i.kind='task' AND i.removed=0 AND m.status='sent' AND i.task_status IN ('assigned','in_progress') AND i.due_date < ?{where}""",
+                 (today, *params))
+    total = db.one(f"""SELECT COUNT(*) AS n FROM meeting_items i JOIN meetings m ON m.id=i.meeting_id
+                       WHERE i.kind='task' AND i.removed=0 AND m.status='sent' AND i.task_status IN ('assigned','in_progress'){where}""", params)
+    return {"overdue": row["n"], "open": total["n"]}

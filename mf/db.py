@@ -5,7 +5,7 @@ import json
 import sqlite3
 from datetime import datetime, timezone
 
-from .config import DB_PATH
+from . import config
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
@@ -77,6 +77,13 @@ MIGRATIONS = [
     ("meeting_items", "assignee_name", "TEXT"), ("meeting_items", "due_text", "TEXT"), ("meeting_items", "removed", "INTEGER NOT NULL DEFAULT 0"),
     ("meeting_items", "sort", "INTEGER NOT NULL DEFAULT 0"), ("meeting_items", "candidates", "TEXT"), ("meeting_items", "decided_at", "TEXT"),
     ("meeting_items", "decided_by", "INTEGER"), ("meeting_items", "done_at", "TEXT"), ("meeting_items", "linked_number", "TEXT"),
+    ("meeting_items", "reminded_at", "TEXT"), ("meeting_items", "overdue_at", "TEXT"),
+    # ТЗ v2 (кастдев): командированные, путь предложения к директору
+    ("branches", "kind", "TEXT NOT NULL DEFAULT 'office'"), ("appeals", "site_city", "TEXT"),
+    ("categories", "suggestion_responsible_user_id", "INTEGER"),
+    ("appeals", "director_request_text", "TEXT"), ("appeals", "director_requested_at", "TEXT"), ("appeals", "director_requested_by", "INTEGER"),
+    ("appeals", "director_decision", "TEXT"), ("appeals", "director_comment", "TEXT"), ("appeals", "director_decided_at", "TEXT"),
+    ("appeals", "director_decided_by", "INTEGER"),
 ]
 
 _conn: sqlite3.Connection | None = None
@@ -103,7 +110,7 @@ def parse(s: str | None) -> datetime | None:
 def conn() -> sqlite3.Connection:
     global _conn
     if _conn is None:
-        c = sqlite3.connect(DB_PATH, check_same_thread=False)
+        c = sqlite3.connect(config.DB_PATH, check_same_thread=False)
         c.row_factory = sqlite3.Row
         c.execute("PRAGMA journal_mode=WAL")
         c.execute("PRAGMA foreign_keys=ON")
@@ -124,9 +131,18 @@ def reset() -> None:
         _conn.close()
         _conn = None
     for suffix in ("", "-wal", "-shm"):
-        p = DB_PATH.with_name(DB_PATH.name + suffix)
+        p = config.DB_PATH.with_name(config.DB_PATH.name + suffix)
         if p.exists():
             p.unlink()
+
+
+def use(data_dir) -> None:
+    """Переключиться на другую папку данных (тесты): закрыть соединение, дальше conn() откроет новую базу."""
+    global _conn
+    if _conn is not None:
+        _conn.close()
+        _conn = None
+    config.set_data_dir(data_dir)
 
 
 def q(sql: str, params=()) -> list[dict]:

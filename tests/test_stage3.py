@@ -1,18 +1,12 @@
 """Этап 3 (без ключа): голосовой ввод через API (STT выключен → честная ошибка), черновик по словарю, похожие обращения
 по ключевым словам, «У меня так же» вместо дубля, кластеры «Повторяющиеся темы»."""
-import os
-import tempfile
-
-os.environ["MF_DATA_DIR"] = tempfile.mkdtemp(prefix="mf-test3-")
-os.environ["MF_STT"] = "off"
+import os  # noqa: F401
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
 from mf import db  # noqa: E402
 from mf.main import app  # noqa: E402
-
-os.environ.pop("OPENAI_API_KEY", None)
 
 
 @pytest.fixture(scope="module")
@@ -30,11 +24,11 @@ def number_id(number):
 
 
 def test_similar_public_finds_a007(c):
-    r = c.post("/api/public/similar", json={"text": "Повторный ввод одних и тех же сведений в разных рабочих системах, какие операции можно синхронизировать"})
+    r = c.post("/api/public/similar", json={"text": "Вбиваем одно и то же в две системы, в 1С и в Битрикс"})
     assert r.status_code == 200, r.text
     j = r.json()
     assert j["engine"] == "keywords" and j["logged_in"] is False
-    assert "A-007" in [i["number"] for i in j["items"]] and "supports" not in j["items"][0]   # база общая с test_core: там есть ещё одно похожее
+    assert [i["number"] for i in j["items"]][:1] == ["A-007"] and "supports" not in j["items"][0]
     r = c.post("/api/public/similar", json={"text": "Кофемашина сломалась на кухне"}).json()
     assert r["items"] == []
 
@@ -43,9 +37,9 @@ def test_support_instead_of_duplicate(c):
     login(c, 6)   # Сауле: похожее найдено → «У меня так же» → нового обращения нет, поддержка учтена
     before = c.get("/api/health").json()["appeals"]
     r = c.post("/api/ai/similar", json={"text": "вбиваем одно и то же в две системы"}).json()
-    hit = next(i for i in r["items"] if i["number"] == "A-007")
-    assert hit["id"] == number_id("A-007") and "supports" in hit
-    assert c.post(f"/api/appeals/{hit['id']}/support").status_code in (200, 409)
+    hit = r["items"][0]
+    assert hit["number"] == "A-007" and hit["id"] == number_id("A-007") and "supports" in hit
+    assert c.post(f"/api/appeals/{hit['id']}/support").status_code == 200
     assert c.get("/api/health").json()["appeals"] == before
     assert db.one("SELECT 1 FROM supports WHERE appeal_id=? AND user_id=6", (number_id("A-007"),))
 

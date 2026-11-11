@@ -1,12 +1,7 @@
 """Этап 2: ИИ-категория QR-формы (словарь без ключа), режим совещания на текстовой расшифровке §10 запасным разбором,
 отправка → поручения, идеи директору, события discussed_at_meeting; «На решение» → принять → обращение у ответственного."""
 import os
-import tempfile
 import time
-
-os.environ["MF_DATA_DIR"] = tempfile.mkdtemp(prefix="mf-test2-")
-os.environ.pop("OPENAI_API_KEY", None)   # этап 2 тестируется без ключа: запасной разбор и словарь категорий
-os.environ["MF_STT"] = "off"
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
@@ -14,8 +9,6 @@ from fastapi.testclient import TestClient  # noqa: E402
 from mf import db  # noqa: E402
 from mf.ai import fallback, names  # noqa: E402
 from mf.main import app  # noqa: E402
-
-os.environ.pop("OPENAI_API_KEY", None)   # mf.config подтянул .env при импорте — тесты должны идти без живого ключа
 
 TRANSCRIPT = """Олег: Коллеги, коротко. Бухгалтерия снова пишет про повторный ввод — одни и те же данные вбивают в две системы.
 Ерлан: Могу собрать список таких операций и оценить, что можно синхронизировать.
@@ -73,8 +66,10 @@ def test_qr_ai_category_routes_to_responsible(c):
 def test_qr_unsure_stays_unassigned(c):
     r = c.post("/api/public/appeals", data={"type": "problem", "text": "Всё плохо, помогите разобраться", "branch_code": "AST"}).json()
     assert r["category"] is None and r["responsible"] is None
-    r = c.post("/api/public/appeals", data={"type": "suggestion", "text": "Навести порядок в общих папках: не найти актуальную редакцию инструкции", "branch_code": "AST"}).json()
+    r = c.post("/api/public/appeals", data={"type": "problem", "text": "В общих папках не найти актуальную редакцию инструкции", "branch_code": "AST"}).json()
     assert r["category"] == "Хранение документов" and r["responsible"] is None   # реальная вакансия (A-019)
+    r = c.post("/api/public/appeals", data={"type": "suggestion", "text": "Навести порядок в общих папках: правила именования и архив старых версий", "branch_code": "AST"}).json()
+    assert r["category"] == "Хранение документов" and r["responsible"] == "Гульнара Сейтжанова"   # предложение → отдел развития (ТЗ v2)
 
 
 def test_keyword_dictionary_against_dataset():
@@ -88,7 +83,7 @@ def test_keyword_dictionary_against_dataset():
 def test_app_form_without_category_gets_ai_category(c):
     login(c, 6)
     a = c.post("/api/appeals", data={"type": "problem", "text": "Принтер в бухгалтерии не печатает, в 1С не выгрузить акты", "category_id": ""}).json()
-    assert a["category"] == "Интеграции и IT" and a["responsible_id"] == 3
+    assert a["category"] == "1С и автоматизация" and a["responsible_id"] == 26   # по кастдеву: 1С — отдельная категория
 
 
 # ---------- нечёткие имена ----------
@@ -106,8 +101,8 @@ def test_fuzzy_names():
 
 def test_meeting_text_transcript_fallback_and_send(c):
     aid7, aid12 = number_id("A-007"), number_id("A-012")
-    login(c, 6)                                     # Сауле поддерживает A-007 (в seed поддержки нет — создаём в тесте;
-    assert c.post(f"/api/appeals/{aid7}/support").status_code in (200, 409)   # 409 — уже поддержала в test_core, база общая)
+    login(c, 6)                                     # Сауле поддерживает A-007 (в seed поддержки нет — создаём в тесте)
+    assert c.post(f"/api/appeals/{aid7}/support").status_code == 200
     assert c.post("/api/meetings", data={"title": "x", "transcript": TRANSCRIPT}).status_code == 403   # сотрудник не ведёт планёрки
 
     login(c, 2)                                     # Олег ведёт планёрку
@@ -168,8 +163,9 @@ def test_director_ideas_accept_and_reject(c):
     login(c, 1)                                     # Виктор — директор
     assert any("На решение" in n for n in notes(c))
     ideas = c.get("/api/director/ideas").json()
-    assert len(ideas["pending"]) == 1
-    idea = ideas["pending"][0]
+    meeting_ideas = [x for x in ideas["pending"] if x["source"] == "meeting"]   # в очереди ещё предложения из обращений (seed, ТЗ v2)
+    assert len(meeting_ideas) == 1
+    idea = meeting_ideas[0]
     assert "шаблон" in idea["text"].lower() and idea["category_responsible"] == "Айгерим Нурланова"
     assert c.post(f"/api/director/ideas/{idea['id']}/reject", json={"reason": " "}).status_code == 422   # причина обязательна
     r = c.post(f"/api/director/ideas/{idea['id']}/accept", json={})
@@ -178,7 +174,7 @@ def test_director_ideas_accept_and_reject(c):
     assert a["type"] == "suggestion" and a["source"] == "meeting" and a["responsible_id"] == 4 and a["category"] == "Задачи и коммуникации"
     assert a["author"]["id"] == 4                   # озвучила Айгерим — она автор и получит баллы
     assert c.post(f"/api/director/ideas/{idea['id']}/accept", json={}).status_code == 409
-    assert c.get("/api/director/ideas").json()["pending"] == []
+    assert [x for x in c.get("/api/director/ideas").json()["pending"] if x["source"] == "meeting"] == []
     login(c, 4)                                     # Айгерим: новое обращение назначено ей по категории
     assert any(a["number"] in n for n in notes(c))
     login(c, 6)
@@ -191,7 +187,7 @@ def test_director_ideas_accept_and_reject(c):
     assert m["status"] == "review" and m["demo"] is False and m["fallback"] is True
     assert c.post(f"/api/meetings/{mid}/send").status_code == 200
     login(c, 1)
-    pending = c.get("/api/director/ideas").json()["pending"]
+    pending = [x for x in c.get("/api/director/ideas").json()["pending"] if x["source"] == "meeting"]
     assert len(pending) == 1
     r = c.post(f"/api/director/ideas/{pending[0]['id']}/reject", json={"reason": "Дежурный не решит проблему разрозненных чатов"})
     assert r.status_code == 200 and r.json()["decision"] == "rejected"

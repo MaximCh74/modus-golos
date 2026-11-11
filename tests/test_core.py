@@ -1,8 +1,5 @@
 """Этап 1: ядро без ИИ — проверочные сценарии датасета 1–6 и правила ТЗ v1.1 §5."""
-import os
-import tempfile
-
-os.environ["MF_DATA_DIR"] = tempfile.mkdtemp(prefix="mf-test-")
+import os  # noqa: F401 — папка данных и окружение задаются в conftest.py
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
@@ -28,10 +25,10 @@ def number_id(number):
 
 
 def test_seed_matches_dataset(c):
-    assert c.get("/api/health").json()["appeals"] == 20
+    assert c.get("/api/health").json()["appeals"] == 28   # 20 датасета + 8 синтетических по кастдеву
     a17 = db.one("SELECT * FROM appeals WHERE number='A-017'")
     assert a17["status"] == "rejected" and "помещения" in a17["resolution_text"]
-    assert db.one("SELECT COUNT(*) AS n FROM categories")["n"] == 18
+    assert db.one("SELECT COUNT(*) AS n FROM categories")["n"] == 19   # 18 датасета + «1С и автоматизация»
     assert db.one("SELECT responsible_id FROM appeals WHERE number='A-019'")["responsible_id"] is None
 
 
@@ -40,13 +37,13 @@ def test_qr_anonymous_and_tracking(c):
     r = c.post("/api/public/appeals", data={"type": "problem", "text": "Нужна помощь, непонятно к кому обращаться", "branch_code": "PVL"})
     assert r.status_code == 200, r.text
     j = r.json()
-    assert j["number"] == "A-021" and j["logged_in"] is False
+    assert j["number"] == "A-029" and j["logged_in"] is False   # после 20 обращений датасета и 8 синтетических по кастдеву
     t = c.get(f"/api/public/track/{j['tracking_token']}").json()
     assert t["status"] == "new" and t["author"] is None and t["is_anonymous"] == 1 and t["unassigned"] is True
     assert c.get("/api/public/track/nope").status_code == 404
     login(c, 15)   # администратор: очередь «Без ответственного», автор не раскрывается
     q = c.get("/api/panel/appeals", params={"unassigned": 1}).json()
-    assert any(x["number"] == "A-021" for x in q)
+    assert any(x["number"] == "A-029" for x in q)
     card = c.get(f"/api/appeals/{j['id']}").json()
     assert card["author"] is None and card["is_anonymous"] == 1
 
@@ -57,15 +54,21 @@ def test_routing_by_category(c):
     assert r.status_code == 200, r.text
     a = r.json()
     assert a["responsible_id"] == 3 and a["responsible"] == "Ерлан Жумабеков"
+    r = c.post("/api/appeals", data={"type": "problem", "text": "В общих папках не найти актуальную инструкцию", "category_id": "17"})
+    assert r.json()["responsible_id"] is None and r.json()["unassigned"] is True   # вакансия категории (A-019)
+    # ТЗ v2: предложения по умолчанию — руководителю отдела развития, руководителю автора — копия
     r = c.post("/api/appeals", data={"type": "suggestion", "text": "Навести порядок в общих папках с инструкциями", "category_id": "17"})
-    assert r.json()["responsible_id"] is None and r.json()["unassigned"] is True
+    assert r.json()["responsible_id"] == 25 and r.json()["responsible"] == "Гульнара Сейтжанова"
+    login(c, 7)   # Марина — руководитель Сауле
+    assert any("подал предложение" in n["text"] and r.json()["number"] in n["text"] for n in c.get("/api/notifications").json()["items"])
 
 
 def test_status_flow_rejection_and_points(c):
     login(c, 6)
     a = c.post("/api/appeals", data={"type": "suggestion", "text": "Сделать шаблон КП с обязательными полями", "category_id": "7"}).json()
     before = c.get("/api/me/points").json()["balance"]
-    login(c, 3)   # Ерлан
+    assert a["responsible_id"] == 25   # предложение → отдел развития (ТЗ v2)
+    login(c, 25)  # Гульнара, отдел развития
     assert c.post(f"/api/panel/appeals/{a['id']}/status", json={"status": "done"}).status_code == 409   # не из «Новое»
     r = c.post(f"/api/panel/appeals/{a['id']}/status", json={"status": "review"})
     assert r.status_code == 200 and r.json()["first_response_at"]
@@ -86,7 +89,7 @@ def test_rejection_with_reason_visible_to_author(c):
     login(c, 6)
     a = c.post("/api/appeals", data={"type": "suggestion", "text": "Поставить кофемашину на третьем этаже", "category_id": "16"}).json()
     before = c.get("/api/me/points").json()["balance"]
-    login(c, 11)   # Сергей, административный руководитель
+    login(c, 25)   # предложение ведёт отдел развития (ТЗ v2)
     r = c.post(f"/api/panel/appeals/{a['id']}/status", json={"status": "rejected", "text": "Бюджет на этот год исчерпан"})
     assert r.status_code == 200
     login(c, 6)
@@ -149,5 +152,5 @@ def test_permissions(c):
 def test_summary(c):
     login(c, 1)
     s = c.get("/api/panel/summary").json()
-    assert s["open"] > 0 and s["considered_share"] is not None and len(s["by_branch"]) == 4
+    assert s["open"] > 0 and s["considered_share"] is not None and len(s["by_branch"]) == 6   # 5 городов + «Объект»
     assert s["done_total"] >= 2

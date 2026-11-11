@@ -56,7 +56,7 @@ async function route() {
     if (p[0] === 'notifications') { S.view = 'notifications'; return await notifications(); }
     if (p[0] === 'meetings' && p[1] === 'new') { S.view = 'meetings'; return await meetingStart({ backHref: '#/meetings', cardPrefix: '#/meetings/' }); }
     if (p[0] === 'meetings' && p[1]) { S.view = 'meetings'; return await meetingCard(Number(p[1]), { backHref: '#/meetings', cardPrefix: '#/meetings/' }); }
-    if (p[0] === 'meetings') { S.view = 'meetings'; return await meetingsList(); }
+    if (p[0] === 'meetings' || p[0].startsWith('meetings?')) { S.view = 'meetings'; return await meetingsList(); }
     if (p[0] === 'decisions') { S.view = 'decisions'; return await decisionsScreen({ backHref: '#/queue' }); }
     if (p[0] === 'admin') { S.view = 'admin'; return placeholder('Администрирование', 'Категории ↔ ответственные ↔ SLA, пользователи, филиалы и QR, награды, баллы — этап 4. Сейчас всё задаётся в mf/seed.py.'); }
     S.view = 'queue'; return await queue();
@@ -134,7 +134,7 @@ async function loadCard(id) {
   const head = h('div', { class: 'card' },
     h('div', { class: 'row' }, h('span', { class: 'h1' }, a.number), badge(a.status), a.overdue ? tag('tag-overdue', 'Просрочено') : null, a.unassigned ? tag('tag-unassigned', 'Без ответственного') : null, a.is_anonymous ? tag('tag-anon', 'аноним') : null),
     tracker(a.status),
-    h('div', { class: 'small muted' }, [a.type_label, a.priority_label + ' приоритет', a.category || 'категория не определена', a.branch, a.department].filter(Boolean).join(' · ')),
+    h('div', { class: 'small muted' }, [a.type_label, a.priority_label + ' приоритет', a.category || 'категория не определена', a.branch, a.site_city ? 'объект: ' + a.site_city : null, a.department].filter(Boolean).join(' · ')),
     h('p', { class: 'pre' }, a.text),
     a.proposed_solution ? h('div', { class: 'small' }, h('b', {}, 'Предлагаемое решение: '), a.proposed_solution) : null,
     h('div', { class: 'small muted mt8' }, 'Автор: ' + (a.author ? a.author.name + (a.author.position ? ' (' + a.author.position + ')' : '') : 'анонимно')),
@@ -142,6 +142,9 @@ async function loadCard(id) {
     a.attachments.length ? h('div', { class: 'small mt8' }, 'Вложения: ', a.attachments.map(f => h('a', { href: '/api/attachments/' + f.id, target: '_blank' }, f.filename + ' '))) : null,
     h('div', { class: 'small muted mt8' }, '👍 У меня так же: ' + a.supports));
   const result = a.resolution_text ? h('div', { class: 'card ' + (a.status === 'rejected' ? 'card-bad' : 'card-ok') }, h('b', {}, a.status === 'rejected' ? 'Отклонено — причина' : 'Что сделали'), h('p', { class: 'pre' }, a.resolution_text)) : null;
+  const director = a.director_decision ? h('div', { class: 'card ' + (a.director_decision === 'pending' ? 'card-info' : a.director_decision === 'accepted' ? 'card-ok' : 'card-bad') },
+    h('div', { class: 'row' }, h('b', {}, 'Решение директора: '), tag(a.director_decision === 'pending' ? 'st-review' : a.director_decision === 'accepted' ? 'st-done' : 'st-rejected', a.director_decision_label), h('span', { class: 'small muted' }, fmtDate(a.director_decided_at || a.director_requested_at))),
+    h('div', { class: 'small mt8' }, h('b', {}, 'Что требуется: '), a.director_request_text), a.director_comment ? h('div', { class: 'small' }, h('b', {}, 'Комментарий: '), a.director_comment) : null) : null;
   let actions = null;
   if (a.can_manage) {
     const assignSel = h('select', {}, h('option', { value: '' }, '— выбрать ответственного —'), staff.map(u => h('option', { value: u.id, selected: u.id === a.responsible_id }, u.name + ' · ' + (u.position || u.role))));
@@ -162,16 +165,19 @@ async function loadCard(id) {
     }
     const clarTa = h('textarea', { placeholder: 'Вопрос автору' });
     const clarBtn = h('button', { class: 'btn btn-sm', onclick: () => act(() => API.post('/api/panel/appeals/' + id + '/clarify', { text: clarTa.value }), 'Уточнение запрошено') }, 'Запросить уточнение');
+    const dirTa = h('textarea', { class: 'hidden', placeholder: 'Что требуется: ресурсы, бюджет, люди — коротко' });
+    const dirBtn = h('button', { class: 'btn btn-sm btn-outline', onclick: () => { if (dirTa.classList.contains('hidden')) { dirTa.classList.remove('hidden'); dirTa.focus(); dirBtn.textContent = 'Вынести на решение'; return; } act(() => API.post('/api/panel/appeals/' + id + '/director', { text: dirTa.value }), 'Вынесено на решение директора'); } }, 'Нужно решение директора');
     const comTa = h('textarea', { placeholder: 'Комментарий (увидит автор)' });
     const comBtn = h('button', { class: 'btn btn-sm', onclick: () => act(() => API.post('/api/panel/appeals/' + id + '/comment', { text: comTa.value }), 'Комментарий добавлен') }, 'Комментировать');
     actions = h('div', { class: 'card actions' },
       h('b', {}, 'Действия'),
       ['new', 'review', 'clarify', 'in_progress'].includes(a.status) ? h('div', { class: 'row' }, h('div', { class: 'spacer' }, assignSel), assignBtn) : null,
       (a.allowed_next || []).length ? h('div', {}, h('div', { class: 'hint' }, 'Статус'), statusBox, reasonTa, h('div', { class: 'mt8' }, confirmBtn)) : null,
+      a.can_request_director ? h('div', {}, h('div', { class: 'hint' }, 'Предложение требует ресурсов или бюджета?'), dirTa, h('div', { class: 'mt8' }, dirBtn)) : null,
       ['new', 'review'].includes(a.status) ? h('div', {}, clarTa, h('div', { class: 'mt8' }, clarBtn)) : null,
       ['new', 'review', 'clarify', 'in_progress'].includes(a.status) ? h('div', {}, comTa, h('div', { class: 'mt8' }, comBtn)) : null);
   }
-  box.replaceChildren(head, result, actions, h('div', { class: 'card' }, h('div', { class: 'h2' }, 'История'), history(a.events)));
+  box.replaceChildren(head, result, director, actions, h('div', { class: 'card' }, h('div', { class: 'h2' }, 'История'), history(a.events)));
   const row = [...document.querySelectorAll('#queue-table tbody tr')].find(tr => tr.textContent.startsWith(a.number));
   if (row) row.classList.add('sel');
 }
@@ -179,7 +185,8 @@ async function loadCard(id) {
 // ---------- совещания ----------
 
 async function meetingsList() {
-  const list = await API.get('/api/meetings');
+  const overdueOnly = (location.hash.split('?')[1] || '').includes('overdue=1');
+  const list = await API.get('/api/meetings' + (overdueOnly ? '?overdue=1' : ''));
   const st = s => s === 'sent' ? 'st-done' : s === 'review' ? 'st-review' : s === 'failed' ? 'st-rejected' : 'st-new';
   const tbl = h('table', { class: 'tbl' },
     h('thead', {}, h('tr', {}, ['Дата', 'Совещание', 'Филиал', 'Ведущий', 'Итог', 'Статус', 'Поручения', 'Идеи'].map(t => h('th', {}, t)))),
@@ -187,9 +194,11 @@ async function meetingsList() {
       h('td', { class: 'small' }, fmtDate(m.created_at)), h('td', {}, h('b', {}, m.title), m.fallback ? h('div', {}, tag('tag-demo', m.demo ? 'демо-разбор без ИИ' : 'без ИИ')) : null),
       h('td', {}, m.branch || '—'), h('td', {}, m.creator || '—'), h('td', { class: 'small' }, m.summary_line || (m.error ? h('span', { class: 'muted' }, m.error) : '—')),
       h('td', {}, tag(st(m.status), m.status_label)),
-      h('td', {}, 'выполнено ' + m.counts.tasks_done + ' / ' + m.counts.tasks + (m.counts.flags ? ' ' : ''), m.counts.flags ? tag('tag-flag', 'флагов ' + m.counts.flags) : null),
+      h('td', {}, 'выполнено ' + m.counts.tasks_done + ' / ' + m.counts.tasks + ' ', m.counts.tasks_overdue ? tag('tag-overdue', 'просрочено ' + m.counts.tasks_overdue) : null, ' ', m.counts.flags ? tag('tag-flag', 'флагов ' + m.counts.flags) : null),
       h('td', {}, 'принято ' + m.counts.ideas_accepted + ' · на решении ' + m.counts.ideas_pending + (m.counts.ideas_rejected ? ' · отклонено ' + m.counts.ideas_rejected : ''))))));
-  root.replaceChildren(h('div', { class: 'wrap wrap-wide' }, h('div', { class: 'row' }, h('div', { class: 'h1' }, 'Совещания'), h('div', { class: 'spacer' }),
+  const chk = h('input', { type: 'checkbox', checked: overdueOnly });
+  chk.addEventListener('change', () => { location.hash = '#/meetings' + (chk.checked ? '?overdue=1' : ''); });
+  root.replaceChildren(h('div', { class: 'wrap wrap-wide' }, h('div', { class: 'row' }, h('div', { class: 'h1' }, 'Совещания'), h('label', { class: 'check small' }, chk, 'только с просроченными поручениями'), h('div', { class: 'spacer' }),
     h('a', { href: '#/meetings/new', class: 'btn btn-primary btn-sm' }, '+ Записать или загрузить планёрку')),
     h('p', { class: 'hint' }, 'Запись планёрки → расшифровка → разбор: итог, решения, поручения, идеи директору, связанные обращения. Ответственные видят свои совещания, директор и администратор — все.'),
     h('div', { class: 'card' }, list.length ? tbl : h('div', { class: 'muted' }, 'Совещаний пока нет'))));

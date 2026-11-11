@@ -12,7 +12,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.datastructures import MutableHeaders
 
-from . import api, appeals, db, seed
+from . import api, appeals, db, meetings, seed
 from .ai import stt
 from .config import ROOT
 
@@ -63,6 +63,9 @@ async def overdue_loop():
             escalated = appeals.check_overdue()
             if escalated:
                 log.info("просрочка: эскалировано %s", ", ".join(escalated))
+            t = meetings.check_tasks()
+            if t["reminded"] or t["overdue"]:
+                log.info("поручения: напоминаний %s, просрочено %s", t["reminded"], t["overdue"])
         except Exception:
             log.exception("check_overdue")
         await asyncio.sleep(60)
@@ -97,6 +100,11 @@ async def index():
 @app.get("/login")
 async def login_page():
     return page("login.html")
+
+
+@app.get("/rules")
+async def rules_page():
+    return page("rules.html")
 
 
 @app.get("/q/{code}")

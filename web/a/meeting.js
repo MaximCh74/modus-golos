@@ -23,8 +23,8 @@ async function meetingStart(opts) {
   const title = h('input', { type: 'text', placeholder: 'Название встречи (необязательно), например «Планёрка продаж»' });
   const canRecord = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder);
   const recBtn = h('button', { class: 'btn btn-primary btn-big', disabled: !canRecord }, '● Начать запись');
-  const file = h('input', { type: 'file', accept: 'audio/*,video/webm,video/mp4,.m4a,.mp3,.wav,.ogg,.webm,.opus', class: 'hidden' });
-  const uploadBtn = h('button', { class: 'btn btn-outline btn-big', onclick: () => file.click() }, 'Загрузить аудио');
+  const file = h('input', { type: 'file', accept: 'audio/*,video/*,.m4a,.mp3,.wav,.ogg,.webm,.opus,.mp4,.mov,.mkv', class: 'hidden' });
+  const uploadBtn = h('button', { class: 'btn btn-outline btn-big', onclick: () => file.click() }, 'Загрузить аудио или видеозвонок');
   const ta = h('textarea', { placeholder: 'Вставьте текст расшифровки — для отладки без микрофона. Формат «Имя: реплика» помогает разбору.' });
   const textBtn = h('button', { class: 'btn btn-sm btn-primary', onclick: () => submitMeeting({ title: title.value, transcript: ta.value }, opts) }, 'Разобрать текст');
   const demoBtn = h('button', { class: 'btn btn-sm', onclick: () => { ta.value = DEMO_TRANSCRIPT; } }, 'Подставить демо-планёрку из ТЗ §10');
@@ -35,7 +35,7 @@ async function meetingStart(opts) {
   const llmLine = ai.llm ? 'Разбор: ' + ai.llm_model + ' через OpenAI' : 'Разбор: без ключа OpenAI — заскриптованный демо-разбор (честно помечается на экране)';
   root.replaceChildren(h('div', { class: 'wrap' }, back(opts.backHref || '#/'), h('div', { class: 'h1' }, 'Режим совещания'),
     h('div', { class: 'card' }, field('Название', title),
-      h('div', { class: 'card card-warn small' }, h('b', {}, 'Участники уведомлены о записи. '), 'Запись расшифровывается автоматически, аудио удаляется сразу после расшифровки — хранится только текст.'),
+      h('div', { class: 'card card-warn small' }, h('b', {}, 'Участники уведомлены о записи. '), 'Запись расшифровывается автоматически; аудио и видео удаляются сразу после расшифровки — хранится только текст. Гибридная планёрка: загрузите запись видеозвонка (mp4, mov, mkv, webm) — возьмём звуковую дорожку.'),
       h('div', { class: 'grid2' }, recBtn, uploadBtn), file,
       canRecord ? null : h('div', { class: 'hint mt8' }, 'Запись с микрофона доступна только по HTTPS (адрес туннеля) или на localhost — загрузите файл или вставьте текст.'),
       h('div', { class: 'hint mt8' }, sttLine), h('div', { class: 'hint' }, llmLine)),
@@ -169,7 +169,7 @@ function itemRow(m, i, kind, staff, save, refresh) {
       add(meta, h('span', { class: 'muted' }, 'Кто:'), sel, h('span', { class: 'muted' }, 'Срок:'), due, i.due_text ? h('span', { class: 'muted' }, '(«' + i.due_text + '»)') : null);
     } else {
       add(meta, h('span', {}, h('b', {}, 'Кто: '), i.assignee || h('span', { class: 'muted' }, 'не назначен')), h('span', {}, h('b', {}, 'Срок: '), i.due_date ? fmtDue(i.due_date) : h('span', { class: 'muted' }, 'нет')),
-        i.task_status && i.task_status !== 'draft' ? tag(i.task_status === 'done' ? 'st-done' : 'st-work', TASK_ST[i.task_status]) : null);
+        i.task_status && i.task_status !== 'draft' ? tag(i.task_status === 'done' ? 'st-done' : 'st-work', TASK_ST[i.task_status]) : null, i.overdue ? tag('tag-overdue', 'Просрочено') : null);
     }
     for (const f of i.flag_labels) meta.append(tag('tag-flag', f));
   }
@@ -260,13 +260,33 @@ async function tasksScreen(opts) {
 async function decisionsScreen(opts) {
   opts = opts || {};
   const d = await API.get('/api/director/ideas');
-  root.replaceChildren(h('div', { class: 'wrap' }, back(opts.backHref || '#/'), h('div', { class: 'h1' }, 'На решение'),
-    h('p', { class: 'hint' }, 'Идеи и проблемы с совещаний. «Принять» создаёт обращение и отправляет его ответственному по категории; отклонение — только с причиной.'),
-    d.pending.length ? d.pending.map(i => ideaCard(i, () => decisionsScreen(opts))) : h('div', { class: 'card muted' }, 'Нет идей, ожидающих решения'),
+  root.replaceChildren(h('div', { class: 'wrap' }, back(opts.backHref || '#/'), h('div', { class: 'row' }, h('div', { class: 'h1' }, 'На решение'), h('div', { class: 'spacer' }),
+      d.over_threshold ? tag('tag-flag', 'ждут дольше ' + d.threshold_days + ' дн: ' + d.over_threshold) : h('span', { class: 'small muted' }, 'порог ' + d.threshold_days + ' дн')),
+    h('p', { class: 'hint' }, 'Идеи с совещаний и предложения из обращений, которым нужны ресурсы. «Принять» для идеи создаёт обращение ответственному по категории; отклонение — только с причиной.'),
+    d.pending.length ? d.pending.map(i => i.source === 'appeal' ? appealDecisionCard(i, () => decisionsScreen(opts)) : ideaCard(i, () => decisionsScreen(opts))) : h('div', { class: 'card muted' }, 'Нет идей, ожидающих решения'),
     d.decided.length ? h('div', { class: 'h2' }, 'Решено') : null,
     d.decided.length ? h('div', { class: 'card list' }, d.decided.map(i => h('div', { class: 'item' }, h('div', { class: 'row' }, tag(i.director_decision === 'accepted' ? 'st-done' : 'st-rejected', i.director_decision_label),
       h('span', { class: 'small muted' }, '«' + i.meeting_title + '» · ' + fmtDate(i.decided_at) + (i.decided_by_name ? ' · ' + i.decided_by_name : '')), i.created_appeal_number ? h('a', { href: '#/appeal/' + i.created_appeal_id, class: 'small' }, '→ ' + i.created_appeal_number) : null),
       h('div', { class: 'small' }, i.text), i.director_comment ? h('div', { class: 'small muted' }, 'Причина: ' + i.director_comment) : null))) : null));
+}
+
+function waitTag(i) {
+  if (i.wait_days === null || i.wait_days === undefined) return null;
+  const d = Math.floor(i.wait_days);
+  return tag(i.over_threshold ? 'tag-flag' : 'tag-type', 'ждёт решения ' + (d < 1 ? 'меньше дня' : d + ' дн'));
+}
+
+function appealDecisionCard(i, refresh) {
+  const reason = h('textarea', { class: 'hidden', placeholder: 'Причина отклонения — её увидят автор и ответственный (обязательно)' });
+  const comment = h('input', { type: 'text', placeholder: 'Комментарий при принятии (необязательно): что выделено, какой срок' });
+  const act = async (decision, text) => { try { await API.post('/api/director/appeals/' + i.appeal_id + '/decide', { decision, comment: text }); toast(decision === 'accepted' ? 'Принято — ответственный и автор уведомлены' : 'Отклонено'); refresh(); } catch (e) { toast(e.message, 'bad'); } };
+  const accept = h('button', { class: 'btn btn-sm btn-ok', onclick: () => act('accepted', comment.value) }, 'Принять');
+  const rejectBtn = h('button', { class: 'btn btn-sm btn-danger', onclick: () => { if (reason.classList.contains('hidden')) { reason.classList.remove('hidden'); reason.focus(); rejectBtn.textContent = 'Подтвердить отклонение'; return; } act('rejected', reason.value); } }, 'Отклонить с причиной');
+  return h('div', { class: 'card ' + (i.over_threshold ? 'card-warn' : 'card-info') },
+    h('div', { class: 'row' }, tag('tag-type', 'из обращения'), h('a', { href: '#/appeal/' + i.appeal_id }, h('b', {}, i.number)), h('span', { class: 'small muted' }, [i.category, i.branch, i.responsible ? 'ведёт ' + i.responsible : null].filter(Boolean).join(' · ')), h('div', { class: 'spacer' }), waitTag(i)),
+    h('p', {}, i.text),
+    h('div', { class: 'small' }, h('b', {}, 'Что требуется: '), i.request), i.supports ? h('div', { class: 'small muted' }, '👍 У меня так же: ' + i.supports) : null,
+    comment, reason, h('div', { class: 'row mt8' }, accept, rejectBtn));
 }
 
 function ideaCard(i, refresh) {
@@ -282,7 +302,7 @@ function ideaCard(i, refresh) {
     try { await API.post('/api/director/ideas/' + i.id + '/reject', { reason: reason.value }); toast('Отклонено'); refresh(); } catch (e) { toast(e.message, 'bad'); }
   } }, 'Отклонить с причиной');
   return h('div', { class: 'card card-info' },
-    h('div', { class: 'row' }, tag('tag-type', i.type === 'problem' ? 'Проблема' : 'Идея'), h('span', { class: 'small muted' }, 'с совещания «' + i.meeting_title + '» · ' + (i.meeting_creator || '') + (i.voiced_by ? ' · озвучил(а) ' + i.voiced_by : ''))),
+    h('div', { class: 'row' }, tag('tag-type', i.type === 'problem' ? 'Проблема' : 'Идея'), h('span', { class: 'small muted' }, 'с совещания «' + i.meeting_title + '» · ' + (i.meeting_creator || '') + (i.voiced_by ? ' · озвучил(а) ' + i.voiced_by : '')), h('div', { class: 'spacer' }), waitTag(i)),
     h('p', {}, i.text),
     h('div', { class: 'row small' }, h('span', { class: 'muted' }, 'Категория → ответственный:'), sel),
     reason, h('div', { class: 'row mt8' }, accept, rejectBtn));
@@ -290,10 +310,12 @@ function ideaCard(i, refresh) {
 
 async function decisionsBlock(href) {
   try {
-    const d = await API.get('/api/director/ideas');
-    if (!d.pending.length) return null;
-    return h('div', { class: 'card card-info' }, h('div', { class: 'row' }, h('b', {}, 'На решение: ' + d.pending.length), h('div', { class: 'spacer' }), h('a', { href, class: 'btn btn-sm btn-primary' }, 'Открыть')),
-      h('div', { class: 'list' }, d.pending.slice(0, 3).map(i => h('div', { class: 'item small', onclick: () => { location.hash = href.slice(href.indexOf('#')); } }, i.text))));
+    const [d, t] = await Promise.all([API.get('/api/director/ideas'), API.get('/api/tasks/overdue').catch(() => null)]);
+    if (!d.pending.length && !(t && t.overdue)) return null;
+    return h('div', { class: 'card ' + (d.over_threshold ? 'card-warn' : 'card-info') }, h('div', { class: 'row' }, h('b', {}, 'На решение: ' + d.pending.length),
+        d.over_threshold ? tag('tag-flag', 'ждут дольше ' + d.threshold_days + ' дн: ' + d.over_threshold) : null, h('div', { class: 'spacer' }), h('a', { href, class: 'btn btn-sm btn-primary' }, 'Открыть')),
+      h('div', { class: 'list' }, d.pending.slice(0, 3).map(i => h('div', { class: 'item small', onclick: () => { location.hash = href.slice(href.indexOf('#')); } }, (i.source === 'appeal' ? i.number + ' · ' : '') + i.text))),
+      t && t.overdue ? h('div', { class: 'row mt8 small' }, h('span', {}, 'Поручения с совещаний: '), tag('tag-overdue', 'просрочено ' + t.overdue), h('a', { href: '/panel#/meetings?overdue=1', class: 'small' }, 'открыть')) : null);
   } catch (e) { return null; }
 }
 

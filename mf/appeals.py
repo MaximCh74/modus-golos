@@ -33,7 +33,8 @@ DEFAULT_POINTS = {"accepted": 10, "done": 50, "support": 2, "support_cap": 20}
 POINT_REASONS = {"accepted": "принято к рассмотрению", "done": "реализовано", "support": "«У меня так же» от коллеги"}
 DEFAULT_SLA = 48
 PUBLIC_EVENT_KINDS = ("created", "assigned", "status_changed", "comment", "clarification_requested",
-                      "clarification_answered", "discussed_at_meeting", "supported")
+                      "clarification_answered", "discussed_at_meeting", "supported", "director_requested", "director_decided")
+DIRECTOR_DECISIONS = {"pending": "На решении", "accepted": "Принято", "rejected": "Отклонено"}
 
 BASE_SELECT = """SELECT a.*, c.name AS category, c.sla_first_response_hours AS sla,
   b.name AS branch, b.code AS branch_code, d.name AS department,
@@ -171,12 +172,32 @@ def next_number() -> str:
     return f"A-{n:03d}"
 
 
-def route(a: dict, actor_id: int | None = None) -> dict | None:
-    """Ответственный своей категории; если его нет или он неактивен — очередь администратора с меткой «Без ответственного»."""
+def dev_head() -> dict | None:
+    """Руководитель отдела развития (ТЗ v2 §2.1): предложения по умолчанию идут ему, если у категории не задан свой ответственный."""
+    uid = db.setting("dev_department_head_id")
+    u = db.one("SELECT * FROM users WHERE id=? AND active=1", (uid,)) if uid else None
+    if not u:
+        u = db.one("SELECT u.* FROM users u JOIN departments d ON d.id=u.department_id WHERE d.name='Отдел развития' AND u.role='responsible' AND u.active=1 ORDER BY u.id LIMIT 1")
+    return u
+
+
+def route(a: dict, actor_id: int | None = None, by_category: bool = False) -> dict | None:
+    """Проблемы — ответственному категории. Предложения (ТЗ v2 по кастдеву) — ответственному за предложения в категории,
+    иначе руководителю отдела развития; by_category=True (идея принята директором) — как проблемы.
+    Нет ответственного или он неактивен — очередь администратора с меткой «Без ответственного».
+    Руководителю автора — уведомление-копия о предложении."""
     resp = None
     cat = db.one("SELECT * FROM categories WHERE id=?", (a["category_id"],)) if a["category_id"] else None
-    if cat and cat["responsible_user_id"]:
+    if a["type"] == "suggestion" and not by_category:
+        if cat and cat["suggestion_responsible_user_id"]:
+            resp = db.one("SELECT * FROM users WHERE id=? AND active=1", (cat["suggestion_responsible_user_id"],))
+        resp = resp or dev_head()
+    if not resp and cat and cat["responsible_user_id"]:
         resp = db.one("SELECT * FROM users WHERE id=? AND active=1", (cat["responsible_user_id"],))
+    if a["type"] == "suggestion" and not a["is_anonymous"]:
+        author = db.one("SELECT * FROM users WHERE id=?", (author_id(a["id"]),)) if author_id(a["id"]) else None
+        if author and author["manager_id"] and author["manager_id"] not in (resp["id"] if resp else None,):
+            notify(author["manager_id"], f"Ваш сотрудник {author['name']} подал предложение {a['number']}: {short(a['text'])}", f"/panel#/appeal/{a['id']}")
     if resp:
         db.ex("UPDATE appeals SET responsible_id=? WHERE id=?", (resp["id"], a["id"]))
         add_event(a["id"], actor_id, "assigned", {"responsible_id": resp["id"], "responsible": resp["name"], "auto": actor_id is None})
@@ -193,7 +214,7 @@ def route(a: dict, actor_id: int | None = None) -> dict | None:
 def create(*, type: str, text: str, proposed_solution: str | None = None, category_id: int | None = None,
            priority: str = "medium", branch_id: int | None = None, department_id: int | None = None,
            author: dict | None = None, is_anonymous: bool = False, source: str = "app", meeting_id: int | None = None,
-           ai: dict | None = None) -> dict:
+           ai: dict | None = None, site_city: str | None = None, route_by_category: bool = False) -> dict:
     """ai — результат mf.ai.classify_appeal (категория подставлена ИИ или словарём): пишется событием ai_classified до маршрутизации."""
     if type not in TYPES:
         raise HTTPException(422, "Неверный тип обращения")
@@ -213,10 +234,11 @@ def create(*, type: str, text: str, proposed_solution: str | None = None, catego
         department_id = department_id or author["department_id"]
     number = next_number()
     aid = db.ex("""INSERT INTO appeals(number, type, category_id, branch_id, department_id, text, proposed_solution, priority,
-                   status, is_anonymous, source, meeting_id, tracking_token, created_at, updated_at)
-                   VALUES(?,?,?,?,?,?,?,?,'new',?,?,?,?,?,?)""",
+                   status, is_anonymous, source, meeting_id, tracking_token, created_at, updated_at, site_city)
+                   VALUES(?,?,?,?,?,?,?,?,'new',?,?,?,?,?,?,?)""",
                 (number, type, category_id, branch_id, department_id, text, (proposed_solution or "").strip() or None, priority,
-                 1 if is_anonymous else 0, source, meeting_id, secrets.token_urlsafe(24), db.now_iso(), db.now_iso()))
+                 1 if is_anonymous else 0, source, meeting_id, secrets.token_urlsafe(24), db.now_iso(), db.now_iso(),
+                 (site_city or "").strip()[:80] or None))
     if author:
         db.ex("INSERT INTO appeal_authors(appeal_id, user_id) VALUES(?,?)", (aid, author["id"]))
     actor = None if (is_anonymous or not author) else author["id"]
@@ -225,7 +247,7 @@ def create(*, type: str, text: str, proposed_solution: str | None = None, catego
         add_event(aid, None, "ai_classified", {"engine": ai.get("engine"), "category_id": ai.get("category_id"), "category": ai.get("category"),
                                                "confidence": ai.get("confidence"), "priority": ai.get("priority"), "summary": ai.get("summary")})
     a = get(aid)
-    route(a)
+    route(a, by_category=route_by_category)
     realtime.publish_roles(("director", "admin"), {"type": "appeal_created", "id": aid, "number": number,
                                                    "branch_id": branch_id, "branch_code": a.get("branch_code")})
     return get(aid)
@@ -368,6 +390,71 @@ def support(appeal_id: int, user: dict) -> int:
     return count
 
 
+# ---------- «Нужно решение директора» (ТЗ v2 §2.1) ----------
+
+def request_director(appeal_id: int, actor: dict, text: str) -> dict:
+    a = get(appeal_id)
+    if a["type"] != "suggestion":
+        raise HTTPException(409, "К директору выносятся предложения; проблемы решает ответственный")
+    if a["status"] not in OPEN:
+        raise HTTPException(409, "Обращение уже закрыто")
+    if a["director_decision"] == "pending":
+        raise HTTPException(409, "Уже ждёт решения директора")
+    text = (text or "").strip()
+    if not text:
+        raise HTTPException(422, "Напишите коротко, что требуется: ресурсы, бюджет, люди")
+    db.ex("""UPDATE appeals SET director_request_text=?, director_requested_at=?, director_requested_by=?, director_decision='pending',
+             director_comment=NULL, director_decided_at=NULL, director_decided_by=NULL WHERE id=?""", (text, db.now_iso(), actor["id"], appeal_id))
+    _first_response(a, actor)
+    add_event(appeal_id, actor["id"], "director_requested", {"text": text})
+    for d in db.q("SELECT id FROM users WHERE role='director' AND active=1"):
+        notify(d["id"], f"На решение: предложение {a['number']} — {short(a['text'], 70)}. Требуется: {short(text, 60)}", "/app#/decisions")
+        realtime.publish(d["id"], {"type": "idea_pending", "appeal_id": appeal_id})
+    notify(author_id(appeal_id), f"{a['number']}: предложение вынесено на решение директора", f"/app#/appeal/{appeal_id}")
+    return get(appeal_id)
+
+
+def director_decide(appeal_id: int, actor: dict, decision: str, comment: str | None) -> dict:
+    a = get(appeal_id)
+    if a["director_decision"] != "pending":
+        raise HTTPException(409, "Это предложение не ждёт решения директора")
+    if decision not in ("accepted", "rejected"):
+        raise HTTPException(422, "Решение: accepted или rejected")
+    comment = (comment or "").strip()
+    if decision == "rejected" and not comment:
+        raise HTTPException(422, "Отклонение требует причины — её увидят автор и ответственный")
+    db.ex("UPDATE appeals SET director_decision=?, director_comment=?, director_decided_at=?, director_decided_by=? WHERE id=?",
+          (decision, comment or None, db.now_iso(), actor["id"], appeal_id))
+    add_event(appeal_id, actor["id"], "director_decided", {"decision": decision, "text": comment or None})
+    label = "принял" if decision == "accepted" else "отклонил"
+    for uid in {a["responsible_id"], author_id(appeal_id), a["director_requested_by"]} - {None, actor["id"]}:
+        notify(uid, f"Директор {label} предложение {a['number']}" + (f": {short(comment, 90)}" if comment else ""), f"/app#/appeal/{appeal_id}")
+    if decision == "rejected" and a["status"] in OPEN:
+        pass   # статус обращения не меняем: ответственный сам закрывает с мотивировкой директора
+    return get(appeal_id)
+
+
+def director_wait_days() -> int:
+    return int(db.setting("director_wait_days", 7) or 7)
+
+
+def director_queue() -> list[dict]:
+    """Предложения из обращений, ждущие решения, с возрастом ожидания — объединяются с идеями совещаний в /api/director/ideas."""
+    rows = db.q(BASE_SELECT + " WHERE a.director_decision IS NOT NULL ORDER BY CASE a.director_decision WHEN 'pending' THEN 0 ELSE 1 END, a.director_requested_at DESC")
+    out = []
+    for r in rows:
+        req = db.parse(r["director_requested_at"])
+        aid = author_id(r["id"])
+        au = db.one("SELECT name FROM users WHERE id=?", (aid,)) if aid and not r["is_anonymous"] else None
+        out.append({"source": "appeal", "appeal_id": r["id"], "number": r["number"], "text": r["text"], "type": r["type"],
+                    "category": r["category"], "category_id": r["category_id"], "branch": r["branch"], "responsible": r["responsible"],
+                    "author": au["name"] if au else None, "request": r["director_request_text"], "requested_at": r["director_requested_at"],
+                    "wait_days": round((db.now() - req).total_seconds() / 86400, 1) if req else None,
+                    "director_decision": r["director_decision"], "director_decision_label": DIRECTOR_DECISIONS.get(r["director_decision"]),
+                    "director_comment": r["director_comment"], "decided_at": r["director_decided_at"], "supports": r["supports"]})
+    return out
+
+
 # ---------- просрочка ----------
 
 def check_overdue() -> list[str]:
@@ -401,7 +488,9 @@ def view(a: dict, user: dict | None = None, public: bool = False) -> dict:
                              "department_id", "department", "text", "proposed_solution", "priority", "priority_label", "status",
                              "status_label", "responsible_id", "responsible", "responsible_position", "is_anonymous", "source",
                              "meeting_id", "resolution_text", "created_at", "updated_at", "first_response_at", "closed_at",
-                             "escalated_at", "supports", "age_hours", "overdue", "unassigned", "sla", "first_response_hours")}
+                             "escalated_at", "supports", "age_hours", "overdue", "unassigned", "sla", "first_response_hours", "site_city",
+                             "director_request_text", "director_requested_at", "director_decision", "director_comment", "director_decided_at")}
+    out["director_decision_label"] = DIRECTOR_DECISIONS.get(a["director_decision"]) if a["director_decision"] else None
     out["is_mine"] = bool(user and aid == user["id"])
     out["author"] = None
     if not public and aid and not a["is_anonymous"]:
@@ -420,6 +509,7 @@ def view(a: dict, user: dict | None = None, public: bool = False) -> dict:
     out["supported_by_me"] = bool(user and db.one("SELECT 1 FROM supports WHERE appeal_id=? AND user_id=?", (a["id"], user["id"])))
     out["can_support"] = bool(user and not out["is_mine"] and not out["supported_by_me"] and a["status"] in OPEN)
     out["can_manage"] = bool(user and can_manage(a, user))
+    out["can_request_director"] = bool(out["can_manage"] and a["type"] == "suggestion" and a["status"] in OPEN and a["director_decision"] != "pending")
     if out["can_manage"]:
         nxt = list(TRANSITIONS[a["status"]])
         if a["type"] == "praise" and a["status"] == "new":
@@ -455,7 +545,7 @@ def list_for(user: dict, f: dict) -> list[dict]:
         rows = [r for r in rows if r["overdue"]]
     keep = ("id", "number", "type", "type_label", "category", "category_id", "branch", "branch_code", "branch_id", "department",
             "status", "status_label", "responsible", "responsible_id", "priority", "priority_label", "created_at", "age_hours",
-            "overdue", "unassigned", "supports", "is_anonymous", "source", "first_response_hours", "text")
+            "overdue", "unassigned", "supports", "is_anonymous", "source", "first_response_hours", "text", "site_city", "director_decision")
     out = []
     for r in rows:
         o = {k: r.get(k) for k in keep}
