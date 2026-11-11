@@ -188,10 +188,17 @@ CUSTDEV_APPEALS = [
      {"director_request": "Бюджет на доработку конфигурации 1С, ориентировочно 2–3 недели подрядчика", "director_requested_hours_ago": 9 * 24}),
 ]
 SUPPORTS = {"A-003": [22], "A-007": [17, 20], "A-012": [20, 22, 23], "A-021": [18, 27], "A-023": [21], "A-027": [12, 18]}
+# Оценка автора (этап 4) — синтетические ответы у части обращений; 20 обращений датасета сохраняют свои приоритеты
+AUTHOR_ANSWERS = {"A-001": ("workaround", None), "A-003": ("now", "department"), "A-007": ("now", "department"), "A-009": ("now", "department"),
+                  "A-011": ("now", "department"), "A-013": ("workaround", None), "A-019": ("workaround", None),
+                  "A-021": ("now", "department"), "A-022": ("workaround", None), "A-023": ("now", "company"), "A-024": ("workaround", None),
+                  "A-025": ("now", "me"), "A-026": ("workaround", None), "A-002": (None, "company"), "A-027": (None, "company"), "A-028": (None, "company"),
+                  "A-020": (None, "company"), "A-016": (None, "department")}
 SETTINGS = {
     "points": {"accepted": 10, "done": 50, "support": 2, "support_cap": 20},
     "league_weights": {"done": 0.5, "considered": 0.3, "speed": 0.2},
     "director_wait_days": 7,         # «ждёт решения дольше порога» — подсветка в «На решение» и счётчик у директора
+    "news_days": 7,                  # «автор ждёт новостей» — напоминание ответственному и строка у директора
     "dev_department_head_id": 25,    # предложения по умолчанию уходят руководителю отдела развития
 }
 
@@ -255,6 +262,9 @@ def run(force: bool = False) -> None:
         ids[number] = aid
         c.execute("INSERT INTO appeal_authors(appeal_id, user_id) VALUES(?,?)", (aid, author))
         event(aid, author, "created", {"source": source, "type": typ, "anonymous": False, **({"synthetic": "custdev"} if extra else {})}, created)
+        if number in AUTHOR_ANSWERS:
+            urg, scope = AUTHOR_ANSWERS[number]
+            c.execute("UPDATE appeals SET author_urgency=?, author_scope=? WHERE id=?", (urg, scope, aid))
         if extra.get("director_request"):
             req_at = now - timedelta(hours=extra["director_requested_hours_ago"])
             c.execute("UPDATE appeals SET director_request_text=?, director_requested_at=?, director_requested_by=?, director_decision='pending' WHERE id=?",

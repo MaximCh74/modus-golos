@@ -127,3 +127,15 @@ def analyze_meeting(transcript: str, users: list[dict] | None = None, open_appea
     return {"summary": summary, "decisions": decisions[:5], "tasks": [], "ideas": ideas[:5], "linked_appeals": linked[:5],
             "open_questions": ["Разбор без ИИ: ключ OpenAI не задан — поручения добавьте вручную, пункты проверьте"],
             "engine": ENGINE, "demo": False}
+
+
+# ---------- «Коротко» без ключа ----------
+
+def brief(text: str) -> dict:
+    """Первые два предложения текста + пометка, что автопересказ недоступен."""
+    t = " ".join((text or "").split())
+    parts = [x.strip() for x in re.split(r"(?<=[.!?])\s+", t) if x.strip()]
+    gist = " ".join(parts[:2]) if parts else t
+    if len(gist) > 240:
+        gist = gist[:239].rstrip() + "…"
+    return {"gist": gist, "proposes": None, "expects": None, "unclear": False, "question": None, "note": "автопересказ недоступен (без ключа)"}

@@ -45,8 +45,9 @@ async function route() {
     if (p[0] === 'changes') return await changes();
     if (p[0] === 'notifications') return await notifications();
     if (p[0] === 'points') return await points();
-    if (p[0] === 'rewards') return placeholder('Награды', 'Витрина наград и заявки — этап 4.');
-    if (p[0] === 'league') return placeholder('Лига филиалов', 'Лига филиалов и топ сотрудников — этап 4.');
+    if (p[0] === 'rewards') return await rewardsScreen();
+    if (p[0] === 'league') return await leagueScreen();
+    if (p[0] === 'u') return await profileScreen(Number(p[1]));
     if (p[0] === 'tasks') return await tasksScreen({ backHref: '#/' });
     if (p[0] === 'meeting' && p[1]) return await meetingCard(Number(p[1]), { backHref: '#/meeting', cardPrefix: '#/meeting/' });
     if (p[0] === 'meeting') return await meetingStart({ backHref: '#/', cardPrefix: '#/meeting/' });
@@ -64,7 +65,7 @@ function placeholder(title, text) {
 
 function tabs(active) {
   const items = [['#/changes', 'Что изменили'], ['#/rewards', 'Награды'], ['#/league', 'Лига']];
-  items.push(['#/tasks', 'Мои поручения']);
+  items.push(['#/tasks', 'Мои поручения'], ['#/u/' + ME.id, 'Мой профиль']);
   if (ME.role !== 'employee') items.push(['#/meeting', 'Совещание']);
   if (ME.role === 'director' || ME.role === 'admin') items.push(['#/decisions', 'На решение']);
   return h('div', { class: 'tabs' }, items.map(([href, label]) => h('a', { href, class: href === active ? 'active' : '' }, label)));
@@ -79,10 +80,11 @@ function item(a) {
 }
 
 async function home() {
-  const [mine, pts, decisions] = await Promise.all([API.get('/api/appeals/mine'), API.get('/api/me/points'),
-    (ME.role === 'director' || ME.role === 'admin') ? decisionsBlock('/app#/decisions') : null]);
+  const [mine, pts, decisions, summary] = await Promise.all([API.get('/api/appeals/mine'), API.get('/api/me/points'),
+    (ME.role === 'director' || ME.role === 'admin') ? decisionsBlock('/app#/decisions') : null,
+    (ME.role === 'director' || ME.role === 'admin') ? API.get('/api/panel/director-summary').catch(() => null) : null]);
   ME.points = pts.balance; renderTop();
-  root.replaceChildren(h('div', { class: 'wrap' }, decisions,
+  root.replaceChildren(h('div', { class: 'wrap' }, summary ? summaryBlock(summary, () => route()) : null, decisions,
     h('div', { class: 'grid2' },
       h('a', { href: '#/new?type=problem', class: 'btn btn-primary btn-big' }, 'Сообщить о проблеме'),
       h('a', { href: '#/new?type=suggestion', class: 'btn btn-outline btn-big' }, 'Предложить улучшение')),
@@ -105,15 +107,20 @@ async function newAppeal(startType) {
   const text = h('textarea', { name: 'text', required: true, placeholder: 'Что происходит и что предлагаете' });
   const sol = h('textarea', { name: 'proposed_solution', placeholder: 'Как это можно решить (необязательно)' });
   const cat = h('select', { name: 'category_id' }, h('option', { value: '' }, '— не знаю, пусть определит ответственный —'), DICTS.categories.map(c => h('option', { value: c.id }, c.name)));
-  const prio = h('select', { name: 'priority' }, Object.entries(PRIO).map(([v, l]) => h('option', { value: v, selected: v === 'medium' }, l)));
+  const prio = h('select', { name: 'priority' }, h('option', { value: '' }, '— по ответу выше и мнению ИИ —'), Object.entries(PRIO).map(([v, l]) => h('option', { value: v }, l)));
   const anon = h('input', { type: 'checkbox' });
   const file = h('input', { type: 'file', accept: 'image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt' });
   const submit = h('button', { type: 'submit', class: 'btn btn-primary btn-big' }, 'Отправить');
   const mic = h('button', { type: 'button', class: 'btn mic' }, '🎤');
+  let inputMode = 'text';
+  const urg = chips(URGENCY); const sc = chips(SCOPE);
+  const chipLabel = h('span', { class: 'muted small' });
+  const chipRow = h('div', { class: 'row mb8' });
+  const renderChips = () => { chipRow.replaceChildren(chipLabel, type === 'problem' ? urg : sc); chipLabel.textContent = type === 'problem' ? 'Насколько мешает работать?' : 'Кого затронет?'; };
   const draftBox = h('div', {});
   const simBox = h('div', {});
   let similarShown = false, anyway = false;
-  const setType = code => { type = code; for (const k in btns) btns[k].classList.toggle('on', k === code); };
+  const setType = code => { type = code; for (const k in btns) btns[k].classList.toggle('on', k === code); renderChips(); };
   const draftBtn = h('button', { type: 'button', class: 'btn btn-sm', onclick: () => draft() }, '✨ Черновик ИИ');
   async function draft() {
     if (text.value.trim().length < 5) { toast('Сначала опишите, что происходит', 'bad'); return; }
@@ -133,10 +140,13 @@ async function newAppeal(startType) {
     } catch (e) { toast(e.message, 'bad'); }
     draftBtn.disabled = false;
   }
-  Voice.attach(mic, text, { onText: () => draft() });
+  Voice.attach(mic, text, { onText: () => { inputMode = 'voice'; draft(); } });
+  renderChips();
+  for (const [code] of types) btns[code].addEventListener('click', renderChips);
   const form = h('form', { class: 'card' },
     switchEl,
     h('div', { class: 'row' }, h('div', { class: 'spacer' }, text), mic),
+    chipRow,
     h('div', { class: 'row mb8' }, draftBtn, h('span', { class: 'hint' }, 'голос → текст → ИИ подставит категорию, приоритет и решение')),
     draftBox,
     field('Предлагаемое решение', sol),
@@ -164,6 +174,7 @@ async function newAppeal(startType) {
     const fd = new FormData();
     fd.set('type', type); fd.set('text', text.value); fd.set('proposed_solution', sol.value);
     fd.set('category_id', cat.value); fd.set('priority', prio.value); fd.set('is_anonymous', anon.checked ? '1' : '0');
+    fd.set('author_urgency', urg.value() || ''); fd.set('author_scope', sc.value() || ''); fd.set('input_mode', inputMode);
     if (file.files && file.files[0]) fd.set('file', file.files[0]);
     submit.disabled = true;
     try { const r = await API.postForm('/api/appeals', fd); toast('Обращение ' + r.number + ' отправлено'); location.hash = '#/appeal/' + r.id; }
@@ -178,17 +189,22 @@ async function appealCard(id) {
     supportBtn.disabled = true;
     try { await API.post('/api/appeals/' + id + '/support'); toast('«У меня так же» учтено'); route(); } catch (e) { toast(e.message, 'bad'); supportBtn.disabled = false; }
   } }, '👍 У меня так же') : null;
+  const thankBtn = a.can_thank ? h('button', { class: 'btn btn-sm', onclick: async () => { thankBtn.disabled = true; try { await API.post('/api/appeals/' + id + '/thank'); toast('Спасибо передано автору'); route(); } catch (e) { toast(e.message, 'bad'); thankBtn.disabled = false; } } }, '🙏 Спасибо') : null;
   const card = h('div', { class: 'card' },
-    h('div', { class: 'row' }, h('span', { class: 'h1' }, a.number), badge(a.status), a.overdue ? tag('tag-overdue', 'Просрочено') : null,
+    h('div', { class: 'row' }, h('span', { class: 'h1' }, a.number), tag(a.stage.code === 'rejected' ? 'st-rejected' : a.stage.code === 'done' ? 'st-done' : 'st-review', a.stage.label), a.overdue ? tag('tag-overdue', 'Просрочено') : null,
       a.is_anonymous ? tag('tag-anon', 'анонимно') : null, tag('tag-type', a.type_label)),
-    tracker(a.status),
-    h('div', { class: 'small muted' }, [a.category, a.branch, a.department].filter(Boolean).join(' · ')),
-    h('p', { class: 'pre' }, a.text),
-    a.proposed_solution ? h('div', { class: 'small' }, h('b', {}, 'Предлагаемое решение: '), a.proposed_solution) : null,
+    stageTracker(a.stage),
+    h('div', { class: 'small muted' }, [a.category, a.branch, a.site_city ? 'объект: ' + a.site_city : null, a.department].filter(Boolean).join(' · ')),
+    a.is_mine ? null : h('div', { class: 'row small mt8' }, userLink(a.author, 'sm')),
+    a.brief && !a.is_mine ? briefBlock(a) : null,
+    a.brief && !a.is_mine ? fullText(a) : h('p', { class: 'pre' }, a.text),
+    a.brief && !a.is_mine ? null : (a.proposed_solution ? h('div', { class: 'small' }, h('b', {}, 'Предлагаемое решение: '), a.proposed_solution) : null),
+    (a.author_urgency_label || a.author_scope_label) ? h('div', { class: 'small mt8' }, h('b', {}, 'Автор: '), [a.author_urgency_label, a.author_scope_label].filter(Boolean).join(' · '), ' · ', h('b', {}, 'Приоритет: '), a.priority_label) : h('div', { class: 'small mt8' }, h('b', {}, 'Приоритет: '), a.priority_label),
     h('div', { class: 'small muted mt8' }, 'Отвечает: ' + (a.responsible ? a.responsible + (a.responsible_position ? ' (' + a.responsible_position + ')' : '') : 'не назначен — в очереди администратора')),
     a.attachments.length ? h('div', { class: 'small mt8' }, 'Вложения: ', a.attachments.map(f => h('a', { href: '/api/attachments/' + f.id, target: '_blank' }, f.filename + ' '))) : null,
     a.points ? h('div', { class: 'small mt8' }, '⭐ Начислено баллов: ' + a.points) : null,
-    h('div', { class: 'row mt8' }, h('span', { class: 'small muted' }, '👍 У меня так же: ' + a.supports), supportBtn, a.supported_by_me ? h('span', { class: 'small muted' }, '(вы поддержали)') : null));
+    h('div', { class: 'row mt8' }, h('span', { class: 'small muted' }, '👍 У меня так же: ' + a.supports), supportBtn, a.supported_by_me ? h('span', { class: 'small muted' }, '(вы поддержали)') : null,
+      a.thanks ? h('span', { class: 'small muted' }, '🙏 ' + a.thanks) : null, thankBtn, a.thanked_by_me ? h('span', { class: 'small muted' }, '(вы поблагодарили)') : null));
   const director = a.director_decision ? h('div', { class: 'card ' + (a.director_decision === 'pending' ? 'card-info' : a.director_decision === 'accepted' ? 'card-ok' : 'card-bad') }, h('b', {}, 'Решение директора: ' + a.director_decision_label), h('div', { class: 'small mt8' }, 'Что требуется: ' + a.director_request_text), a.director_comment ? h('div', { class: 'small' }, 'Комментарий: ' + a.director_comment) : null) : null;
   const result = a.status === 'done' || (a.status === 'closed' && a.resolution_text)
     ? h('div', { class: 'card card-ok' }, h('b', {}, 'Что сделали'), h('p', { class: 'pre' }, a.resolution_text))
@@ -211,10 +227,15 @@ async function changes() {
   const rows = await API.get('/api/changes');
   root.replaceChildren(h('div', { class: 'wrap' }, h('a', { href: '#/', class: 'small' }, '← Назад'), h('div', { class: 'h1' }, 'Что изменили'), tabs('#/changes'),
     h('p', { class: 'hint' }, 'Реализованные обращения: проблема → что сделали.'),
-    rows.length ? rows.map(r => h('div', { class: 'card', onclick: () => { location.hash = '#/appeal/' + r.id; } },
-      h('div', { class: 'row' }, h('b', {}, r.number), tag('tag-type', r.type_label), h('span', { class: 'small muted' }, [r.category, r.branch].filter(Boolean).join(' · ')), h('div', { class: 'spacer' }), h('span', { class: 'small muted' }, fmtDate(r.closed_at))),
-      h('p', { class: 'small muted' }, r.text),
-      h('div', { class: 'card card-ok small' }, h('b', {}, '→ '), r.resolution_text))) : h('div', { class: 'card muted' }, 'Пока ничего не реализовано')));
+    rows.length ? rows.map(r => {
+      const tb = (!r.is_mine && !r.thanked_by_me && r.author) ? h('button', { class: 'btn btn-sm', onclick: async ev => { ev.stopPropagation(); tb.disabled = true; try { await API.post('/api/appeals/' + r.id + '/thank'); toast('Спасибо передано ' + r.author.name); changes(); } catch (e) { toast(e.message, 'bad'); tb.disabled = false; } } }, '🙏 Спасибо') : null;
+      return h('div', { class: 'card', onclick: () => { location.hash = '#/appeal/' + r.id; } },
+        h('div', { class: 'row' }, h('b', {}, r.number), tag('tag-type', r.type_label), h('span', { class: 'small muted' }, [r.category, r.branch].filter(Boolean).join(' · ')), h('div', { class: 'spacer' }), h('span', { class: 'small muted' }, fmtDate(r.closed_at))),
+        h('div', { class: 'row small mt8' }, userLink(r.author, 'sm')),
+        h('p', { class: 'small muted' }, r.brief_line || r.text),
+        h('div', { class: 'card card-ok small' }, h('b', {}, '→ '), r.resolution_text),
+        h('div', { class: 'row small' }, h('span', { class: 'muted' }, '🙏 ' + r.thanks + (r.thanked_by_me ? ' (и вы)' : '')), tb));
+    }) : h('div', { class: 'card muted' }, 'Пока ничего не реализовано')));
 }
 
 async function notifications() {
@@ -232,6 +253,60 @@ async function points() {
     h('div', { class: 'card' }, h('div', { class: 'big' }, String(d.balance)), h('div', { class: 'hint' }, 'Принято к рассмотрению +' + d.rules.accepted + ' · реализовано +' + d.rules.done + ' · «У меня так же» +' + d.rules.support + ' (до +' + d.rules.support_cap + ' на обращение). За отправку, отклонённые, отзывы и анонимные — нет. ', h('a', { href: '/rules', target: '_blank' }, 'Как начисляются баллы →'))),
     h('div', { class: 'card list' }, d.ledger.length ? d.ledger.map(l => h('div', { class: 'item', onclick: () => { if (l.appeal_id) location.hash = '#/appeal/' + l.appeal_id; } },
       h('div', { class: 'row' }, h('b', {}, '+' + l.amount), h('span', {}, l.number || ''), h('span', { class: 'small muted' }, l.reason_label), h('div', { class: 'spacer' }), h('span', { class: 'small muted' }, fmtDate(l.created_at))))) : h('div', { class: 'muted' }, 'Начислений пока нет'))));
+}
+
+// ---------- этап 4: сводка директора, профиль, награды, лига ----------
+
+function summaryBlock(d, refresh) {
+  const canSpeak = !!(window.speechSynthesis && speechSynthesis.getVoices().some(v => v.lang && v.lang.toLowerCase().startsWith('ru')));
+  const speak = () => { const u = new SpeechSynthesisUtterance(d.sentences.map(s => s.text).join(' ')); u.lang = 'ru-RU'; const v = speechSynthesis.getVoices().find(v => v.lang && v.lang.toLowerCase().startsWith('ru')); if (v) u.voice = v; speechSynthesis.cancel(); speechSynthesis.speak(u); };
+  const refreshBtn = h('button', { class: 'btn btn-sm', onclick: async () => { refreshBtn.disabled = true; try { await API.get('/api/panel/director-summary?refresh=1'); refresh(); } catch (e) { toast(e.message, 'bad'); refreshBtn.disabled = false; } } }, '↻ Обновить');
+  const l = d.lines || {};
+  return h('div', { class: 'card summary-ai' },
+    h('div', { class: 'row' }, h('div', { class: 'lbl' }, 'Сводка'), tag(d.engine === 'openai' ? 'tag-ai' : 'tag-demo', d.engine === 'openai' ? 'пересказ ИИ по фактам' : 'шаблон без ИИ'), h('div', { class: 'spacer' }), h('span', { class: 'small muted' }, fmtDate(d.at)), canSpeak ? h('button', { class: 'btn btn-sm', onclick: speak }, '🔊 Озвучить') : null, refreshBtn),
+    d.sentences.map(s => h('p', {}, s.href ? h('a', { href: s.href }, s.text) : s.text)),
+    h('div', { class: 'lines mt8' },
+      l.urgent_open ? h('a', { href: '/panel#/queue?open=1&urgency=now' }, tag('tag-flag', 'Мешают работать сейчас: ' + l.urgent_open)) : null,
+      l.decisions_over_threshold ? h('a', { href: '#/decisions' }, tag('tag-flag', 'Ждут решения дольше ' + l.threshold_days + ' дн: ' + l.decisions_over_threshold)) : null,
+      l.tasks_overdue ? h('a', { href: '/panel#/meetings?overdue=1' }, tag('tag-overdue', 'Поручения просрочены: ' + l.tasks_overdue)) : null,
+      l.no_news ? h('a', { href: '/panel#/queue?status=in_progress' }, tag('tag-flag', 'Без новостей авторам дольше ' + l.news_days + ' дн: ' + l.no_news)) : null));
+}
+
+async function profileScreen(uid) {
+  const u = await API.get('/api/users/' + uid + '/profile');
+  const mine = uid === ME.id;
+  const file = h('input', { type: 'file', accept: 'image/*', class: 'hidden' });
+  file.addEventListener('change', async () => { if (!file.files[0]) return; const fd = new FormData(); fd.set('file', file.files[0]); try { await API.postForm('/api/me/avatar', fd); toast('Аватарка обновлена'); profileScreen(uid); } catch (e) { toast(e.message, 'bad'); } });
+  const removeBtn = (ME.role === 'admin' || ME.role === 'director') && u.avatar && !mine ? h('button', { class: 'btn btn-sm btn-danger', onclick: async () => { await API.post('/api/admin/users/' + uid + '/avatar/remove'); toast('Аватарка убрана'); profileScreen(uid); } }, 'Убрать аватарку') : null;
+  root.replaceChildren(h('div', { class: 'wrap' }, h('a', { href: '#/', class: 'small' }, '← Назад'),
+    h('div', { class: 'card' }, h('div', { class: 'profile-head' }, avatarEl(u, 'lg'), h('div', {}, h('div', { class: 'h1' }, u.name), h('div', { class: 'small muted' }, [u.position, u.city || u.branch, u.department].filter(Boolean).join(' · ')),
+      mine ? h('div', { class: 'row mt8' }, h('button', { class: 'btn btn-sm', onclick: () => file.click() }, u.avatar ? 'Сменить аватарку' : 'Загрузить аватарку'), file, h('span', { class: 'hint' }, 'квадратная обрезка, до 3 МБ')) : removeBtn)),
+      h('div', { class: 'stats mt16' }, h('div', { class: 'stat' }, h('b', {}, String(u.points)), h('span', { class: 'small muted' }, 'баллов')), h('div', { class: 'stat' }, h('b', {}, String(u.implemented.length)), h('span', { class: 'small muted' }, 'внедрено')),
+        h('div', { class: 'stat' }, h('b', {}, String(u.thanks)), h('span', { class: 'small muted' }, '«спасибо»')), h('div', { class: 'stat' }, h('b', {}, String(u.supported)), h('span', { class: 'small muted' }, 'поддержал коллег'))),
+      h('div', { class: 'hint mt8' }, 'Витрина вклада — не соцсеть: без ленты и сообщений. В пилоте аватарка и данные берутся из Битрикс24.')),
+    h('div', { class: 'lbl mt16' }, 'Внедрённые идеи'),
+    h('div', { class: 'card list' }, u.implemented.length ? u.implemented.map(i => h('div', { class: 'item', onclick: () => { location.hash = '#/appeal/' + i.id; } }, h('div', { class: 'row' }, h('b', {}, i.number), h('span', { class: 'small muted' }, fmtDate(i.closed_at))), h('div', { class: 'small' }, i.text), h('div', { class: 'small card-ok' }, '→ ' + (i.resolution_text || '')))) : h('div', { class: 'muted' }, 'Пока нет — внедрённые идеи попадают сюда из «Что изменили»'))));
+}
+
+async function rewardsScreen() {
+  const d = await API.get('/api/rewards');
+  root.replaceChildren(h('div', { class: 'wrap' }, h('a', { href: '#/', class: 'small' }, '← Назад'), h('div', { class: 'h1' }, 'Награды'), tabs('#/rewards'),
+    h('div', { class: 'card row' }, h('span', {}, 'У вас '), h('b', { class: 'big' }, String(d.balance)), h('span', {}, ' баллов'), h('div', { class: 'spacer' }), h('a', { href: '/rules', target: '_blank', class: 'small' }, 'как начисляются →')),
+    h('div', { class: 'hint' }, 'Состав наград демонстрационный, определяет компания. Заявку подтверждает администратор или директор, баллы списываются при одобрении.'),
+    d.items.map(r => { const can = d.balance >= r.cost_points; const btn = h('button', { class: 'btn btn-sm ' + (can ? 'btn-primary' : ''), disabled: !can, onclick: async () => { btn.disabled = true; try { await API.post('/api/rewards/' + r.id + '/claim'); toast('Заявка отправлена'); rewardsScreen(); } catch (e) { toast(e.message, 'bad'); btn.disabled = false; } } }, can ? 'Получить' : 'Не хватает ' + (r.cost_points - d.balance));
+      return h('div', { class: 'card' }, h('div', { class: 'row' }, h('b', {}, r.title), tag('tag-type', r.cost_points + ' баллов'), h('div', { class: 'spacer' }), btn), h('div', { class: 'small muted' }, r.description)); }),
+    d.claims.length ? h('div', { class: 'lbl mt16' }, 'Мои заявки') : null,
+    d.claims.length ? h('div', { class: 'card list' }, d.claims.map(c => h('div', { class: 'item' }, h('div', { class: 'row' }, tag(c.status === 'approved' ? 'st-done' : c.status === 'rejected' ? 'st-rejected' : 'st-review', c.status === 'approved' ? 'Одобрено' : c.status === 'rejected' ? 'Отклонено' : 'На рассмотрении'), h('b', {}, c.title), h('span', { class: 'small muted' }, fmtDate(c.created_at))), c.comment ? h('div', { class: 'small muted' }, c.comment) : null))) : null));
+}
+
+async function leagueScreen() {
+  const d = await API.get('/api/panel/league');
+  root.replaceChildren(h('div', { class: 'wrap' }, h('a', { href: '#/', class: 'small' }, '← Назад'), h('div', { class: 'h1' }, 'Лига филиалов'), tabs('#/league'),
+    h('div', { class: 'hint' }, 'По качеству работы с обращениями, а не по их числу: реализовано ' + Math.round(d.weights.done * 100) + ' % · рассмотрено ' + Math.round(d.weights.considered * 100) + ' % · скорость первого ответа ' + Math.round(d.weights.speed * 100) + ' %.'),
+    h('div', { class: 'card' }, h('table', { class: 'tbl league' }, h('thead', {}, h('tr', {}, ['#', 'Филиал', 'Балл', 'Реализовано', 'Рассмотрено', 'Скорость', 'Открыто'].map(t => h('th', {}, t)))),
+      h('tbody', {}, d.items.map(b => h('tr', {}, h('td', {}, String(b.rank)), h('td', {}, h('b', {}, b.city || b.name), h('div', { class: 'small muted' }, b.total + ' обращений' + (b.enough ? '' : ' — мало данных'))), h('td', { class: 'score' }, h('b', {}, String(b.score))), h('td', {}, Math.round(b.done_share * 100) + ' %'), h('td', {}, Math.round(b.considered_share * 100) + ' %'), h('td', {}, Math.round(b.speed * 100) + ' %'), h('td', {}, String(b.open))))))),
+    h('div', { class: 'lbl mt16' }, 'Топ сотрудников'),
+    h('div', { class: 'card list' }, d.top.map((u, i) => h('div', { class: 'item', onclick: () => { location.hash = '#/u/' + u.id; } }, h('div', { class: 'row' }, h('b', {}, (i + 1) + '.'), avatarEl(u), h('div', {}, h('b', {}, u.name), h('div', { class: 'small muted' }, [u.position, u.branch].filter(Boolean).join(' · '))), h('div', { class: 'spacer' }), h('span', { class: 'small' }, '⭐ ' + u.points + ' · внедрено ' + u.implemented + ' · 🙏 ' + u.thanks)))))));
 }
 
 boot();

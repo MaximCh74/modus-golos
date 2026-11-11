@@ -66,6 +66,9 @@ async def overdue_loop():
             t = meetings.check_tasks()
             if t["reminded"] or t["overdue"]:
                 log.info("поручения: напоминаний %s, просрочено %s", t["reminded"], t["overdue"])
+            n = appeals.check_news()
+            if n:
+                log.info("авторы ждут новостей: напоминаний %s", n)
         except Exception:
             log.exception("check_overdue")
         await asyncio.sleep(60)

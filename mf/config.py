@@ -23,7 +23,7 @@ def _load_env(path: Path) -> None:
 
 _load_env(ROOT / ".env")
 
-DATA_DIR = UPLOAD_DIR = DB_PATH = AUDIO_DIR = None   # задаются в set_data_dir()
+DATA_DIR = UPLOAD_DIR = DB_PATH = AUDIO_DIR = AVATAR_DIR = None   # задаются в set_data_dir()
 
 
 def set_data_dir(path) -> None:
@@ -35,6 +35,9 @@ def set_data_dir(path) -> None:
     UPLOAD_DIR.mkdir(exist_ok=True)
     AUDIO_DIR = DATA_DIR / "audio"
     AUDIO_DIR.mkdir(exist_ok=True)
+    global AVATAR_DIR
+    AVATAR_DIR = DATA_DIR / "avatars"
+    AVATAR_DIR.mkdir(exist_ok=True)
     DB_PATH = DATA_DIR / "mf.db"
 
 

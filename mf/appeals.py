@@ -33,8 +33,82 @@ DEFAULT_POINTS = {"accepted": 10, "done": 50, "support": 2, "support_cap": 20}
 POINT_REASONS = {"accepted": "принято к рассмотрению", "done": "реализовано", "support": "«У меня так же» от коллеги"}
 DEFAULT_SLA = 48
 PUBLIC_EVENT_KINDS = ("created", "assigned", "status_changed", "comment", "clarification_requested",
-                      "clarification_answered", "discussed_at_meeting", "supported", "director_requested", "director_decided")
+                      "clarification_answered", "discussed_at_meeting", "supported", "director_requested", "director_decided", "progress", "thanked", "priority_changed")
 DIRECTOR_DECISIONS = {"pending": "На решении", "accepted": "Принято", "rejected": "Отклонено"}
+# Оценка автора (этап 4): один необязательный вопрос вместо «выберите приоритет» — итоговый приоритет ставит система с ответственным
+URGENCY = {"now": "Прямо сейчас мешает", "workaround": "Мешает, но обхожусь", "minor": "Мелочь"}
+SCOPE = {"me": "Меня", "department": "Мой отдел", "company": "Всю компанию"}
+MATRIX = {("now", "me"): "medium", ("now", "department"): "high", ("now", "company"): "high",
+          ("workaround", "me"): "low", ("workaround", "department"): "medium", ("workaround", "company"): "high",
+          ("minor", "me"): "low", ("minor", "department"): "low", ("minor", "company"): "medium"}
+PRIORITY_RANK = {"high": 3, "medium": 2, "low": 1}
+# Стадии для автора — словами собственника (внутренние статусы не меняются)
+STAGES = [("accepted", "Принято"), ("elaboration", "Проработка"), ("decision", "Принятие решения"), ("implementation", "Реализация"), ("done", "Готово")]
+
+
+def matrix_priority(type: str, urgency: str | None, scope: str | None) -> str | None:
+    """Без ключа: матрица из ответа автора. Для проблемы масштаб по умолчанию «мой отдел», для идеи срочность — «мешает, но обхожусь»."""
+    if not urgency and not scope:
+        return None
+    urgency = urgency if urgency in URGENCY else ("workaround" if type == "suggestion" else None)
+    scope = scope if scope in SCOPE else ("department" if type == "problem" else None)
+    if not urgency or not scope:
+        return None
+    return MATRIX[(urgency, scope)]
+
+
+def bump(priority: str) -> str:
+    return {"low": "medium", "medium": "high"}.get(priority, "high")
+
+
+def brief_of(a: dict) -> dict | None:
+    try:
+        return json.loads(a["brief"]) if a.get("brief") else None
+    except (TypeError, ValueError):
+        return None
+
+
+def line(a: dict, n: int = 90) -> str:
+    """Одна строка про обращение: первая строка «Коротко», если есть, иначе начало текста (ТЗ этапа 4 §3.2)."""
+    b = brief_of(a)
+    if b and b.get("gist") and not b.get("unclear"):
+        return short(b["gist"], n)
+    return short(a["text"], n)
+
+
+def stage_for(a: dict) -> dict:
+    """Трекер для автора стадиями собственника: Принято → Проработка → Принятие решения → Реализация → Готово; «Не принято» — отдельный финал."""
+    st = a["status"]
+    rejected = st == "rejected"
+    if st == "new":
+        idx = 0
+    elif st in ("review", "clarify"):
+        idx = 2 if a.get("director_decision") == "pending" else 1
+    elif st == "in_progress":
+        idx = 3
+    elif st in ("done", "closed"):
+        idx = 4
+    else:
+        idx = 4
+    steps = []
+    for i, (code, label) in enumerate(STAGES):
+        state = "done" if i < idx else "cur" if i == idx else "future"
+        if code == "decision" and i < idx and a.get("director_decision") != "accepted":
+            state = "skip"   # в работу без директора — стадия отмечена пройденной автоматически
+        if rejected and i == 4:
+            label, state = "Не принято", "cur"
+        if rejected and i < 4 and i >= idx:
+            state = "future"
+        steps.append({"code": code, "label": label, "state": state})
+    cur = steps[idx]
+    note = None
+    if st == "clarify":
+        note = "нужно ваше уточнение"
+    elif a.get("director_decision") == "pending":
+        note = "ждёт решения директора"
+    elif rejected:
+        note = "с причиной — см. ниже"
+    return {"code": "rejected" if rejected else cur["code"], "label": cur["label"], "index": idx, "steps": steps, "note": note}
 
 BASE_SELECT = """SELECT a.*, c.name AS category, c.sla_first_response_hours AS sla,
   b.name AS branch, b.code AS branch_code, d.name AS department,
@@ -120,6 +194,11 @@ def add_event(appeal_id: int, actor_id: int | None, kind: str, payload: dict | N
     return eid
 
 
+def touch_news(appeal_id: int) -> None:
+    """Автор увидел новость (статус, комментарий, ход работы, уточнение) — от этого считается «последняя новость автору»."""
+    db.ex("UPDATE appeals SET last_news_at=? WHERE id=?", (db.now_iso(), appeal_id))
+
+
 def notify(user_id: int | None, text: str, link: str | None = None) -> None:
     if not user_id:
         return
@@ -201,7 +280,7 @@ def route(a: dict, actor_id: int | None = None, by_category: bool = False) -> di
     if resp:
         db.ex("UPDATE appeals SET responsible_id=? WHERE id=?", (resp["id"], a["id"]))
         add_event(a["id"], actor_id, "assigned", {"responsible_id": resp["id"], "responsible": resp["name"], "auto": actor_id is None})
-        notify(resp["id"], f"Новое обращение {a['number']}: {short(a['text'])}", f"/panel#/appeal/{a['id']}")
+        notify(resp["id"], f"Новое обращение {a['number']}: {line(a)}", f"/panel#/appeal/{a['id']}")
     else:
         db.ex("UPDATE appeals SET responsible_id=NULL WHERE id=?", (a["id"],))
         add_event(a["id"], actor_id, "assigned", {"responsible_id": None, "auto": True, "reason": "no_responsible"})
@@ -214,12 +293,15 @@ def route(a: dict, actor_id: int | None = None, by_category: bool = False) -> di
 def create(*, type: str, text: str, proposed_solution: str | None = None, category_id: int | None = None,
            priority: str = "medium", branch_id: int | None = None, department_id: int | None = None,
            author: dict | None = None, is_anonymous: bool = False, source: str = "app", meeting_id: int | None = None,
-           ai: dict | None = None, site_city: str | None = None, route_by_category: bool = False) -> dict:
+           ai: dict | None = None, site_city: str | None = None, route_by_category: bool = False,
+           author_urgency: str | None = None, author_scope: str | None = None, input_mode: str | None = None) -> dict:
     """ai — результат mf.ai.classify_appeal (категория подставлена ИИ или словарём): пишется событием ai_classified до маршрутизации."""
     if type not in TYPES:
         raise HTTPException(422, "Неверный тип обращения")
+    author_urgency = author_urgency if author_urgency in URGENCY else None
+    author_scope = author_scope if author_scope in SCOPE else None
     if priority not in PRIORITIES:
-        priority = "medium"
+        priority = matrix_priority(type, author_urgency, author_scope) or "medium"
     if source not in SOURCES:
         source = "app"
     text = (text or "").strip()
@@ -234,11 +316,14 @@ def create(*, type: str, text: str, proposed_solution: str | None = None, catego
         department_id = department_id or author["department_id"]
     number = next_number()
     aid = db.ex("""INSERT INTO appeals(number, type, category_id, branch_id, department_id, text, proposed_solution, priority,
-                   status, is_anonymous, source, meeting_id, tracking_token, created_at, updated_at, site_city)
-                   VALUES(?,?,?,?,?,?,?,?,'new',?,?,?,?,?,?,?)""",
+                   status, is_anonymous, source, meeting_id, tracking_token, created_at, updated_at, site_city,
+                   author_urgency, author_scope, brief, brief_engine, brief_at, input_mode)
+                   VALUES(?,?,?,?,?,?,?,?,'new',?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (number, type, category_id, branch_id, department_id, text, (proposed_solution or "").strip() or None, priority,
                  1 if is_anonymous else 0, source, meeting_id, secrets.token_urlsafe(24), db.now_iso(), db.now_iso(),
-                 (site_city or "").strip()[:80] or None))
+                 (site_city or "").strip()[:80] or None, author_urgency, author_scope,
+                 json.dumps(ai["brief"], ensure_ascii=False) if ai and ai.get("brief") else None,
+                 (ai or {}).get("engine") if ai and ai.get("brief") else None, db.now_iso() if ai and ai.get("brief") else None, input_mode))
     if author:
         db.ex("INSERT INTO appeal_authors(appeal_id, user_id) VALUES(?,?)", (aid, author["id"]))
     actor = None if (is_anonymous or not author) else author["id"]
@@ -313,6 +398,7 @@ def set_status(appeal_id: int, actor: dict, status: str, text: str | None = None
         award(a, "accepted")
     if status == "done":
         award(a, "done")
+    touch_news(appeal_id)
     msg = f"{a['number']}: статус «{STATUSES[status]}»" + (f" — {text}" if text else "")
     notify(author_id(appeal_id), msg, f"/app#/appeal/{appeal_id}")
     realtime.publish_roles(("director", "admin"), {"type": "appeal_updated", "id": appeal_id, "status": status})
@@ -342,8 +428,86 @@ def comment(appeal_id: int, actor: dict, text: str) -> dict:
     _first_response(a, actor)
     add_event(appeal_id, actor["id"], "comment", {"text": text})
     if actor["id"] != author_id(appeal_id):
+        touch_news(appeal_id)
         notify(author_id(appeal_id), f"{a['number']}: комментарий — {short(text, 80)}", f"/app#/appeal/{appeal_id}")
     return get(appeal_id)
+
+
+def progress(appeal_id: int, actor: dict, text: str) -> dict:
+    """«Сообщить о ходе» (по словам собственника): короткая новость автору без смены статуса."""
+    a = get(appeal_id)
+    text = (text or "").strip()
+    if not text:
+        raise HTTPException(422, "Напишите коротко, что сделано или что дальше")
+    if a["status"] not in OPEN:
+        raise HTTPException(409, "Обращение уже закрыто")
+    _first_response(a, actor)
+    add_event(appeal_id, actor["id"], "progress", {"text": text})
+    touch_news(appeal_id)
+    notify(author_id(appeal_id), f"{a['number']}: как идут дела — {short(text, 90)}", f"/app#/appeal/{appeal_id}")
+    return get(appeal_id)
+
+
+def set_priority(appeal_id: int, actor: dict, priority: str) -> dict:
+    a = get(appeal_id)
+    if priority not in PRIORITIES:
+        raise HTTPException(422, "Приоритет: low, medium или high")
+    if priority != a["priority"]:
+        db.ex("UPDATE appeals SET priority=?, priority_manual=1 WHERE id=?", (priority, appeal_id))
+        add_event(appeal_id, actor["id"], "priority_changed", {"from": a["priority"], "to": priority, "reason": "manual"})
+    return get(appeal_id)
+
+
+def news_days_setting() -> int:
+    return int(db.setting("news_days", 7) or 7)
+
+
+def news_age_days(a: dict) -> float | None:
+    """Сколько дней автор без новостей: от последней новости, а если её не было — от создания."""
+    last = db.parse(a.get("last_news_at")) or db.parse(a["created_at"])
+    return round((db.now() - last).total_seconds() / 86400, 1) if last else None
+
+
+def check_news() -> int:
+    """«В работе» без новостей автору дольше порога → напоминание ответственному «Автор ждёт новостей» (раз в порог)."""
+    th = news_days_setting()
+    n = 0
+    for a in db.q(BASE_SELECT + " WHERE a.status='in_progress' AND a.responsible_id IS NOT NULL"):
+        age = news_age_days(a)
+        rem = db.parse(a.get("news_reminded_at"))
+        if age is not None and age >= th and (rem is None or (db.now() - rem).total_seconds() >= th * 86400):
+            db.ex("UPDATE appeals SET news_reminded_at=? WHERE id=?", (db.now_iso(), a["id"]))
+            notify(a["responsible_id"], f"Автор ждёт новостей по {a['number']} — {int(age)} дн без вестей. Нажмите «Сообщить о ходе»", f"/panel#/appeal/{a['id']}")
+            n += 1
+    return n
+
+
+def no_news_count(th: int | None = None) -> int:
+    th = th or news_days_setting()
+    return sum(1 for a in db.q(BASE_SELECT + " WHERE a.status='in_progress'") if (news_age_days(a) or 0) >= th)
+
+
+def thank(appeal_id: int, user: dict) -> int:
+    """«Спасибо» под внедрённой идеей: одно на человека, автору уведомление, баллов нет — признание, а не валюта."""
+    a = get(appeal_id)
+    if a["status"] not in ("done", "closed") or a["type"] == "praise":
+        raise HTTPException(409, "«Спасибо» — за реализованные обращения")
+    if author_id(appeal_id) == user["id"]:
+        raise HTTPException(409, "Это ваше обращение")
+    if a["is_anonymous"]:
+        raise HTTPException(409, "Автор анонимный")
+    if db.one("SELECT 1 FROM thanks WHERE appeal_id=? AND user_id=?", (appeal_id, user["id"])):
+        raise HTTPException(409, "Вы уже сказали спасибо")
+    db.ex("INSERT INTO thanks(appeal_id, user_id, created_at) VALUES(?,?,?)", (appeal_id, user["id"], db.now_iso()))
+    count = db.one("SELECT COUNT(*) AS n FROM thanks WHERE appeal_id=?", (appeal_id,))["n"]
+    add_event(appeal_id, None, "thanked", {"count": count})
+    notify(author_id(appeal_id), f"{user['name']} говорит спасибо за {a['number']} (всего {count})", f"/app#/appeal/{appeal_id}")
+    return count
+
+
+def set_brief(appeal_id: int, brief: dict | None, engine: str | None) -> None:
+    db.ex("UPDATE appeals SET brief=?, brief_engine=?, brief_at=? WHERE id=?",
+          (json.dumps(brief, ensure_ascii=False) if brief else None, engine, db.now_iso(), appeal_id))
 
 
 def request_clarification(appeal_id: int, actor: dict, text: str) -> dict:
@@ -387,6 +551,9 @@ def support(appeal_id: int, user: dict) -> int:
     add_event(appeal_id, None, "supported", {"count": count})
     notify(author_id(appeal_id), f"{a['number']}: коллега отметил «У меня так же» (всего {count})", f"/app#/appeal/{appeal_id}")
     award(a, "support")
+    if count % 3 == 0 and a["priority"] != "high" and not a.get("priority_manual"):   # каждые 3 поддержки — на ступень выше, не выше высокого
+        db.ex("UPDATE appeals SET priority=? WHERE id=?", (bump(a["priority"]), appeal_id))
+        add_event(appeal_id, None, "priority_changed", {"from": a["priority"], "to": bump(a["priority"]), "reason": "supports", "count": count})
     return count
 
 
@@ -489,13 +656,22 @@ def view(a: dict, user: dict | None = None, public: bool = False) -> dict:
                              "status_label", "responsible_id", "responsible", "responsible_position", "is_anonymous", "source",
                              "meeting_id", "resolution_text", "created_at", "updated_at", "first_response_at", "closed_at",
                              "escalated_at", "supports", "age_hours", "overdue", "unassigned", "sla", "first_response_hours", "site_city",
-                             "director_request_text", "director_requested_at", "director_decision", "director_comment", "director_decided_at")}
+                             "director_request_text", "director_requested_at", "director_decision", "director_comment", "director_decided_at",
+                             "author_urgency", "author_scope", "priority_manual", "brief_engine", "brief_at", "last_news_at", "input_mode")}
     out["director_decision_label"] = DIRECTOR_DECISIONS.get(a["director_decision"]) if a["director_decision"] else None
+    out["author_urgency_label"] = URGENCY.get(a["author_urgency"]) if a.get("author_urgency") else None
+    out["author_scope_label"] = SCOPE.get(a["author_scope"]) if a.get("author_scope") else None
+    out["brief"] = brief_of(a)
+    out["stage"] = stage_for(a)
+    out["news_days"] = news_age_days(a) if a["status"] in OPEN else None
+    out["thanks"] = db.one("SELECT COUNT(*) AS n FROM thanks WHERE appeal_id=?", (a["id"],))["n"]
+    out["thanked_by_me"] = bool(user and db.one("SELECT 1 FROM thanks WHERE appeal_id=? AND user_id=?", (a["id"], user["id"])))
+    out["responsible_avatar"] = avatar_url(a["responsible_id"]) if a["responsible_id"] else None
     out["is_mine"] = bool(user and aid == user["id"])
     out["author"] = None
     if not public and aid and not a["is_anonymous"]:
-        u = db.one("SELECT name, position FROM users WHERE id=?", (aid,))
-        out["author"] = {"id": aid, "name": u["name"], "position": u["position"]} if u else None
+        u = db.one("SELECT name, position, avatar FROM users WHERE id=?", (aid,))
+        out["author"] = {"id": aid, "name": u["name"], "position": u["position"], "avatar": avatar_url(aid, u["avatar"])} if u else None
     events = events_of(a["id"])
     if public or not user or user["role"] not in STAFF:
         events = [e for e in events if e["kind"] in PUBLIC_EVENT_KINDS or (e["kind"] == "points_awarded" and out["is_mine"])]
@@ -508,6 +684,7 @@ def view(a: dict, user: dict | None = None, public: bool = False) -> dict:
     out["points"] = int(db.one("SELECT COALESCE(SUM(amount),0) AS s FROM points_ledger WHERE appeal_id=?", (a["id"],))["s"]) if out["is_mine"] else None
     out["supported_by_me"] = bool(user and db.one("SELECT 1 FROM supports WHERE appeal_id=? AND user_id=?", (a["id"], user["id"])))
     out["can_support"] = bool(user and not out["is_mine"] and not out["supported_by_me"] and a["status"] in OPEN)
+    out["can_thank"] = bool(user and not out["is_mine"] and not out["thanked_by_me"] and a["status"] in ("done", "closed") and a["type"] != "praise" and not a["is_anonymous"])
     out["can_manage"] = bool(user and can_manage(a, user))
     out["can_request_director"] = bool(out["can_manage"] and a["type"] == "suggestion" and a["status"] in OPEN and a["director_decision"] != "pending")
     if out["can_manage"]:
@@ -538,8 +715,15 @@ def list_for(user: dict, f: dict) -> list[dict]:
     if f.get("days"):
         where.append("a.created_at >= ?"); params.append(db.iso(db.now() - timedelta(days=int(f["days"]))))
     if f.get("q"):
-        where.append("(a.number LIKE ? OR a.text LIKE ?)"); params += [f"%{f['q']}%", f"%{f['q']}%"]
-    sql = BASE_SELECT + (" WHERE " + " AND ".join(where) if where else "") + " ORDER BY a.created_at DESC"
+        where.append("(a.number LIKE ? OR a.text LIKE ? OR a.brief LIKE ?)"); params += [f"%{f['q']}%", f"%{f['q']}%", f"%{f['q']}%"]
+    if f.get("urgency"):
+        where.append("a.author_urgency=?"); params.append(f["urgency"])
+    if f.get("cluster_id"):
+        where.append("a.cluster_id=?"); params.append(int(f["cluster_id"]))
+    order = "a.created_at DESC"
+    if f.get("sort") == "priority":
+        order = "CASE a.priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END, a.created_at DESC"
+    sql = BASE_SELECT + (" WHERE " + " AND ".join(where) if where else "") + " ORDER BY " + order
     rows = [decorate(r) for r in db.q(sql, params)]
     if f.get("overdue"):
         rows = [r for r in rows if r["overdue"]]
@@ -550,8 +734,21 @@ def list_for(user: dict, f: dict) -> list[dict]:
     for r in rows:
         o = {k: r.get(k) for k in keep}
         o["text"] = short(r["text"], 120)
+        o["brief_line"] = line(r, 120)
+        o["author_urgency"] = r.get("author_urgency")
+        o["author_urgency_label"] = URGENCY.get(r.get("author_urgency") or "")
+        o["news_days"] = news_age_days(r) if r["status"] in OPEN else None
         out.append(o)
     return out
+
+
+def avatar_url(user_id: int | None, avatar: str | None = "?") -> str | None:
+    if not user_id:
+        return None
+    if avatar == "?":
+        u = db.one("SELECT avatar FROM users WHERE id=?", (user_id,))
+        avatar = u["avatar"] if u else None
+    return f"/api/avatars/{avatar}" if avatar else None
 
 
 def mine(user: dict) -> list[dict]:
@@ -568,8 +765,24 @@ def changes(limit: int = 50) -> list[dict]:
     """Лента «Что изменили»: проблема → что сделали (закрывает A-020 из датасета)."""
     rows = db.q(BASE_SELECT + " WHERE a.status IN ('done','closed') AND a.resolution_text IS NOT NULL AND a.type != 'praise' "
                 "ORDER BY COALESCE(a.closed_at, a.updated_at) DESC LIMIT ?", (limit,))
-    return [{k: r.get(k) for k in ("id", "number", "type", "type_label", "category", "branch", "text", "resolution_text",
-                                    "closed_at", "supports")} for r in rows]
+    out = []
+    for r in rows:
+        o = {k: r.get(k) for k in ("id", "number", "type", "type_label", "category", "branch", "text", "resolution_text", "closed_at", "supports")}
+        aid = author_id(r["id"])
+        au = db.one("SELECT id, name, avatar FROM users WHERE id=?", (aid,)) if aid and not r["is_anonymous"] else None
+        o["author"] = {"id": au["id"], "name": au["name"], "avatar": avatar_url(au["id"], au["avatar"])} if au else None
+        o["thanks"] = db.one("SELECT COUNT(*) AS n FROM thanks WHERE appeal_id=?", (r["id"],))["n"]
+        o["brief_line"] = line(r, 140)
+        out.append(o)
+    return out
+
+
+def changes_for(user: dict | None, limit: int = 50) -> list[dict]:
+    rows = changes(limit)
+    for o in rows:
+        o["thanked_by_me"] = bool(user and db.one("SELECT 1 FROM thanks WHERE appeal_id=? AND user_id=?", (o["id"], user["id"])))
+        o["is_mine"] = bool(user and o["author"] and o["author"]["id"] == user["id"])
+    return rows
 
 
 def summary(user: dict, days: int = 30, branch_id: int | None = None) -> dict:

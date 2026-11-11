@@ -10,8 +10,8 @@
     try { a = await API.get(url); }
     catch (e) { root.replaceChildren(h('div', { class: 'wrap' }, h('div', { class: 'card card-bad' }, e.message))); return; }
     const card = h('div', { class: 'card' },
-      h('div', { class: 'row' }, h('span', { class: 'h1' }, a.number), badge(a.status), a.is_anonymous ? tag('tag-anon', 'анонимно') : null),
-      tracker(a.status),
+      h('div', { class: 'row' }, h('span', { class: 'h1' }, a.number), tag(a.stage.code === 'rejected' ? 'st-rejected' : a.stage.code === 'done' ? 'st-done' : 'st-review', a.stage.label), a.is_anonymous ? tag('tag-anon', 'анонимно') : null),
+      stageTracker(a.stage),
       h('div', { class: 'small muted' }, [a.type_label, a.category, a.branch].filter(Boolean).join(' · ')),
       h('p', { class: 'pre' }, a.text),
       h('div', { class: 'small muted' }, 'Отвечает: ' + (a.responsible ? a.responsible + (a.responsible_position ? ' (' + a.responsible_position + ')' : '') : 'ответственный назначается администратором')),

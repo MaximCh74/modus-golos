@@ -50,6 +50,7 @@ CREATE TABLE IF NOT EXISTS rewards (id INTEGER PRIMARY KEY, title TEXT NOT NULL,
 CREATE TABLE IF NOT EXISTS reward_claims (id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, reward_id INTEGER NOT NULL,
   status TEXT NOT NULL DEFAULT 'requested', created_at TEXT NOT NULL);
 
+CREATE TABLE IF NOT EXISTS thanks (appeal_id INTEGER NOT NULL, user_id INTEGER NOT NULL, created_at TEXT NOT NULL, PRIMARY KEY (appeal_id, user_id));
 CREATE TABLE IF NOT EXISTS appeal_embeddings (appeal_id INTEGER PRIMARY KEY, model TEXT NOT NULL, hash TEXT NOT NULL, vec TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS notifications (
   id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, text TEXT NOT NULL, link TEXT, created_at TEXT NOT NULL, read_at TEXT);
@@ -84,6 +85,12 @@ MIGRATIONS = [
     ("appeals", "director_request_text", "TEXT"), ("appeals", "director_requested_at", "TEXT"), ("appeals", "director_requested_by", "INTEGER"),
     ("appeals", "director_decision", "TEXT"), ("appeals", "director_comment", "TEXT"), ("appeals", "director_decided_at", "TEXT"),
     ("appeals", "director_decided_by", "INTEGER"),
+    # этап 4: оценка автора, «Коротко», новости автору, аватарки, заявки на награды
+    ("appeals", "author_urgency", "TEXT"), ("appeals", "author_scope", "TEXT"), ("appeals", "priority_manual", "INTEGER NOT NULL DEFAULT 0"),
+    ("appeals", "brief", "TEXT"), ("appeals", "brief_engine", "TEXT"), ("appeals", "brief_at", "TEXT"),
+    ("appeals", "last_news_at", "TEXT"), ("appeals", "news_reminded_at", "TEXT"), ("appeals", "input_mode", "TEXT"),
+    ("users", "avatar", "TEXT"),
+    ("reward_claims", "comment", "TEXT"), ("reward_claims", "decided_at", "TEXT"), ("reward_claims", "decided_by", "INTEGER"),
 ]
 
 _conn: sqlite3.Connection | None = None

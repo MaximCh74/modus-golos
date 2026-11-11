@@ -54,14 +54,24 @@ def chat_json(system: str, user: str, validate, *, max_tokens: int = 2000) -> di
 # ---------- структурирование обращения (ТЗ §7) ----------
 
 CLASSIFY_SYSTEM = """Ты помощник системы обратной связи сотрудников компании (инженерные системы безопасности, филиалы в Казахстане и России).
-Структурируй обращение сотрудника. Отвечай ТОЛЬКО JSON вида:
-{"summary": "суть в одной фразе", "proposed_solution": "предлагаемое решение или null", "type": "problem|suggestion|praise",
+Структурируй обращение сотрудника и перескажи его коротко для ответственного. Текст может быть голосовой расшифровкой —
+длинной и сбивчивой, на русском или казахском. Пересказывай ТОЛЬКО сказанное, ничего не добавляй и не додумывай.
+Отвечай ТОЛЬКО JSON вида:
+{"summary": "Суть — 1–2 предложения своими словами, без вводных («шалом», «это самое»)",
+ "proposed_solution": "что автор предлагает сделать, или null",
+ "expects": "чего автор ждёт (ответ, срок, действие), если сказано, иначе null",
+ "unclear": false,  // true, если суть неясна — тогда summary: "суть неясна" и обязательно clarifying_question
+ "clarifying_question": "вопрос автору, если без него не разобраться, иначе null",
+ "type": "problem|suggestion|praise",
  "category": "ровно одно название из списка категорий или null, если ни одна не подходит", "confidence": 0.0-1.0,
- "priority": "low|medium|high", "clarifying_question": "вопрос автору, если без него не разобраться, иначе null"}
-Текст может быть на русском или казахском. Категорию выбирай только из списка, не придумывай новых."""
+ "priority": "low|medium|high"}
+Приоритет: учитывай ответ автора («насколько мешает» / «кого затронет»), текст и число коллег «у меня так же»:
+мешает прямо сейчас всему отделу или компании — high; обходится — medium; мелочь, касается одного — low.
+Категорию выбирай только из списка, не придумывай новых."""
 
 
-def classify_appeal(text: str, categories: list[dict], type_hint: str | None = None) -> dict:
+def classify_appeal(text: str, categories: list[dict], type_hint: str | None = None, author_urgency: str | None = None,
+                    author_scope: str | None = None, supports: int = 0, clarifications: list[dict] | None = None) -> dict:
     names = [c["name"] for c in categories]
 
     def validate(d: dict) -> None:
@@ -75,17 +85,54 @@ def classify_appeal(text: str, categories: list[dict], type_hint: str | None = N
             raise ValueError("priority вне списка")
 
     cats = "\n".join(f"- {c['name']}" + (f" (ответственный: {c['responsible']})" if c.get("responsible") else " (ответственный не назначен)") for c in categories)
+    from .. import appeals as _ap
+    ctx = []
+    if type_hint:
+        ctx.append(f"Автор отметил тип: {type_hint}")
+    if author_urgency:
+        ctx.append(f"Автор ответил «насколько мешает работать»: {_ap.URGENCY.get(author_urgency, author_urgency)}")
+    if author_scope:
+        ctx.append(f"Автор ответил «кого затронет»: {_ap.SCOPE.get(author_scope, author_scope)}")
+    if supports:
+        ctx.append(f"Коллег «у меня так же»: {supports}")
+    qa = ""
+    if clarifications:
+        qa = "\n\nУточнения (вопрос ответственного → ответ автора), учти их в пересказе:\n" + "\n".join(f"— {q.get('q')}\n  → {q.get('a')}" for q in clarifications)
     user = "Категории (с ответственным по должности — выбирай ту, чей ответственный будет решать вопрос):\n" + cats + \
-           (f"\n\nАвтор отметил тип: {type_hint}" if type_hint else "") + f"\n\nОбращение:\n{text}"
-    d = chat_json(CLASSIFY_SYSTEM, user, validate, max_tokens=400)
+           ("\n\n" + "\n".join(ctx) if ctx else "") + f"\n\nОбращение:\n{text}" + qa
+    d = chat_json(CLASSIFY_SYSTEM, user, validate, max_tokens=600)
     cat = next((c for c in categories if c["name"] == d["category"]), None)
     try:
         conf = float(d.get("confidence") or 0)
     except (TypeError, ValueError):
         conf = 0.0
+    unclear = bool(d.get("unclear")) or (str(d.get("summary") or "").strip().lower().startswith("суть неясна"))
+    brief = {"gist": d.get("summary") or "", "proposes": d.get("proposed_solution"), "expects": d.get("expects"),
+             "unclear": unclear, "question": d.get("clarifying_question")}
     return {"category_id": cat["id"] if cat else None, "category": cat["name"] if cat else None, "confidence": round(conf, 2),
             "priority": d.get("priority") or "medium", "summary": d.get("summary"), "proposed_solution": d.get("proposed_solution"),
-            "type": d.get("type"), "clarifying_question": d.get("clarifying_question"), "engine": ENGINE}
+            "type": d.get("type"), "clarifying_question": d.get("clarifying_question"), "brief": brief, "engine": ENGINE}
+
+
+# ---------- сводка директора: ИИ только пересказывает готовые факты ----------
+
+SUMMARY_SYSTEM = """Ты пишешь короткую деловую сводку для директора по готовым фактам. Правила:
+- 3–5 предложений, человеческим языком, деловой тон, без воды и без оценок;
+- используй ТОЛЬКО числа из фактов, ничего не вычисляй и не добавляй; если факт равен нулю — можно не упоминать;
+- каждое предложение — об одном факте: обращения за период, ждущие решения директора, главная тема, просроченные поручения,
+  авторы без новостей, «мешают работать сейчас»;
+- начни с приветствия, которое дано в фактах, дословно.
+Отвечай ТОЛЬКО JSON: {"sentences": ["...", "..."]}"""
+
+
+def director_summary(facts: dict) -> list[str]:
+    def validate(d: dict) -> None:
+        if not isinstance(d, dict) or not isinstance(d.get("sentences"), list) or not d["sentences"]:
+            raise ValueError("нет sentences")
+        if not all(isinstance(x, str) and x.strip() for x in d["sentences"]):
+            raise ValueError("пустые предложения")
+    d = chat_json(SUMMARY_SYSTEM, "Факты (JSON):\n" + json.dumps(facts, ensure_ascii=False), validate, max_tokens=500)
+    return [x.strip() for x in d["sentences"]][:6]
 
 
 # ---------- разбор совещания (ТЗ §7) ----------

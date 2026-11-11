@@ -75,6 +75,10 @@ function eventText(e) {
     case 'discussed_at_meeting': return 'Обсуждено на совещании' + (p.meeting_title ? ' «' + p.meeting_title + '»' : '') + (p.text ? ': ' + p.text : '');
     case 'director_requested': return 'Вынесено на решение директора' + (p.text ? ': ' + p.text : '');
     case 'director_decided': return 'Директор ' + (p.decision === 'accepted' ? 'принял' : 'отклонил') + ' предложение' + (p.text ? ': ' + p.text : '');
+    case 'progress': return 'Как идут дела: ' + p.text;
+    case 'thanked': return '«Спасибо» от коллеги — уже ' + p.count;
+    case 'priority_changed': return 'Приоритет: ' + (PRIO[p.from] || p.from) + ' → ' + (PRIO[p.to] || p.to) + (p.reason === 'supports' ? ' (по числу «У меня так же»)' : ' (ответственный)');
+    case 'rebriefed': return 'Пересказ «Коротко» обновлён' + (p.clarifications ? ' с учётом уточнений' : '');
     case 'ai_classified': return p.category ? 'Категория определена ' + (p.engine === 'openai' ? 'ИИ' : 'по ключевым словам (без ИИ)') + ': ' + p.category + (p.confidence ? ' (' + Math.round(p.confidence * 100) + ' %)' : '')
       : 'Категория не определена ' + (p.engine === 'openai' ? 'ИИ' : 'по ключевым словам') + ' — передано администратору';
     case 'supported': return '«У меня так же» — уже ' + p.count;
@@ -134,7 +138,13 @@ const Voice = {
       rec.start(1000);
       t0 = Date.now();
       btn.classList.add('recording');
-      timer = setInterval(() => { const s = Math.round((Date.now() - t0) / 1000); btn.textContent = '■ ' + s; }, 500);
+      let hinted = false;
+      timer = setInterval(() => {
+        const s = Math.round((Date.now() - t0) / 1000);
+        btn.textContent = '■ ' + s;
+        if (s >= 150 && !hinted) { hinted = true; toast('Осталось 30 секунд записи'); }
+        if (s >= 180 && rec.state === 'recording') { clearInterval(timer); rec.stop(); btn.disabled = true; btn.textContent = '…'; toast('Запись остановлена: лимит 3 минуты'); }
+      }, 500);
       btn.textContent = '■ 0';
       btn.title = 'Идёт запись — нажмите, чтобы остановить';
     });
@@ -153,4 +163,61 @@ function similarBlock(r, opts) {
   return h('div', { class: 'card card-warn' }, h('b', {}, 'Похоже, об этом уже сообщали'), h('div', { class: 'hint' }, note + '. Если это то же самое — отметьте «У меня так же» вместо нового обращения' + (opts.canSupport ? '' : ' (нужен вход)') + '.'),
     h('div', { class: 'list mt8' }, items),
     h('div', { class: 'row mt8' }, h('button', { class: 'btn btn-outline', onclick: ev => { ev.preventDefault(); if (opts.onAnyway) opts.onAnyway(); } }, 'Всё равно отправить')));
+}
+
+
+// Аватарка: своя картинка или инициалы на фирменном фоне; анонимным — нейтральная иконка.
+function avatarEl(u, size) {
+  const cls = 'avatar' + (size === 'sm' ? ' avatar-sm' : size === 'lg' ? ' avatar-lg' : '');
+  if (!u) return h('span', { class: cls + ' avatar-anon', title: 'Анонимно' }, '•');
+  if (u.avatar) return h('img', { class: cls, src: u.avatar, alt: u.name || '' });
+  const parts = String(u.name || '?').split(' ');
+  const ini = (parts[0][0] || '') + (parts[1] ? parts[1][0] : '');
+  return h('span', { class: cls, title: u.name || '' }, ini.toUpperCase());
+}
+function userLink(u, size) {
+  if (!u) return h('span', { class: 'row' }, avatarEl(null, size), h('span', { class: 'muted' }, 'Анонимно'));
+  return h('a', { href: '/app#/u/' + u.id, class: 'row ulink' }, avatarEl(u, size), h('span', {}, u.name));
+}
+
+// Трекер для автора — стадиями собственника: Принято → Проработка → Принятие решения → Реализация → Готово (или Не принято).
+function stageTracker(stage) {
+  const el = h('div', { class: 'tracker ' + (stage.code === 'rejected' ? 'rejected' : stage.note === 'нужно ваше уточнение' ? 'clarify' : '') });
+  stage.steps.forEach(s => el.append(h('div', { class: 'step ' + (s.state === 'skip' ? 'done skip' : s.state === 'future' ? '' : s.state), title: s.state === 'skip' ? 'пройдено автоматически' : '' }, h('div', { class: 'bar' }), s.label)));
+  return h('div', {}, el, stage.note ? h('div', { class: 'small muted' }, stage.note) : null);
+}
+
+// «Коротко» — пересказ для ответственного (ТЗ этапа 4 §3): суть / что предлагает / чего ждёт.
+function briefBlock(a, opts) {
+  opts = opts || {};
+  const b = a.brief;
+  if (!b) return null;
+  const ai = a.brief_engine === 'openai';
+  const head = [a.author ? a.author.name : 'Анонимно', a.branch, a.input_mode === 'voice' ? 'голосом' : 'текстом'].filter(Boolean).join(' · ');
+  return h('div', { class: 'card ' + (b.unclear ? 'card-warn' : 'card-info') + ' brief' },
+    h('div', { class: 'row' }, h('b', {}, 'Коротко'), h('span', { class: 'small muted' }, head), h('div', { class: 'spacer' }), tag(ai ? 'tag-ai' : 'tag-demo', ai ? 'пересказ ИИ' : (b.note || 'без ИИ'))),
+    h('div', { class: 'mt8' }, h('b', {}, 'Суть: '), b.gist || '—'),
+    b.proposes ? h('div', {}, h('b', {}, 'Что предлагает: '), b.proposes) : null,
+    b.expects ? h('div', {}, h('b', {}, 'Чего ждёт: '), b.expects) : null,
+    b.unclear && b.question ? h('div', { class: 'small mt8' }, h('b', {}, 'Уточняющий вопрос ИИ: '), b.question) : null,
+    opts.actions || null);
+}
+function fullText(a) {
+  return h('details', { class: 'mt8' }, h('summary', { class: 'small' }, (a.brief ? 'Показать полностью' : 'Текст обращения') + (a.input_mode === 'voice' ? ' (расшифровка голоса)' : '')), h('p', { class: 'pre' }, a.text),
+    a.proposed_solution ? h('div', { class: 'small' }, h('b', {}, 'Предлагаемое решение: '), a.proposed_solution) : null);
+}
+
+// Чипы «насколько мешает» / «кого затронет» (одно нажатие, необязательно)
+const URGENCY = { now: 'Прямо сейчас мешает', workaround: 'Мешает, но обхожусь', minor: 'Мелочь' };
+const SCOPE = { me: 'Меня', department: 'Мой отдел', company: 'Всю компанию' };
+function chips(options, onPick) {
+  const box = h('div', { class: 'chips' });
+  let value = null;
+  for (const [code, label] of Object.entries(options)) {
+    const b = h('button', { type: 'button', class: 'chip', onclick: () => { value = value === code ? null : code; for (const x of box.children) x.classList.toggle('on', x.dataset.code === value); if (onPick) onPick(value); } }, label);
+    b.dataset.code = code;
+    box.append(b);
+  }
+  box.value = () => value;
+  return box;
 }

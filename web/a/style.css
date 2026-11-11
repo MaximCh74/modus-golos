@@ -207,3 +207,41 @@ details.card > summary { cursor: pointer; font-weight: 700; color: var(--navy); 
 .cluster { padding: 10px 0; border-bottom: 1px solid var(--line-soft); }
 .cluster:last-child { border-bottom: 0; }
 .cluster .nums a { margin-right: 6px; font-weight: 600; }
+
+/* этап 4: чипы, аватарки, карта, сводка, профиль */
+.chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip { border: 1px solid var(--line); background: #fff; border-radius: 999px; padding: 6px 12px; font: inherit; font-size: 13px; font-weight: 600; color: var(--ink); cursor: pointer; }
+.chip.on { background: var(--navy); color: #fff; border-color: var(--navy); }
+.avatar { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 50%; background: var(--navy); color: #fff; font-weight: 700; font-size: 12px; flex: none; object-fit: cover; letter-spacing: .02em; }
+.avatar-sm { width: 24px; height: 24px; font-size: 10px; }
+.avatar-lg { width: 88px; height: 88px; font-size: 30px; }
+.avatar-anon { background: var(--line); color: var(--muted); }
+.ulink { text-decoration: none; color: var(--ink); gap: 8px; }
+.ulink:hover span:last-child { text-decoration: underline; }
+.tracker .step.skip .bar { background: #fff; border-color: var(--red); }
+.tracker .step.skip .bar::after { display: none; }
+.brief b { color: var(--navy); }
+.summary-ai { border-left: 4px solid var(--red); }
+.summary-ai p { margin: 6px 0; font-size: 16px; line-height: 1.5; }
+.summary-ai a { color: var(--ink); text-decoration: none; border-bottom: 1px dashed var(--line); }
+.summary-ai a:hover { color: var(--red); border-bottom-color: var(--red); }
+.lines { display: flex; gap: 8px; flex-wrap: wrap; }
+.lines a { text-decoration: none; }
+.map { position: relative; width: 100%; aspect-ratio: 900 / 520; border-radius: var(--radius); overflow: hidden; border: 1px solid var(--line-soft); background: #dde7f3; }
+.map-bg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.map-layer { position: absolute; inset: 0; }
+.marker { position: absolute; transform: translate(-50%, -100%); cursor: pointer; text-align: center; }
+.marker .pin { width: 26px; height: 26px; border-radius: 50%; background: var(--red); color: #fff; display: flex; align-items: center; justify-content: center; margin: 0 auto; box-shadow: 0 2px 6px rgba(8, 39, 66, .35); font-size: 11px; border: 2px solid #fff; }
+.marker.prod .pin { background: var(--navy); }
+.marker.warn .pin { box-shadow: 0 0 0 4px rgba(228, 0, 0, .25); }
+.marker.site .pin { width: 16px; height: 16px; background: #fff; color: var(--red); border: 2px solid var(--red); font-size: 9px; }
+.marker .mlabel { font-size: 11px; background: rgba(255,255,255,.9); border-radius: 6px; padding: 1px 6px; margin-top: 2px; white-space: nowrap; color: var(--ink); }
+.marker.site .mlabel { font-size: 10px; }
+.marker.blink .pin { animation: blink .6s 6; }
+.lg-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--red); vertical-align: middle; }
+.lg-dot.site { background: #fff; border: 2px solid var(--red); width: 8px; height: 8px; }
+.league td.score b { color: var(--navy); font-size: 18px; }
+.profile-head { display: flex; gap: 16px; align-items: center; }
+.stat { text-align: center; } .stat b { display: block; font-size: 24px; color: var(--navy); }
+.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+@media (max-width: 480px) { .stats { grid-template-columns: repeat(2, 1fr); } .marker .mlabel { display: none; } }
