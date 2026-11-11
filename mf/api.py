@@ -135,7 +135,8 @@ async def public_create(request: Request, type: str = Form(...), text: str = For
 async def classify(text: str, type_hint: str | None) -> dict:
     """ИИ-категория: LLM в threadpool (сетевой вызов), без ключа — словарь. Любая ошибка → без категории, не 500."""
     import asyncio
-    cats = db.q("SELECT id, name FROM categories ORDER BY id")
+    cats = db.q("""SELECT c.id, c.name, CASE WHEN u.id IS NULL THEN NULL ELSE u.name || ', ' || COALESCE(u.position, u.role) END AS responsible
+                   FROM categories c LEFT JOIN users u ON u.id=c.responsible_user_id AND u.active=1 ORDER BY c.id""")
     try:
         return await asyncio.to_thread(ai.classify_appeal, text, cats, type_hint)
     except Exception as e:   # noqa: BLE001

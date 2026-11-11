@@ -215,7 +215,8 @@ def _context():
                     LEFT JOIN branches b ON b.id=u.branch_id LEFT JOIN departments d ON d.id=u.department_id WHERE u.active=1""")
     open_appeals = [{"id": a["id"], "number": a["number"], "text": appeals.short(a["text"], 160)} for a in
                     db.q("SELECT id, number, text FROM appeals WHERE status IN ('new','review','clarify','in_progress') ORDER BY id")]
-    categories = db.q("SELECT id, name FROM categories ORDER BY id")
+    categories = db.q("""SELECT c.id, c.name, CASE WHEN u.id IS NULL THEN NULL ELSE u.name || ', ' || COALESCE(u.position, u.role) END AS responsible
+                         FROM categories c LEFT JOIN users u ON u.id=c.responsible_user_id AND u.active=1 ORDER BY c.id""")
     return users, open_appeals, categories
 
 

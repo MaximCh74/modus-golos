@@ -74,7 +74,9 @@ def classify_appeal(text: str, categories: list[dict], type_hint: str | None = N
         if d.get("priority") not in ("low", "medium", "high", None):
             raise ValueError("priority вне списка")
 
-    user = "Категории:\n- " + "\n- ".join(names) + (f"\n\nАвтор отметил тип: {type_hint}" if type_hint else "") + f"\n\nОбращение:\n{text}"
+    cats = "\n".join(f"- {c['name']}" + (f" (ответственный: {c['responsible']})" if c.get("responsible") else " (ответственный не назначен)") for c in categories)
+    user = "Категории (с ответственным по должности — выбирай ту, чей ответственный будет решать вопрос):\n" + cats + \
+           (f"\n\nАвтор отметил тип: {type_hint}" if type_hint else "") + f"\n\nОбращение:\n{text}"
     d = chat_json(CLASSIFY_SYSTEM, user, validate, max_tokens=400)
     cat = next((c for c in categories if c["name"] == d["category"]), None)
     try:
@@ -91,23 +93,33 @@ def classify_appeal(text: str, categories: list[dict], type_hint: str | None = N
 MEETING_SYSTEM = """Ты разбираешь расшифровку рабочего совещания (планёрки) компании. Речь может быть на русском и казахском,
 расшифровка автоматическая — имена и слова могут быть искажены. Выдели:
 - summary: итог 3–5 строк — о чём договорились и что осталось открытым;
-- decisions: принятые решения (список строк);
+- decisions: принятые решения — договорённости и правила («решили…», «договорились…»); поручения сюда НЕ дублировать;
 - tasks: поручения: {"text": что сделать, "assignee_name": имя исполнителя как прозвучало (или null), "due": срок как прозвучало
   («до пятницы», «к 15 ноября», ISO-дата) или null, "quote": цитата из расшифровки};
-- ideas: идеи и проблемы, которые нужно вынести директору: {"text", "type": "suggestion|problem", "category": название из списка категорий или null,
-  "voiced_by": кто озвучил или null};
-- linked_appeals: обращения из списка открытых, которые обсуждались (по смыслу, не только по номеру): {"number": "A-007", "decision": что решили сообщить автору};
+- ideas: идеи и проблемы, которые нужно вынести директору: {"text", "type": "suggestion|problem", "category": название из списка категорий
+  (у каждой указан ответственный — выбирай категорию, чей ответственный по должности будет это делать) или null, "voiced_by": кто озвучил или null};
+- linked_appeals: обращения из списка открытых, которых касалось обсуждение — по смыслу, не только по номеру: если на совещании
+  обсудили проблему или приняли решение по теме открытого обращения, это связь. {"number": "A-007", "decision": что сообщить автору обращения};
 - open_questions: что осталось без решения, срока или ответственного.
-Не придумывай имена: если имя не прозвучало или неразборчиво — null. Отвечай ТОЛЬКО JSON с этими шестью ключами."""
+Не придумывай имена: если имя не прозвучало или неразборчиво — null. Отвечай ТОЛЬКО JSON с этими шестью ключами; пустые разделы — пустой список [].
+Форма ответа: {"summary": "...", "decisions": ["..."], "tasks": [{"text": "...", "assignee_name": null, "due": null, "quote": "..."}],
+"ideas": [{"text": "...", "type": "suggestion", "category": null, "voiced_by": null}], "linked_appeals": [{"number": "A-001", "decision": "..."}], "open_questions": []}"""
 
 
 def _validate_meeting(d: dict) -> None:
-    for key in ("summary", "decisions", "tasks", "ideas", "linked_appeals", "open_questions"):
-        if key not in d:
-            raise ValueError(f"нет поля {key}")
+    """Проверка схемы с мягкой нормализацией: пустое поле → [], строка вместо списка → [строка]."""
+    if not isinstance(d, dict) or not d.get("summary"):
+        raise ValueError("нет поля summary")
     for key in ("decisions", "tasks", "ideas", "linked_appeals", "open_questions"):
-        if not isinstance(d[key], list):
+        v = d.get(key)
+        if v is None or v == "":
+            d[key] = []
+        elif isinstance(v, (str, dict)):
+            d[key] = [v]
+        elif not isinstance(v, list):
             raise ValueError(f"{key} не список")
+    d["decisions"] = [x.get("text", "") if isinstance(x, dict) else str(x) for x in d["decisions"]]
+    d["open_questions"] = [x.get("text", "") if isinstance(x, dict) else str(x) for x in d["open_questions"]]
     for t in d["tasks"]:
         if not isinstance(t, dict) or not t.get("text"):
             raise ValueError("task без text")
@@ -136,10 +148,12 @@ def _chunks(text: str) -> list[str]:
 def analyze_meeting(transcript: str, users: list[dict], open_appeals: list[dict], categories: list[dict]) -> dict:
     people = "\n".join(f"- {u['name']} — {u.get('position') or u.get('role')}, {u.get('branch') or ''}, {u.get('department') or ''}".rstrip(", ") for u in users)
     appeals_txt = "\n".join(f"- {a['number']}: {a['text']}" for a in open_appeals)
-    cats = ", ".join(c["name"] for c in categories)
-    context = f"Сотрудники:\n{people}\n\nОткрытые обращения:\n{appeals_txt}\n\nКатегории: {cats}\n\n"
+    cats = "\n".join(f"- {c['name']}" + (f" (ответственный: {c['responsible']})" if c.get("responsible") else " (ответственный не назначен)") for c in categories)
+    context = f"Сотрудники:\n{people}\n\nКатегории обращений:\n{cats}\n\n"
+    tail = (f"\n\nОткрытые обращения сотрудников — проверь КАЖДОЕ: касалось ли его обсуждение по смыслу (та же проблема, принятое решение по этой теме)?"
+            f" Все такие — в linked_appeals с текстом, что сообщить автору.\n{appeals_txt}")
     parts = _chunks(transcript)
-    results = [chat_json(MEETING_SYSTEM, context + f"Расшифровка (часть {i + 1} из {len(parts)}):\n{p}", _validate_meeting, max_tokens=2500)
+    results = [chat_json(MEETING_SYSTEM, context + f"Расшифровка (часть {i + 1} из {len(parts)}):\n{p}" + tail, _validate_meeting, max_tokens=2500)
                for i, p in enumerate(parts)]
     if len(results) == 1:
         d = results[0]
