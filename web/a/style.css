@@ -272,6 +272,7 @@ tr.muted td { opacity: .6; }
 .marker.site .mlabel { display: inline-block; font-size: 10px; margin-left: 4px; vertical-align: middle; }
 .lg-pin { color: var(--red); stroke: #fff; }
 .home-top { position: static; }
+.home-top .brand span { display: block; }
 .home-line { font-weight: 700; color: var(--navy); font-size: 16px; }
 .home-grid { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 16px; align-items: start; margin-top: 12px; }
 .city-buttons { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }

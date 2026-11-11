@@ -39,7 +39,7 @@ function renderTop() {
   nav.push(['#/league', 'Лига']);
   if (ME.role === 'admin' || ME.role === 'director') nav.push(['#/admin', 'Администрирование']);
   top.replaceChildren(
-    h('a', { href: '#/queue', class: 'brand' }, h('img', { src: '/a/img/logo.svg', alt: 'Модус Трейд' }), h('span', {}, 'Панель', h('small', {}, 'обратная связь · демо'))),
+    h('a', { href: '#/queue', class: 'brand' }, h('img', { src: '/a/img/logo.svg', alt: 'Модус Трейд' }), h('span', {}, 'Панель', h('small', {}, 'Модус Голос · демо'))),
     h('div', { class: 'nav' }, nav.map(([href, label]) => h('a', { href, class: hash.startsWith(href) || (href === '#/queue' && hash.startsWith('#/appeal')) ? 'active' : '' }, label))),
     h('div', { class: 'spacer' }),
     h('a', { href: '#/notifications', class: 'btn btn-sm bell', title: 'Уведомления' }, icon('bell'), ME.unread ? h('span', { class: 'n' }, String(ME.unread)) : null),
@@ -325,7 +325,7 @@ async function adminScreen() {
     h('div', { class: 'tblwrap' }, h('table', { class: 'tbl mt8 compact' }, h('thead', {}, h('tr', {}, ['Имя', 'Должность', 'Роль', 'Город', 'Отдел', 'Руководитель', 'Почта', 'ID Б24', 'Акт.', ''].map(t => h('th', {}, t)))), h('tbody', {}, d.users.map(userRow), userRow({})))));
   const bx = d.bitrix || {};
   const bitrixCard = h('div', { class: 'card' }, h('b', {}, 'Битрикс24'),
-    bx.configured ? h('div', { class: 'small mt8' }, h('div', {}, 'Портал: ', h('b', {}, bx.portal)), h('div', {}, 'Приложение установлено (токены портала): ', h('b', {}, bx.tokens ? 'да' + (bx.installed_at ? ' · ' + fmtDate(bx.installed_at) : '') : 'нет — откройте «Обратная связь» в меню портала или нажмите «Установить»')),
+    bx.configured ? h('div', { class: 'small mt8' }, h('div', {}, 'Портал: ', h('b', {}, bx.portal)), h('div', {}, 'Приложение установлено (токены портала): ', h('b', {}, bx.tokens ? 'да' + (bx.installed_at ? ' · ' + fmtDate(bx.installed_at) : '') : 'нет — откройте «Модус Голос» в меню портала или нажмите «Установить»')),
       h('div', {}, 'Сопоставлено сотрудников: ', h('b', {}, String(bx.mapped_users || 0))), h('div', {}, 'Поручения в задачи Битрикса: ', h('b', {}, bx.tasks ? 'включено' : 'выключено (BITRIX_TASKS=1)')))
       : h('div', { class: 'small mt8' }, bx.webhook ? 'Только входящий вебхук: уведомления дублируются в чат, входа через Битрикс24 нет.' : 'Не подключён: нет настроек в .env. Инструкция — docs/BITRIX24.md. Без настроек ничего не имитируется.'));
   root.replaceChildren(h('div', { class: 'wrap wrap-wide' }, h('div', { class: 'h1' }, 'Администрирование'),

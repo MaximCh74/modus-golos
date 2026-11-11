@@ -3,7 +3,7 @@
 # Один раз владелец: gh auth login  (браузер, учётка GitHub). Потом: tools/github_publish.sh [имя-репо]
 set -euo pipefail
 GH="${GH:-$HOME/.local/bin/gh}"
-NAME="${1:-modus-feedback}"
+NAME="${1:-modus-golos}"
 READER="${READER:-}"
 cd "$(dirname "$0")/.."
 "$GH" auth status >/dev/null 2>&1 || { echo "Сначала: $GH auth login"; exit 1; }
@@ -13,7 +13,7 @@ git ls-files | grep -q -E "^\.env$|docs/source/" && { echo "В индексе .e
 OWNER=$("$GH" api user -q .login)
 if ! "$GH" repo view "$OWNER/$NAME" >/dev/null 2>&1; then
   "$GH" repo create "$NAME" --private --source . --remote origin --push \
-    --description "Обратная связь и предложения сотрудников + режим совещания — хакатон Pavlodar Hub × ГК «Модус Трейд»"
+    --description "«Модус Голос» — каждый голос услышан: обратная связь и предложения сотрудников + режим совещания — хакатон Pavlodar Hub × ГК «Модус Трейд»"
 else
   git remote get-url origin >/dev/null 2>&1 || git remote add origin "git@github.com:$OWNER/$NAME.git"
   git push -u origin main

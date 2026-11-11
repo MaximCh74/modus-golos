@@ -223,3 +223,14 @@ def test_no_emoji_in_frontend():
                 bad.append(f"{f.name}:{n}: {line.strip()[:80]}")
     assert not bad, bad
     assert (web / "a" / "icons" / "LICENSE").is_file()
+
+
+def test_command_demo_phrase_without_key(c):
+    """Фраза из DEMO.md (без грубостей) должна разбираться и без ключа: город, срок словами, вежливый текст."""
+    login(c, 1)
+    r = c.post("/api/director/command/parse", json={"text": "Пусть Омск до шести вечера расскажет, что по обращениям в работе"}).json()
+    cmd = r["command"]
+    assert cmd["intent"] == "request_progress" and cmd["filters"]["branch"] == "Омск" and cmd["deadline"]["time"] == "18:00" and cmd["deadline"]["label"] == "сегодня до 18:00"
+    assert r["plan"]["recipients"] and r["plan"]["recipients"][0]["message"].startswith("Виктор просит сегодня до 18:00 сообщить о ходе работ по обращени")
+    from mf import commands
+    assert commands.parse_time("к часу") == "13:00" and commands.parse_time("до пяти") == "17:00" and commands.parse_time("к девяти утра") == "09:00" and commands.parse_time("до 18 ноября") is None

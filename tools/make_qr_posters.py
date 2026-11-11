@@ -65,7 +65,7 @@ def poster(c: canvas.Canvas, base: str, branch: dict, big: bool = False) -> None
         for j in range(4):
             c.circle(W - 45 * mm + i * 6 * mm, H - 14 * mm - j * 6 * mm, 1.1 * mm, fill=1, stroke=0)
     c.setLineWidth(1.2); c.line(20 * mm, H - 48 * mm, 30 * mm, H - 48 * mm)
-    c.setFont("Montserrat-SemiBold", 11); c.drawString(33 * mm, H - 49.5 * mm, "ОБРАТНАЯ СВЯЗЬ · " + ("ОБЪЕКТ" if branch["kind"] == "field" else "ФИЛИАЛ").upper())
+    c.setFont("Montserrat-SemiBold", 11); c.drawString(33 * mm, H - 49.5 * mm, "МОДУС ГОЛОС · " + ("ОБЪЕКТ" if branch["kind"] == "field" else "ФИЛИАЛ").upper())
     rgb(c, NAVY); c.setFont("Montserrat-ExtraBold", 30 if not big else 26)
     title = "Есть идея или проблема?" ; c.drawString(20 * mm, H - 64 * mm, title)
     c.setFont("Montserrat-SemiBold", 22); c.drawString(20 * mm, H - 76 * mm, "Наведите камеру")
@@ -81,7 +81,7 @@ def poster(c: canvas.Canvas, base: str, branch: dict, big: bool = False) -> None
     if branch["kind"] == "field":
         rgb(c, MUTED); c.setFont("Montserrat", 11); c.drawCentredString(W / 2, y - 29 * mm, "Укажите город или объект в форме — геолокация не нужна")
     rgb(c, MUTED); c.setFont("Montserrat", 10); c.drawCentredString(W / 2, y - 23 * mm, url)
-    c.setFont("Montserrat", 9); c.drawCentredString(W / 2, 14 * mm, "ГК «Модус Трейд» · обратная связь и предложения сотрудников · демо")
+    c.setFont("Montserrat", 9); c.drawCentredString(W / 2, 14 * mm, "ГК «Модус Трейд» · «Модус Голос» — каждый голос услышан · демо")
     c.showPage()
 
 
@@ -95,7 +95,7 @@ def slide_qr(base: str, code: str, out: Path, label: str) -> None:
     f = ImageFont.truetype(str(fonts["Montserrat-ExtraBold"]), 96); f2 = ImageFont.truetype(str(fonts["Montserrat"]), 56)
     d.text((1000, 1830), label, fill=(8, 39, 66), font=f, anchor="mm")
     d.text((1000, 1950), f"{base}/q/{code}", fill=(100, 116, 141), font=f2, anchor="mm")
-    d.text((1000, 2070), "Наведите камеру — без установки и регистрации", fill=(228, 0, 0), font=f2, anchor="mm")
+    d.text((1000, 2070), "Модус Голос · наведите камеру — без установки и регистрации", fill=(228, 0, 0), font=f2, anchor="mm")
     canvas_img.save(out, "PNG")
 
 
@@ -108,7 +108,7 @@ def main() -> None:
     out_pdf = ROOT / "demo" / "qr_posters.pdf"
     out_pdf.parent.mkdir(exist_ok=True)
     c = canvas.Canvas(str(out_pdf), pagesize=A4)
-    c.setTitle("QR-плакаты — обратная связь ГК «Модус Трейд»")
+    c.setTitle("QR-плакаты — «Модус Голос», ГК «Модус Трейд»")
     for b in branches:
         poster(c, base, b)
     c.save()

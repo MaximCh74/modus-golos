@@ -32,7 +32,7 @@
     : h('div', { class: 'row' }, cfg.bitrix ? h('a', { href: cfg.bitrix_login, class: 'btn btn-sm btn-primary' }, iconText('log-in', 'Войти через Битрикс24')) : null,
         h('a', { href: '/login', class: 'btn btn-sm' + (cfg.bitrix ? '' : ' btn-primary') }, iconText('log-in', cfg.bitrix ? 'Демо-вход' : 'Войти')));
   root.replaceChildren(
-    h('div', { class: 'topbar home-top' }, h('a', { href: '/', class: 'brand' }, h('img', { src: '/a/img/logo.svg', alt: 'Модус Трейд' })),
+    h('div', { class: 'topbar home-top' }, h('a', { href: '/', class: 'brand' }, h('img', { src: '/a/img/logo.svg', alt: 'Модус Трейд' }), h('span', {}, 'Модус Голос', h('small', {}, 'Каждый голос услышан'))),
       h('div', { class: 'home-line' }, 'Есть идея или проблема? Выберите город или отсканируйте QR'), h('div', { class: 'spacer' }), loginBtns),
     h('div', { class: 'wrap wrap-wide' },
       h('div', { class: 'home-grid' }, h('div', {}, mapEl, buttons), card),

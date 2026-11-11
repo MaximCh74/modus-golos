@@ -1,4 +1,4 @@
-"""Modus Feedback — FastAPI-приложение: API (mf/api.py), страницы (web/*.html), статика (web/a)."""
+"""«Модус Голос» (Modus Golos) — FastAPI-приложение: API (mf/api.py), страницы (web/*.html), статика (web/a)."""
 from __future__ import annotations
 
 import asyncio
@@ -100,7 +100,7 @@ async def lifespan(app: FastAPI):
     task.cancel()
 
 
-app = FastAPI(title="Modus Feedback", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
+app = FastAPI(title="Модус Голос", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
 app.add_middleware(Headers)
 app.include_router(api.router, prefix="/api")
 app.mount("/a", StaticFiles(directory=WEB / "a"), name="assets")
@@ -219,7 +219,7 @@ async def bitrix_app(request: Request):
         if user:
             return RedirectResponse(_home_for(user), status_code=302)
         return HTMLResponse("<!doctype html><meta charset='utf-8'><link rel='stylesheet' href='/a/style.css'><div class='wrap'><div class='card card-info'>"
-                            "Откройте «Обратная связь» из левого меню Битрикс24 — вход произойдёт автоматически.</div></div>")
+                            "Откройте «Модус Голос» из левого меню Битрикс24 — вход произойдёт автоматически.</div></div>")
     try:
         user = await _run(bitrix.login_from_app, form)
     except bitrix.BitrixError as e:

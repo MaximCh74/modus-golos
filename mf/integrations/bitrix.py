@@ -279,7 +279,7 @@ def notify(user_id: int | None, text: str, link: str | None = None) -> None:
         return
     msg = text
     if link:
-        msg += f"\n[URL={_public_url()}{link}]Открыть в системе обратной связи[/URL]"
+        msg += f"\n[URL={_public_url()}{link}]Открыть в «Модус Голос»[/URL]"
     if os.environ.get("PYTEST_CURRENT_TEST"):
         _send_notify(row["bitrix_id"], msg)
     else:
@@ -312,8 +312,8 @@ def create_task(assignee_user_id: int, title: str, description: str, due_date: s
         return None
 
 
-INSTALL_PAGE = """<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>Установка · Обратная связь</title>
+INSTALL_PAGE = """<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>Установка · Модус Голос</title>
 <link rel="stylesheet" href="/a/style.css"></head><body><div class="wrap"><div class="card card-ok"><div class="h1">Приложение установлено</div>
-<p>Токены портала сохранены. Пункт «Обратная связь» появится в левом меню Битрикс24 — откройте его.</p>
+<p>Токены портала сохранены. Пункт «Модус Голос» появится в левом меню Битрикс24 — откройте его.</p>
 <p class="small muted">Если окно не закрылось само — закройте его.</p></div></div>
 <script src="https://api.bitrix24.com/api/v1/"></script><script src="/a/bitrix_install.js"></script></body></html>"""
