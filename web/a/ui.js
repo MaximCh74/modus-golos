@@ -203,8 +203,9 @@ function briefBlock(a, opts) {
     opts.actions || null);
 }
 function fullText(a) {
-  return h('details', { class: 'mt8' }, h('summary', { class: 'small' }, (a.brief ? 'Показать полностью' : 'Текст обращения') + (a.input_mode === 'voice' ? ' (расшифровка голоса)' : '')), h('p', { class: 'pre' }, a.text),
-    a.proposed_solution ? h('div', { class: 'small' }, h('b', {}, 'Предлагаемое решение: '), a.proposed_solution) : null);
+  const sol = a.proposed_solution ? h('div', { class: 'small' }, h('b', {}, 'Предлагаемое решение: '), a.proposed_solution) : null;
+  if (!a.brief) return h('div', {}, h('p', { class: 'pre' }, a.text), sol);
+  return h('details', { class: 'mt8' }, h('summary', { class: 'small' }, 'Показать полностью' + (a.input_mode === 'voice' ? ' (расшифровка голоса)' : '')), h('p', { class: 'pre' }, a.text), sol);
 }
 
 // Чипы «насколько мешает» / «кого затронет» (одно нажатие, необязательно)

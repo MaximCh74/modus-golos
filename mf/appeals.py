@@ -763,8 +763,8 @@ def mine(user: dict) -> list[dict]:
 
 def changes(limit: int = 50) -> list[dict]:
     """Лента «Что изменили»: проблема → что сделали (закрывает A-020 из датасета)."""
-    rows = db.q(BASE_SELECT + " WHERE a.status IN ('done','closed') AND a.resolution_text IS NOT NULL AND a.type != 'praise' "
-                "ORDER BY COALESCE(a.closed_at, a.updated_at) DESC LIMIT ?", (limit,))
+    rows = [decorate(r) for r in db.q(BASE_SELECT + " WHERE a.status IN ('done','closed') AND a.resolution_text IS NOT NULL AND a.type != 'praise' "
+                                     "ORDER BY COALESCE(a.closed_at, a.updated_at) DESC LIMIT ?", (limit,))]
     out = []
     for r in rows:
         o = {k: r.get(k) for k in ("id", "number", "type", "type_label", "category", "branch", "text", "resolution_text", "closed_at", "supports")}

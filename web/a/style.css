@@ -245,3 +245,6 @@ details.card > summary { cursor: pointer; font-weight: 700; color: var(--navy); 
 .stat { text-align: center; } .stat b { display: block; font-size: 24px; color: var(--navy); }
 .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
 @media (max-width: 480px) { .stats { grid-template-columns: repeat(2, 1fr); } .marker .mlabel { display: none; } }
+.w70 { width: 70px !important; }
+#queue-table .card { overflow-x: auto; }
+.split > * { min-width: 0; }

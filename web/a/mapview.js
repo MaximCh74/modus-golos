@@ -11,17 +11,20 @@ function mapView(data, opts) {
   const layerBranches = h('div', { class: 'map-layer' });
   for (const b of data.branches) {
     const [x, y] = mapXY(b.lat, b.lng);
-    const m = h('div', { class: 'marker' + (b.overdue ? ' warn' : '') + (b.kind === 'production' ? ' prod' : ''), style: 'left:' + x + '%;top:' + y + '%', title: b.name, onclick: () => { if (opts.onBranch) opts.onBranch(b); } },
+    const m = h('div', { class: 'marker' + (b.overdue ? ' warn' : '') + (b.kind === 'production' ? ' prod' : ''), title: b.name, onclick: () => { if (opts.onBranch) opts.onBranch(b); } },
       h('div', { class: 'pin' }, h('span', {}, '●')),
       h('div', { class: 'mlabel' }, h('b', {}, b.city), h('span', {}, ' ' + b.open + ' откр.' + (b.overdue ? ' · ⚠ ' + b.overdue : ''))));
+    m.style.left = x + '%'; m.style.top = y + '%';   // через CSSOM: CSP без inline-стилей запрещает атрибут style
     m.dataset.branch = b.id;
     layerBranches.append(m);
   }
   for (const s of data.sites) {
     if (!s.lat) continue;
     const [x, y] = mapXY(s.lat, s.lng);
-    layerSites.append(h('div', { class: 'marker site', style: 'left:' + x + '%;top:' + y + '%', title: 'Объект: ' + s.city + ' · ' + s.numbers.join(', '), onclick: () => { if (opts.onSite) opts.onSite(s); } },
-      h('div', { class: 'pin' }, h('span', {}, '▲')), h('div', { class: 'mlabel' }, h('b', {}, s.city), h('span', {}, ' ' + s.open))));
+    const sm = h('div', { class: 'marker site', title: 'Объект: ' + s.city + ' · ' + s.numbers.join(', '), onclick: () => { if (opts.onSite) opts.onSite(s); } },
+      h('div', { class: 'pin' }, h('span', {}, '▲')), h('div', { class: 'mlabel' }, h('b', {}, s.city), h('span', {}, ' ' + s.open)));
+    sm.style.left = x + '%'; sm.style.top = y + '%';
+    layerSites.append(sm);
   }
   box.append(layerSites, layerBranches);
   const legend = h('div', { class: 'row small muted mt8' }, h('span', {}, h('span', { class: 'lg-dot' }), ' офис / производство'), h('span', {}, h('span', { class: 'lg-dot site' }), ' слой «Объекты» — командированные (по городу из QR)'), h('span', {}, '⚠ — есть просроченные'));

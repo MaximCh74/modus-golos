@@ -783,10 +783,11 @@ async def panel_clusters(request: Request):
 # ---------- этап 4: главная директора, лига, карта, награды, настройки ----------
 
 @router.get("/panel/director-summary")
-async def director_summary(request: Request, refresh: str = ""):
+async def director_summary(request: Request, refresh: str = "", engine: str = ""):
+    """engine=template — показать шаблон без ИИ (для сравнения на демо)."""
     user = auth.require(request, *appeals.STAFF)
     import asyncio
-    return await asyncio.to_thread(director.summary, user, parse_bool(refresh))
+    return await asyncio.to_thread(director.summary, user, parse_bool(refresh), engine == "template")
 
 
 @router.get("/panel/map")

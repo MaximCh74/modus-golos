@@ -190,7 +190,7 @@ async function loadCard(id) {
       ['new', 'review', 'clarify', 'in_progress'].includes(a.status) ? h('div', {}, h('div', { class: 'hint' }, 'Новость автору без смены статуса'), progTa, h('div', { class: 'mt8' }, progBtn)) : null,
       ['new', 'review', 'clarify', 'in_progress'].includes(a.status) ? h('div', {}, comTa, h('div', { class: 'mt8' }, comBtn)) : null);
   }
-  box.replaceChildren(head, result, director, actions, h('div', { class: 'card' }, h('div', { class: 'h2' }, 'История'), history(a.events)));
+  box.replaceChildren(...[head, result, director, actions, h('div', { class: 'card' }, h('div', { class: 'h2' }, 'История'), history(a.events))].filter(Boolean));
   const row = [...document.querySelectorAll('#queue-table tbody tr')].find(tr => tr.textContent.startsWith(a.number));
   if (row) row.classList.add('sel');
 }
@@ -235,7 +235,7 @@ async function summary() {
     h('div', { class: 'kpi' }, h('b', {}, String(d.unassigned)), h('span', {}, 'без ответственного')));
   const byType = h('div', { class: 'card' }, h('b', {}, 'По типам'), h('div', { class: 'row mt8' }, Object.entries(d.by_type).map(([t, n]) => h('span', { class: 'badge tag-type' }, TYPES[t] + ': ' + n))),
     h('b', { class: 'mt16' }, 'По статусам'), h('div', { class: 'row mt8' }, Object.entries(d.by_status).map(([s, n]) => h('span', { class: 'badge ' + STATUS[s][1] }, STATUS[s][0] + ': ' + n))));
-  const branches = h('div', { class: 'card' }, h('b', {}, 'Филиалы'), h('div', { class: 'hint' }, 'Карта филиалов и лига — этап 4; количество обращений филиал не ранжирует.'),
+  const branches = h('div', { class: 'card' }, h('b', {}, 'Филиалы'), h('div', { class: 'hint' }, 'Количество обращений филиал не ранжирует — лига по качеству во вкладке «Лига».'),
     h('table', { class: 'tbl mt8' }, h('thead', {}, h('tr', {}, ['Филиал', 'Всего', 'Открыто', 'Просрочено', 'Рассмотрено', 'Первый ответ', 'Реализовано', 'Главная тема'].map(t => h('th', {}, t)))),
       h('tbody', {}, d.by_branch.map(b => h('tr', { onclick: () => { S.filters = { branch_id: b.id }; location.hash = '#/queue'; } },
         h('td', {}, b.name), h('td', {}, b.total), h('td', {}, b.open), h('td', {}, b.overdue ? tag('tag-overdue', String(b.overdue)) : '0'),
@@ -259,10 +259,11 @@ function summaryBlockPanel(d) {
   const canSpeak = !!(window.speechSynthesis && speechSynthesis.getVoices().some(v => v.lang && v.lang.toLowerCase().startsWith('ru')));
   const speak = () => { const u = new SpeechSynthesisUtterance(d.sentences.map(s => s.text).join(' ')); u.lang = 'ru-RU'; const v = speechSynthesis.getVoices().find(v => v.lang && v.lang.toLowerCase().startsWith('ru')); if (v) u.voice = v; speechSynthesis.cancel(); speechSynthesis.speak(u); };
   const refreshBtn = h('button', { class: 'btn btn-sm', onclick: async () => { refreshBtn.disabled = true; try { await API.get('/api/panel/director-summary?refresh=1'); summary(); } catch (e) { toast(e.message, 'bad'); refreshBtn.disabled = false; } } }, '↻ Обновить');
+  const tplBtn = d.engine === 'openai' ? h('button', { class: 'btn btn-sm', title: 'Показать шаблон без ИИ для сравнения', onclick: async () => { const t = await API.get('/api/panel/director-summary?engine=template'); const box = document.querySelector('.summary-ai'); if (box) box.replaceWith(summaryBlockPanel(t)); } }, 'шаблон') : null;
   const l = d.lines || {};
   const link = href => href && href.startsWith('/panel') ? href.slice(6) : href;
   return h('div', { class: 'card summary-ai mt16' },
-    h('div', { class: 'row' }, h('div', { class: 'lbl' }, 'Сводка для директора'), tag(d.engine === 'openai' ? 'tag-ai' : 'tag-demo', d.engine === 'openai' ? 'пересказ ИИ по фактам сервера' : 'шаблон без ИИ'), h('div', { class: 'spacer' }), h('span', { class: 'small muted' }, fmtDate(d.at)), canSpeak ? h('button', { class: 'btn btn-sm', onclick: speak }, '🔊 Озвучить') : null, refreshBtn),
+    h('div', { class: 'row' }, h('div', { class: 'lbl' }, 'Сводка для директора'), tag(d.engine === 'openai' ? 'tag-ai' : 'tag-demo', d.engine === 'openai' ? 'пересказ ИИ по фактам сервера' : 'шаблон без ИИ'), h('div', { class: 'spacer' }), h('span', { class: 'small muted' }, fmtDate(d.at)), canSpeak ? h('button', { class: 'btn btn-sm', onclick: speak }, '🔊 Озвучить') : null, tplBtn, refreshBtn),
     d.sentences.map(s => h('p', {}, s.href ? h('a', { href: link(s.href) }, s.text) : s.text)),
     h('div', { class: 'lines mt8' },
       l.urgent_open ? h('a', { href: '#/queue?open=1&urgency=now' }, tag('tag-flag', 'Мешают работать сейчас: ' + l.urgent_open)) : null,
@@ -298,7 +299,7 @@ async function adminScreen() {
   } }, 'Сохранить настройки');
   const staff = d.users.filter(u => u.role !== 'employee' && u.active);
   const userSel = (val) => h('select', {}, h('option', { value: '' }, '— вакансия —'), staff.map(u => h('option', { value: u.id, selected: u.id === val }, u.name + ' · ' + (u.position || u.role))));
-  const catRows = d.categories.map(c => { const rs = userSel(c.responsible_user_id); const ss = userSel(c.suggestion_responsible_user_id); const sla = h('input', { type: 'number', value: c.sla, style: 'width:70px' });
+  const catRows = d.categories.map(c => { const rs = userSel(c.responsible_user_id); const ss = userSel(c.suggestion_responsible_user_id); const sla = h('input', { type: 'number', value: c.sla, class: 'w70' });
     const save = h('button', { class: 'btn btn-sm', onclick: async () => { try { await API.post('/api/admin/categories/' + c.id, { responsible_user_id: rs.value ? Number(rs.value) : null, suggestion_responsible_user_id: ss.value ? Number(ss.value) : null, sla: Number(sla.value) }); toast('Сохранено: ' + c.name); } catch (e) { toast(e.message, 'bad'); } } }, '✓');
     return h('tr', {}, h('td', {}, h('b', {}, c.name), h('div', { class: 'small muted' }, c.appeals + ' обращений')), h('td', {}, rs), h('td', {}, ss), h('td', {}, sla), h('td', {}, save)); });
   const claimRows = claims.map(c => { const dec = (decision) => async () => { const comment = decision === 'rejected' ? prompt('Причина отказа') : ''; if (decision === 'rejected' && !comment) return; try { await API.post('/api/admin/reward-claims/' + c.id + '/decide', { decision, comment }); toast('Решено'); adminScreen(); } catch (e) { toast(e.message, 'bad'); } };

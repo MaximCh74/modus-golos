@@ -143,19 +143,25 @@ def version() -> str:
     return hashlib.sha1(f"{e['n']}-{e['m']}-{i['n']}-{i['m']}".encode()).hexdigest()[:12]
 
 
-def summary(user: dict, refresh: bool = False) -> dict:
+def summary(user: dict, refresh: bool = False, force_template: bool = False) -> dict:
     key = f"director_summary:{user['id']}"
     cached = db.setting(key)
     v = version()
+    if force_template:
+        f = facts()
+        return {"sentences": template(f, user), "engine": "template", "facts": f, "at": db.now_iso(), "version": v, "lines": _lines(f)}
     if cached and not refresh and cached.get("version") == v and (db.now() - db.parse(cached["at"])).total_seconds() < CACHE_TTL:
         return cached
     f = facts()
     ai = ai_sentences(f, user)
-    out = {"sentences": ai or template(f, user), "engine": "openai" if ai else "template", "facts": f, "at": db.now_iso(), "version": v,
-           "lines": {"urgent_open": f["urgent_open"], "decisions_over_threshold": f["decisions_over_threshold"], "decisions_pending": f["decisions_pending"],
-                     "tasks_overdue": f["tasks_overdue"], "no_news": f["no_news"], "news_days": f["news_days"], "threshold_days": f["decision_threshold_days"]}}
+    out = {"sentences": ai or template(f, user), "engine": "openai" if ai else "template", "facts": f, "at": db.now_iso(), "version": v, "lines": _lines(f)}
     db.set_setting(key, out)
     return out
+
+
+def _lines(f: dict) -> dict:
+    return {"urgent_open": f["urgent_open"], "decisions_over_threshold": f["decisions_over_threshold"], "decisions_pending": f["decisions_pending"],
+            "tasks_overdue": f["tasks_overdue"], "no_news": f["no_news"], "news_days": f["news_days"], "threshold_days": f["decision_threshold_days"]}
 
 
 # ---------- лига и топ ----------
@@ -185,7 +191,7 @@ def league() -> dict:
         score = w["done"] * done_share + w["considered"] * considered_share + w["speed"] * speed
         out.append({"id": b["id"], "code": b["code"], "name": b["name"], "city": b["city"], "total": total, "open": sum(1 for r in items if r["status"] in appeals.OPEN),
                     "done": len(done), "done_share": round(done_share, 2), "considered_share": round(considered_share, 2), "speed": round(speed, 2),
-                    "overdue": sum(1 for r in items if r["overdue"]), "score": round(score * 100), "enough": total >= 2})
+                    "overdue": sum(1 for r in items if r["overdue"]), "score": round(score * 100), "enough": total >= 3})
     out.sort(key=lambda x: (-x["enough"], -x["score"]))
     for i, x in enumerate(out, 1):
         x["rank"] = i
