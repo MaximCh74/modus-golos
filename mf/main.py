@@ -110,6 +110,21 @@ async def rules_page():
     return page("rules.html")
 
 
+@app.get("/offline")
+async def offline_page():
+    return page("offline.html")
+
+
+@app.get("/manifest.json")
+async def manifest():
+    return FileResponse(WEB / "manifest.json", media_type="application/manifest+json")
+
+
+@app.get("/sw.js")
+async def service_worker():
+    return FileResponse(WEB / "sw.js", media_type="application/javascript", headers={"Service-Worker-Allowed": "/", "Cache-Control": "no-cache"})
+
+
 @app.get("/q/{code}")
 async def qr_page(code: str):
     return page("qr.html")

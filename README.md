@@ -91,7 +91,8 @@ Cloudflare с постоянным поддоменом (домен за Cloudfl
 - `mf/ai/` — все вызовы ИИ: `stt.py` (faster-whisper / whisper-1), `llm.py` (OpenAI, строгий JSON), `fallback.py` (словарь
   категорий и демо-разбор без ключа), `names.py` (нечёткие имена).
 - `web/` — страницы и статика (ванильный JS, без сборки); `web/a/meeting.js` — общий код режима совещания для `/app` и `/panel`.
-- `tools/` — `stt_bench.py` сравнение моделей STT, `tunnel.sh` именованный туннель Cloudflare, `github_publish.sh`, `make_map.py` карта из Natural Earth.
+- `tools/` — `stt_bench.py` сравнение моделей STT, `tunnel.sh` туннель Cloudflare, `github_publish.sh`, `make_map.py` карта из Natural Earth, `preflight.sh`, `demo_reset.sh`, `demo_snapshot.sh`, `make_qr_posters.py`, `demo_video.py`.
+- `demo/` — снапшот демо-базы, QR-плакаты, скрины для слайдов, видео прогона.
 - `docs/` — `TZ_v1.1.md` наше ТЗ, `source/` исходники организаторов, `STATUS.md` реализовано / имитация / план,
   `stt_bench_2026-11-11.json` результат сравнения моделей, `CONCEPT.md` концепция (этап 5).
 - `tests/` — pytest: `test_core.py` этап 1 (сценарии датасета), `test_stage2.py` режим совещания и ИИ-категория.

@@ -105,12 +105,31 @@ def warmup() -> None:
             pass
 
 
+def name_hints() -> tuple[str, str]:
+    """Имена демо-пользователей и термины компании для распознавания: hotwords + initial_prompt (faster-whisper ≥ 1.0.2),
+    чтобы «Ерлан» не превращался в «Ирлан». Берутся из базы, поэтому новые сотрудники подхватываются сами."""
+    try:
+        from .. import db
+        rows = db.q("SELECT name FROM users WHERE active=1")
+        names = sorted({r["name"].split()[0] for r in rows} | {r["name"] for r in rows})
+    except Exception:   # noqa: BLE001
+        names = []
+    first = sorted({n for n in names if " " not in n})
+    terms = ["1С", "Битрикс24", "номенклатура", "спецификация"]
+    # лимит промпта whisper — 224 токена: только имена (без фамилий) и четыре термина, не больше ~200 символов
+    hot = ", ".join(first[:30])
+    prompt = ("Планёрка «Модус Трейд»: " + ", ".join(first[:16]) + ". " + ", ".join(terms) + ".")[:200]
+    return hot, prompt
+
+
 def _local(path: Path, language: str | None) -> dict:
     model = _load()
     t0 = time.time()
+    hot, prompt = name_hints()
     try:
         segments, info = model.transcribe(str(path), language=language, beam_size=5, vad_filter=True,
-                                          vad_parameters={"min_silence_duration_ms": 500})
+                                          vad_parameters={"min_silence_duration_ms": 500},
+                                          hotwords=hot or None, initial_prompt=prompt or None)
         lines = []
         for s in segments:
             txt = s.text.strip()
@@ -147,8 +166,9 @@ def _openai(path: Path, language: str | None) -> dict:
             path = tmp
         except Exception as e:   # noqa: BLE001
             raise STTError(f"не удалось извлечь звук: {e}") from e
+    _, prompt = name_hints()
     with open(path, "rb") as f:
-        kwargs = {"model": "whisper-1", "file": f, "response_format": "verbose_json"}
+        kwargs = {"model": "whisper-1", "file": f, "response_format": "verbose_json", "prompt": prompt}   # та же подсказка имён
         if language:
             kwargs["language"] = language
         r = OpenAI().audio.transcriptions.create(**kwargs)

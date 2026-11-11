@@ -13,7 +13,7 @@ from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, Reque
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
-from . import ai, appeals, auth, db, director, meetings, realtime
+from . import ai, appeals, auth, db, demo, director, meetings, realtime
 from .ai import llm, similar, stt
 from . import config
 from .config import LLM_MODEL, PUBLIC_URL
@@ -868,9 +868,10 @@ async def admin_settings(request: Request):
             "categories": db.q("""SELECT c.id, c.name, c.responsible_user_id, c.suggestion_responsible_user_id, c.sla_first_response_hours AS sla,
                                   u.name AS responsible, s.name AS suggestion_responsible, (SELECT COUNT(*) FROM appeals a WHERE a.category_id=c.id) AS appeals
                                   FROM categories c LEFT JOIN users u ON u.id=c.responsible_user_id LEFT JOIN users s ON s.id=c.suggestion_responsible_user_id ORDER BY c.id"""),
-            "users": db.q("SELECT id, name, role, position, active, avatar FROM users ORDER BY name"),
+            "users": db.q("SELECT id, name, role, position, branch_id, department_id, manager_id, active, avatar FROM users ORDER BY active DESC, name"),
             "branches": db.q("SELECT id, code, name, city, kind FROM branches ORDER BY is_hq DESC, name"),
-            "rewards": db.q("SELECT * FROM rewards ORDER BY id")}
+            "departments": db.q("SELECT id, name FROM departments ORDER BY id"),
+            "rewards": db.q("SELECT * FROM rewards ORDER BY active DESC, id")}
 
 
 class SettingsBody(BaseModel):
@@ -914,3 +915,114 @@ async def admin_category(category_id: int, body: CategoryBody, request: Request)
 async def panel_check_news(request: Request):
     auth.require(request, "director", "admin")
     return {"reminded": appeals.check_news()}
+
+
+# ---------- этап 5: минимальное редактирование наград и пользователей ----------
+
+class RewardBody(BaseModel):
+    id: int | None = None
+    title: str
+    description: str | None = None
+    cost_points: int
+    active: bool = True
+
+
+@router.post("/admin/rewards")
+async def admin_reward(body: RewardBody, request: Request):
+    """Витрину наград заполняет компания: добавить, изменить, отключить."""
+    auth.require(request, "admin", "director")
+    title = body.title.strip()
+    if not title or body.cost_points <= 0:
+        raise HTTPException(422, "Название и положительная стоимость обязательны")
+    if body.id:
+        if not db.one("SELECT 1 FROM rewards WHERE id=?", (body.id,)):
+            raise HTTPException(404, "Награда не найдена")
+        db.ex("UPDATE rewards SET title=?, description=?, cost_points=?, active=? WHERE id=?", (title, (body.description or "").strip() or None, body.cost_points, 1 if body.active else 0, body.id))
+        rid = body.id
+    else:
+        rid = db.ex("INSERT INTO rewards(title, description, cost_points, active) VALUES(?,?,?,?)", (title, (body.description or "").strip() or None, body.cost_points, 1 if body.active else 0))
+    return db.one("SELECT * FROM rewards WHERE id=?", (rid,))
+
+
+class UserBody(BaseModel):
+    id: int | None = None
+    name: str
+    role: str
+    position: str | None = None
+    branch_id: int | None = None
+    department_id: int | None = None
+    manager_id: int | None = None
+    active: bool = True
+
+
+@router.post("/admin/users")
+async def admin_user(body: UserBody, request: Request):
+    """Сотрудники: добавить, изменить, отключить (в пилоте — из Битрикс24)."""
+    user = auth.require(request, "admin", "director")
+    name = " ".join(body.name.split())
+    if len(name) < 3 or body.role not in auth.ROLES:
+        raise HTTPException(422, "Имя и роль обязательны")
+    if body.id == user["id"] and not body.active:
+        raise HTTPException(409, "Нельзя отключить себя")
+    vals = (name, body.role, (body.position or "").strip() or None, body.branch_id, body.department_id, body.manager_id, 1 if body.active else 0)
+    if body.id:
+        if not db.one("SELECT 1 FROM users WHERE id=?", (body.id,)):
+            raise HTTPException(404, "Сотрудник не найден")
+        db.ex("UPDATE users SET name=?, role=?, position=?, branch_id=?, department_id=?, manager_id=?, active=? WHERE id=?", (*vals, body.id))
+        uid = body.id
+    else:
+        uid = db.ex("INSERT INTO users(name, role, position, branch_id, department_id, manager_id, active) VALUES(?,?,?,?,?,?,?)", vals)
+    return db.one("SELECT id, name, role, position, branch_id, department_id, manager_id, active FROM users WHERE id=?", (uid,))
+
+
+# ---------- этап 5: демо-состояние и проверка перед выходом ----------
+
+@router.post("/admin/demo-snapshot")
+async def admin_demo_snapshot(request: Request):
+    auth.require(request, "admin", "director")
+    return demo.snapshot()
+
+
+@router.post("/admin/demo-reset")
+async def admin_demo_reset(request: Request):
+    """Вернуть базу в демо-состояние за секунды, без вызовов ИИ. Сессии сбрасываются — войти заново."""
+    auth.require(request, "admin", "director")
+    r = demo.reset()
+    realtime.publish_all({"type": "demo_reset"})
+    return r
+
+
+@router.get("/admin/preflight")
+async def admin_preflight(request: Request, stt_test: str = "1"):
+    """Проверка «за час до выхода»: ключ, STT на GPU, база в демо-состоянии. Внешний туннель и батарею проверяет tools/preflight.sh."""
+    auth.require(request, "admin", "director")
+    import asyncio
+    out = {"checks": []}
+    # ключ OpenAI — короткий вызов
+    if llm.available():
+        try:
+            t = await asyncio.to_thread(lambda: llm.chat_json("Отвечай JSON.", 'Верни {"ok": true}', lambda d: None, max_tokens=20))
+            out["checks"].append({"name": "ключ OpenAI", "ok": bool(t.get("ok")), "detail": LLM_MODEL})
+        except Exception as e:   # noqa: BLE001
+            out["checks"].append({"name": "ключ OpenAI", "ok": False, "detail": str(e)[:160] + " → без ключа работает запасной режим"})
+    else:
+        out["checks"].append({"name": "ключ OpenAI", "ok": False, "detail": "ключа нет — запасной режим (демо-разбор, словарь, шаблон сводки)"})
+    # STT
+    st = stt.available()
+    if parse_bool(stt_test) and st["local"]:
+        wav = Path(__file__).resolve().parent.parent / "demo" / "fixtures" / "test_ru.wav"
+        if wav.is_file():
+            try:
+                r = await asyncio.to_thread(stt.transcribe, wav, "ru")
+                ok = "систем" in r["text"].lower() or "ерлан" in r["text"].lower()
+                out["checks"].append({"name": "STT на GPU", "ok": ok, "detail": f"{r['engine']}, {r['seconds']} с: «{r['text'][:70]}»"})
+            except Exception as e:   # noqa: BLE001
+                out["checks"].append({"name": "STT на GPU", "ok": False, "detail": str(e)[:160]})
+        else:
+            out["checks"].append({"name": "STT на GPU", "ok": st["loaded"], "detail": "модель " + ("загружена" if st["loaded"] else "не загружена") + ", тестового wav нет"})
+    else:
+        out["checks"].append({"name": "STT", "ok": st["local"] or st["openai"], "detail": f"режим {st['mode']}, локально: {st['local']}, облако: {st['openai']}"})
+    ds = demo.is_demo_state()
+    out["checks"] += [{"name": "БД: " + c["name"], "ok": c["ok"], "detail": c["detail"]} for c in ds["checks"]]
+    out["ok"] = all(c["ok"] for c in out["checks"])
+    return out

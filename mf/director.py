@@ -123,17 +123,25 @@ def ai_sentences(f: dict, user: dict) -> list[dict] | None:
     """LLM пересказывает факты; каждое число в ответе должно быть среди фактов, иначе — шаблон."""
     if not llm.available():
         return None
-    try:
-        sentences = llm.director_summary({**f, "greeting": greeting(user), "cluster": f["cluster"] and {k: v for k, v in f["cluster"].items() if k != "id"}})
-    except llm.LLMError as e:
-        log.warning("сводка: %s", e)
-        return None
+    payload = {**f, "greeting": greeting(user), "cluster": f["cluster"] and {k: v for k, v in f["cluster"].items() if k != "id"}}
     allowed = _allowed_numbers(f)
-    for s in sentences:
-        if not _numbers(s) <= allowed:
-            log.warning("сводка: лишние числа в «%s» — шаблон", s)
+    for attempt in range(2):   # числа не из фактов или запрещённый синоним → повторная генерация, затем шаблон
+        try:
+            sentences = llm.director_summary(payload)
+        except llm.LLMError as e:
+            log.warning("сводка: %s", e)
             return None
-    return [{"text": s, "href": _link_for(s, f)} for s in sentences]
+        bad = next((s for s in sentences if not _numbers(s) <= allowed), None)
+        if bad:
+            log.warning("сводка (попытка %d): лишние числа в «%s»", attempt + 1, bad)
+            continue
+        word = next((w for s in sentences if (w := llm.has_forbidden(s))), None)
+        if word:
+            log.warning("сводка (попытка %d): запрещённый термин «%s»", attempt + 1, word)
+            payload = {**payload, "note": f"В прошлом ответе было слово «{word}» — так нельзя, используй термины из глоссария."}
+            continue
+        return [{"text": s, "href": _link_for(s, f)} for s in sentences]
+    return None
 
 
 def version() -> str:
