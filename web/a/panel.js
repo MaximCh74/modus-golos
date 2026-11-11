@@ -228,7 +228,7 @@ async function summary() {
     const note = c.engine === 'embeddings' ? 'кластеры по смыслу (эмбеддинги ИИ), порог ' + c.threshold : 'по ключевым словам (без ИИ), порог ' + c.threshold;
     clustersBox.replaceChildren(h('b', {}, 'Повторяющиеся темы'), h('div', { class: 'hint' }, 'Группы из двух и более открытых обращений об одном и том же — ' + note + '. Открытых всего: ' + c.open_total + '.'),
       c.clusters.length ? h('div', { class: 'mt8' }, c.clusters.map(k => h('div', { class: 'cluster' },
-        h('div', { class: 'row' }, h('b', {}, k.size + ' обращения'), k.category ? tag('tag-type', k.category) : null, k.supports ? h('span', { class: 'small muted' }, '👍 ' + k.supports) : null, h('div', { class: 'spacer' }), h('span', { class: 'small muted' }, k.branches.join(' · '))),
+        h('div', { class: 'row' }, h('b', {}, plural(k.size, 'обращение', 'обращения', 'обращений')), k.category ? tag('tag-type', k.category) : null, k.supports ? h('span', { class: 'small muted' }, '👍 ' + k.supports) : null, h('div', { class: 'spacer' }), h('span', { class: 'small muted' }, k.branches.join(' · '))),
         h('div', { class: 'small' }, k.label),
         h('div', { class: 'small nums mt8' }, k.items.map(i => h('a', { href: '#/appeal/' + i.id }, i.number)))))) : h('div', { class: 'muted small mt8' }, 'Повторов не найдено'));
   }).catch(e => clustersBox.replaceChildren(h('b', {}, 'Повторяющиеся темы'), h('div', { class: 'card-bad small' }, e.message)));

@@ -97,6 +97,7 @@ function toast(msg, kind) {
   clearTimeout(_toastTimer);
   _toastTimer = setTimeout(() => { t.className = 'toast'; }, 3500);
 }
+function plural(n, one, few, many) { const m10 = n % 10, m100 = n % 100; return n + ' ' + (m10 === 1 && m100 !== 11 ? one : m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20) ? few : many); }
 function qs(name) { return new URLSearchParams(location.search).get(name); }
 function field(label, input, hint) { return h('label', { class: 'field' }, h('span', {}, label), input, hint ? h('div', { class: 'hint' }, hint) : null); }
 
