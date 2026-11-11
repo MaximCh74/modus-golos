@@ -13,8 +13,9 @@ from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, Reque
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
-from . import ai, appeals, auth, db, demo, director, meetings, realtime
+from . import ai, appeals, auth, commands, db, demo, director, meetings, realtime
 from .ai import llm, similar, stt
+from .integrations import bitrix
 from . import config
 from .config import LLM_MODEL, PUBLIC_URL
 
@@ -94,11 +95,24 @@ async def public_rules():
     return {"points": cfg, "rewards": rewards, "director_wait_days": appeals.director_wait_days()}
 
 
+@router.get("/public/config")
+async def public_config(request: Request):
+    """Что доступно без входа: подключён ли Битрикс24 (кнопка «Войти через Битрикс24»), публичный адрес."""
+    return {"bitrix": bitrix.configured(), "bitrix_login": "/bitrix/login" if bitrix.configured() else None,
+            "bitrix_portal": bitrix.portal() if bitrix.configured() else None, "public_url": base_url(request)}
+
+
 @router.get("/public/branches")
 async def public_branches(request: Request):
     base = base_url(request)
     return [{**b, "qr_url": f"{base}/q/{b['code']}", "qr_svg": f"/api/public/qr/{b['code']}.svg"}
             for b in db.q("SELECT id, code, name, city, country, kind FROM branches ORDER BY is_hq DESC, kind, name")]
+
+
+@router.get("/public/map")
+async def public_map(request: Request):
+    """Стартовая страница — карта без входа (этап 6 §3)."""
+    return director.public_map_data(base_url(request))
 
 
 @router.get("/public/branch/{code}")
@@ -214,8 +228,7 @@ async def auth_users():
 @router.post("/auth/login-as")
 async def login_as(body: LoginAs, request: Request, response: Response):
     auth.logout(request.cookies.get(auth.COOKIE))
-    token = auth.login(body.user_id)
-    response.set_cookie(auth.COOKIE, token, httponly=True, samesite="lax", max_age=30 * 86400, path="/")
+    auth.set_cookie(response, auth.login(body.user_id))
     return auth.public(auth.user_by_id(body.user_id))
 
 
@@ -697,6 +710,56 @@ async def reject_idea(item_id: int, body: Reject, request: Request):
     return meetings.reject_idea(item_id, auth.require(request, "director", "admin"), body.reason)
 
 
+# ---------- этап 6: команды директора голосом или текстом (голос → /api/stt → текст → сюда) ----------
+
+class CommandText(BaseModel):
+    text: str
+
+
+class CommandSend(BaseModel):
+    messages: dict[str, str] | None = None   # правки текста по получателям {user_id: текст} с экрана подтверждения
+
+
+@router.get("/director/command/help")
+async def command_help(request: Request):
+    auth.require(request, "director", "admin")
+    return {"intents": [{"intent": k, "what": v, "example": commands.EXAMPLES[k]} for k, v in commands.INTENTS.items()], "llm": llm.available()}
+
+
+@router.post("/director/command/parse")
+async def command_parse(body: CommandText, request: Request):
+    """Разбор + план для экрана подтверждения. НИЧЕГО не отправляет: план лежит в памяти под случайным id до [Отправить]."""
+    user = auth.require(request, "director", "admin")
+    import asyncio
+    cmd = await asyncio.to_thread(commands.parse, body.text, user)
+    plan = await asyncio.to_thread(commands.build_plan, cmd, user)
+    pid = commands.remember(plan, cmd, user)
+    return {"plan_id": pid, "command": cmd, "plan": plan}
+
+
+@router.post("/director/command/{plan_id}/send")
+async def command_send(plan_id: str, body: CommandSend, request: Request):
+    user = auth.require(request, "director", "admin")
+    return commands.execute(plan_id, user, body.messages)
+
+
+@router.get("/director/command/{plan_id}/audio")
+async def command_audio(plan_id: str, request: Request):
+    """Короткий голосовой ответ после отправки («Отправил напоминания четырём сотрудникам…») — OpenAI TTS с кэшем; без ключа 503."""
+    user = auth.require(request, "director", "admin")
+    p = commands.get_plan(plan_id, user)
+    if not p["sent"]:
+        raise HTTPException(409, "Команда ещё не отправлена")
+    if not llm.available():
+        raise HTTPException(503, "Озвучка через OpenAI недоступна без ключа — используется голос браузера")
+    import asyncio
+    try:
+        audio, src = await asyncio.to_thread(director.tts_cached, p["sent"]["reply"])
+    except Exception as e:   # noqa: BLE001
+        raise HTTPException(503, f"Озвучка недоступна: {e}"[:200])
+    return Response(audio, media_type="audio/mpeg", headers={"Cache-Control": "no-store", "X-TTS-Source": src})
+
+
 # ---------- этап 3: голос, черновик ИИ, похожие обращения, кластеры ----------
 
 async def _transcribe_upload(audio: UploadFile | None, language: str | None) -> dict:
@@ -882,7 +945,8 @@ async def admin_settings(request: Request):
             "categories": db.q("""SELECT c.id, c.name, c.responsible_user_id, c.suggestion_responsible_user_id, c.sla_first_response_hours AS sla,
                                   u.name AS responsible, s.name AS suggestion_responsible, (SELECT COUNT(*) FROM appeals a WHERE a.category_id=c.id) AS appeals
                                   FROM categories c LEFT JOIN users u ON u.id=c.responsible_user_id LEFT JOIN users s ON s.id=c.suggestion_responsible_user_id ORDER BY c.id"""),
-            "users": db.q("SELECT id, name, role, position, branch_id, department_id, manager_id, active, avatar FROM users ORDER BY active DESC, name"),
+            "users": db.q("SELECT id, name, role, position, branch_id, department_id, manager_id, active, avatar, email, bitrix_id FROM users ORDER BY active DESC, name"),
+            "bitrix": bitrix.status(),
             "branches": db.q("SELECT id, code, name, city, kind FROM branches ORDER BY is_hq DESC, name"),
             "departments": db.q("SELECT id, name FROM departments ORDER BY id"),
             "rewards": db.q("SELECT * FROM rewards ORDER BY active DESC, id")}
@@ -967,6 +1031,8 @@ class UserBody(BaseModel):
     department_id: int | None = None
     manager_id: int | None = None
     active: bool = True
+    email: str | None = None
+    bitrix_id: int | None = None
 
 
 @router.post("/admin/users")
@@ -978,15 +1044,16 @@ async def admin_user(body: UserBody, request: Request):
         raise HTTPException(422, "Имя и роль обязательны")
     if body.id == user["id"] and not body.active:
         raise HTTPException(409, "Нельзя отключить себя")
-    vals = (name, body.role, (body.position or "").strip() or None, body.branch_id, body.department_id, body.manager_id, 1 if body.active else 0)
+    email = (body.email or "").strip().lower() or None
+    vals = (name, body.role, (body.position or "").strip() or None, body.branch_id, body.department_id, body.manager_id, 1 if body.active else 0, email, body.bitrix_id or None)
     if body.id:
         if not db.one("SELECT 1 FROM users WHERE id=?", (body.id,)):
             raise HTTPException(404, "Сотрудник не найден")
-        db.ex("UPDATE users SET name=?, role=?, position=?, branch_id=?, department_id=?, manager_id=?, active=? WHERE id=?", (*vals, body.id))
+        db.ex("UPDATE users SET name=?, role=?, position=?, branch_id=?, department_id=?, manager_id=?, active=?, email=?, bitrix_id=? WHERE id=?", (*vals, body.id))
         uid = body.id
     else:
-        uid = db.ex("INSERT INTO users(name, role, position, branch_id, department_id, manager_id, active) VALUES(?,?,?,?,?,?,?)", vals)
-    return db.one("SELECT id, name, role, position, branch_id, department_id, manager_id, active FROM users WHERE id=?", (uid,))
+        uid = db.ex("INSERT INTO users(name, role, position, branch_id, department_id, manager_id, active, email, bitrix_id) VALUES(?,?,?,?,?,?,?,?,?)", vals)
+    return db.one("SELECT id, name, role, position, branch_id, department_id, manager_id, active, email, bitrix_id FROM users WHERE id=?", (uid,))
 
 
 # ---------- этап 5: демо-состояние и проверка перед выходом ----------

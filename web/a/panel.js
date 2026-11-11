@@ -42,7 +42,7 @@ function renderTop() {
     h('a', { href: '#/queue', class: 'brand' }, h('img', { src: '/a/img/logo.svg', alt: 'Модус Трейд' }), h('span', {}, 'Панель', h('small', {}, 'обратная связь · демо'))),
     h('div', { class: 'nav' }, nav.map(([href, label]) => h('a', { href, class: hash.startsWith(href) || (href === '#/queue' && hash.startsWith('#/appeal')) ? 'active' : '' }, label))),
     h('div', { class: 'spacer' }),
-    h('a', { href: '#/notifications', class: 'btn btn-sm bell' }, '🔔', ME.unread ? h('span', { class: 'n' }, String(ME.unread)) : null),
+    h('a', { href: '#/notifications', class: 'btn btn-sm bell', title: 'Уведомления' }, icon('bell'), ME.unread ? h('span', { class: 'n' }, String(ME.unread)) : null),
     h('a', { href: '/app', class: 'btn btn-sm' }, 'Приложение'),
     h('a', { href: '/login', class: 'btn btn-sm', title: ME.role_label }, ME.name + ' · ' + ME.role_label));
 }
@@ -114,7 +114,7 @@ async function loadQueue(flashId) {
   if (!table) return;
   const counts = h('div', { class: 'small muted mb8' }, rows.length + ' обращений · просрочено ' + rows.filter(r => r.overdue).length + ' · без ответственного ' + rows.filter(r => r.unassigned).length);
   const tbl = h('table', { class: 'tbl' },
-    h('thead', {}, h('tr', {}, ['№ · Коротко', 'Тип', 'Категория', 'Филиал', 'Подразделение', 'Статус', 'Ответственный', 'Возраст', 'Новость автору', 'Метки', '👍'].map(t => h('th', {}, t)))),
+    h('thead', {}, h('tr', {}, ['№ · Коротко', 'Тип', 'Категория', 'Филиал', 'Подразделение', 'Статус', 'Ответственный', 'Возраст', 'Новость автору', 'Метки', 'Поддержка'].map(t => h('th', {}, t)))),
     h('tbody', {}, rows.map(r => h('tr', { class: (S.selected === r.id ? 'sel' : '') + (flashId === r.id ? ' flash' : ''), onclick: () => { location.hash = '#/appeal/' + r.id; } },
       h('td', {}, h('b', {}, r.number), h('div', { class: 'small muted' }, (r.brief_line || r.text).slice(0, 70) + ((r.brief_line || r.text).length > 70 ? '…' : ''))),
       h('td', {}, r.type_label, h('div', {}, tag('tag-prio-' + r.priority, r.priority_label)), r.author_urgency === 'now' ? h('div', {}, tag('tag-flag', 'мешает сейчас')) : null),
@@ -137,7 +137,7 @@ async function loadCard(id) {
   for (const tr of document.querySelectorAll('#queue-table tbody tr')) tr.classList.remove('sel');
   const staff = (DICTS.users || []).filter(u => u.role !== 'employee' && u.active);
   const act = async (fn, okMsg) => { try { await fn(); if (okMsg) toast(okMsg); await loadCard(id); await loadQueue(); } catch (e) { toast(e.message, 'bad'); } };
-  const rebriefBtn = a.can_manage ? h('button', { class: 'btn btn-sm', onclick: () => act(() => API.post('/api/panel/appeals/' + id + '/rebrief'), 'Пересказ обновлён') }, '↻ Пересказать заново') : null;
+  const rebriefBtn = a.can_manage ? h('button', { class: 'btn btn-sm', onclick: () => act(() => API.post('/api/panel/appeals/' + id + '/rebrief'), 'Пересказ обновлён') }, iconText('refresh', 'Пересказать заново')) : null;
   const prioSel = a.can_manage ? h('select', { class: 'mi-sel' }, Object.entries(PRIO).map(([v, l]) => h('option', { value: v, selected: v === a.priority }, l))) : null;
   if (prioSel) prioSel.addEventListener('change', () => act(() => API.post('/api/panel/appeals/' + id + '/priority', { priority: prioSel.value }), 'Приоритет изменён'));
   const head = h('div', { class: 'card' },
@@ -150,7 +150,7 @@ async function loadCard(id) {
     h('div', { class: 'row small mt8' }, h('span', { class: 'muted' }, 'Автор:'), userLink(a.author, 'sm')),
     h('div', { class: 'small muted' }, 'Ответственный: ' + (a.responsible || 'не назначен') + ' · SLA ' + (a.sla || 48) + ' ч · первый ответ: ' + (a.first_response_hours === null ? 'нет' : 'через ' + fmtHours(a.first_response_hours))),
     a.attachments.length ? h('div', { class: 'small mt8' }, 'Вложения: ', a.attachments.map(f => h('a', { href: '/api/attachments/' + f.id, target: '_blank' }, f.filename + ' '))) : null,
-    h('div', { class: 'small muted mt8' }, '👍 У меня так же: ' + a.supports + (a.thanks ? ' · 🙏 спасибо: ' + a.thanks : '') + (a.news_days !== null && a.news_days !== undefined ? ' · последняя новость автору: ' + (a.news_days < 1 ? 'сегодня' : Math.floor(a.news_days) + ' дн назад') : '')));
+    h('div', { class: 'row small muted mt8' }, iconText('thumbs-up', 'У меня так же: ' + a.supports), a.thanks ? iconText('heart', 'спасибо: ' + a.thanks) : null, a.news_days !== null && a.news_days !== undefined ? h('span', {}, 'последняя новость автору: ' + (a.news_days < 1 ? 'сегодня' : Math.floor(a.news_days) + ' дн назад')) : null));
   const result = a.resolution_text ? h('div', { class: 'card ' + (a.status === 'rejected' ? 'card-bad' : 'card-ok') }, h('b', {}, a.status === 'rejected' ? 'Отклонено — причина' : 'Что сделали'), h('p', { class: 'pre' }, a.resolution_text)) : null;
   const director = a.director_decision ? h('div', { class: 'card ' + (a.director_decision === 'pending' ? 'card-info' : a.director_decision === 'accepted' ? 'card-ok' : 'card-bad') },
     h('div', { class: 'row' }, h('b', {}, 'Решение директора: '), tag(a.director_decision === 'pending' ? 'st-review' : a.director_decision === 'accepted' ? 'st-done' : 'st-rejected', a.director_decision_label), h('span', { class: 'small muted' }, fmtDate(a.director_decided_at || a.director_requested_at))),
@@ -171,7 +171,7 @@ async function loadCard(id) {
         pendingStatus = n.code; reasonTa.classList.remove('hidden'); confirmBtn.classList.remove('hidden');
         reasonTa.placeholder = n.code === 'rejected' ? 'Мотивировка отказа — автор её увидит (обязательно)' : 'Что сделано — увидит автор и лента «Что изменили» (обязательно)';
         reasonTa.focus();
-      } }, '→ ' + n.label));
+      } }, iconText('arrow-right', n.label)));
     }
     const clarTa = h('textarea', { placeholder: 'Вопрос автору' });
     const clarBtn = h('button', { class: 'btn btn-sm', onclick: () => act(() => API.post('/api/panel/appeals/' + id + '/clarify', { text: clarTa.value }), 'Уточнение запрошено') }, 'Запросить уточнение');
@@ -212,8 +212,8 @@ async function meetingsList() {
   const chk = h('input', { type: 'checkbox', checked: overdueOnly });
   chk.addEventListener('change', () => { location.hash = '#/meetings' + (chk.checked ? '?overdue=1' : ''); });
   root.replaceChildren(h('div', { class: 'wrap wrap-wide' }, h('div', { class: 'row' }, h('div', { class: 'h1' }, 'Совещания'), h('label', { class: 'check small' }, chk, 'только с просроченными поручениями'), h('div', { class: 'spacer' }),
-    h('a', { href: '#/meetings/new', class: 'btn btn-primary btn-sm' }, '+ Записать или загрузить планёрку')),
-    h('p', { class: 'hint' }, 'Запись планёрки → расшифровка → разбор: итог, решения, поручения, идеи директору, связанные обращения. Ответственные видят свои совещания, директор и администратор — все.'),
+    h('a', { href: '#/meetings/new', class: 'btn btn-primary btn-sm' }, iconText('plus', 'Записать или загрузить планёрку'))),
+    h('p', { class: 'hint' }, 'Запись планёрки, расшифровка, разбор: итог, решения, поручения, идеи директору, связанные обращения. Ответственные видят свои совещания, директор и администратор — все.'),
     h('div', { class: 'card' }, list.length ? tbl : h('div', { class: 'muted' }, 'Совещаний пока нет'))));
 }
 
@@ -223,7 +223,7 @@ let MAPVIEW = null;
 async function summary() {
   const [d, ds, md] = await Promise.all([API.get('/api/panel/summary?days=30'), API.get('/api/panel/director-summary').catch(() => null), API.get('/api/panel/map').catch(() => null)]);
   const sumBlock = ds ? summaryBlockPanel(ds) : null;
-  MAPVIEW = md ? mapView(md, { onBranch: b => { S.filters = { branch_id: b.id, open: true }; location.hash = '#/queue'; }, onSite: s => { S.filters = { q: s.city, open: true }; location.hash = '#/queue'; } }) : null;
+  MAPVIEW = md ? mapView(md, { staff: true, onBranch: b => { S.filters = { branch_id: b.id, open: true }; location.hash = '#/queue'; }, onSite: s => { S.filters = { q: s.city, open: true }; location.hash = '#/queue'; } }) : null;
   const mapCard = h('div', { class: 'card' }, h('div', { class: 'row' }, h('b', {}, 'Карта'), h('span', { class: 'hint' }, 'клик по городу — очередь филиала; новое обращение — маркер мигает')), MAPVIEW || h('div', { class: 'muted small' }, 'карта недоступна'));
   const pct = x => x === null || x === undefined ? '—' : Math.round(x * 100) + ' %';
   const kpis = h('div', { class: 'kpis' },
@@ -245,20 +245,21 @@ async function summary() {
     const note = c.engine === 'embeddings' ? 'кластеры по смыслу (эмбеддинги ИИ), порог ' + c.threshold : 'по ключевым словам (без ИИ), порог ' + c.threshold;
     clustersBox.replaceChildren(h('b', {}, 'Повторяющиеся темы'), h('div', { class: 'hint' }, 'Группы из двух и более открытых обращений об одном и том же — ' + note + '. Открытых всего: ' + c.open_total + '.'),
       c.clusters.length ? h('div', { class: 'mt8' }, c.clusters.map(k => h('div', { class: 'cluster' },
-        h('div', { class: 'row' }, h('b', {}, plural(k.size, 'обращение', 'обращения', 'обращений')), k.category ? tag('tag-type', k.category) : null, k.supports ? h('span', { class: 'small muted' }, '👍 ' + k.supports) : null, h('div', { class: 'spacer' }), h('span', { class: 'small muted' }, k.branches.join(' · '))),
+        h('div', { class: 'row' }, h('b', {}, plural(k.size, 'обращение', 'обращения', 'обращений')), k.category ? tag('tag-type', k.category) : null, k.supports ? h('span', { class: 'small muted' }, iconText('thumbs-up', String(k.supports))) : null, h('div', { class: 'spacer' }), h('span', { class: 'small muted' }, k.branches.join(' · '))),
         h('div', { class: 'small' }, k.label),
         h('div', { class: 'small nums mt8' }, k.items.map(i => h('a', { href: '#/appeal/' + i.id }, i.number)))))) : h('div', { class: 'muted small mt8' }, 'Повторов не найдено'));
   }).catch(e => clustersBox.replaceChildren(h('b', {}, 'Повторяющиеся темы'), h('div', { class: 'card-bad small' }, e.message)));
   const cats = h('div', { class: 'card' }, h('b', {}, 'Открытые обращения по категориям'),
     h('div', { class: 'list mt8' }, d.top_categories.map(c => h('div', { class: 'item', onclick: () => { const id = (DICTS.categories.find(x => x.name === c.category) || {}).id; S.filters = { category_id: id, open: true }; location.hash = '#/queue'; } }, h('div', { class: 'row' }, c.category, h('div', { class: 'spacer' }), h('b', {}, String(c.open)))))));
   const check = ME.role !== 'responsible' ? h('button', { class: 'btn btn-sm', onclick: async () => { const r = await API.post('/api/panel/check-overdue'); toast(r.escalated.length ? 'Эскалировано: ' + r.escalated.join(', ') : 'Новых просрочек нет'); summary(); } }, 'Проверить просрочки сейчас') : null;
-  root.replaceChildren(h('div', { class: 'wrap wrap-wide' }, h('div', { class: 'row' }, h('div', { class: 'h1' }, 'Сводка'), h('div', { class: 'spacer' }), check), sumBlock, kpis, h('div', { class: 'split mt16' }, h('div', {}, mapCard, branches, clustersBox, cats), byType)));
+  const command = (ME.role === 'director' || ME.role === 'admin') ? commandPanel({ decisionsHref: '#/decisions' }) : null;
+  root.replaceChildren(h('div', { class: 'wrap wrap-wide' }, h('div', { class: 'row' }, h('div', { class: 'h1' }, 'Сводка'), h('div', { class: 'spacer' }), check), sumBlock, command, kpis, h('div', { class: 'split mt16' }, h('div', {}, mapCard, branches, clustersBox, cats), byType)));
 }
 
 function summaryBlockPanel(d) {
-  const speakBtn = h('button', { class: 'btn btn-sm', title: 'Озвучить сводку' }, '🔊 Озвучить');
+  const speakBtn = h('button', { class: 'btn btn-sm', title: 'Озвучить сводку' }, iconText('volume', 'Озвучить'));
   speakBtn.addEventListener('click', () => speakSummary(speakBtn, d.sentences));
-  const refreshBtn = h('button', { class: 'btn btn-sm', onclick: async () => { refreshBtn.disabled = true; try { await API.get('/api/panel/director-summary?refresh=1'); summary(); } catch (e) { toast(e.message, 'bad'); refreshBtn.disabled = false; } } }, '↻ Обновить');
+  const refreshBtn = h('button', { class: 'btn btn-sm', onclick: async () => { refreshBtn.disabled = true; try { await API.get('/api/panel/director-summary?refresh=1'); summary(); } catch (e) { toast(e.message, 'bad'); refreshBtn.disabled = false; } } }, iconText('refresh', 'Обновить'));
   const tplBtn = d.engine === 'openai' ? h('button', { class: 'btn btn-sm', title: 'Показать шаблон без ИИ для сравнения', onclick: async () => { const t = await API.get('/api/panel/director-summary?engine=template'); const box = document.querySelector('.summary-ai'); if (box) box.replaceWith(summaryBlockPanel(t)); } }, 'шаблон') : null;
   const l = d.lines || {};
   const link = href => href && href.startsWith('/panel') ? href.slice(6) : href;
@@ -279,7 +280,7 @@ async function leaguePanel() {
     h('div', { class: 'split mt16' },
       h('div', { class: 'card' }, h('table', { class: 'tbl league' }, h('thead', {}, h('tr', {}, ['#', 'Филиал', 'Балл', 'Реализовано', 'Рассмотрено', 'Скорость', 'Открыто', 'Просрочено'].map(t => h('th', {}, t)))),
         h('tbody', {}, d.items.map(b => h('tr', { onclick: () => { S.filters = { branch_id: b.id }; location.hash = '#/queue'; } }, h('td', {}, String(b.rank)), h('td', {}, h('b', {}, b.name), h('div', { class: 'small muted' }, b.total + ' обращений' + (b.enough ? '' : ' — мало данных'))), h('td', { class: 'score' }, h('b', {}, String(b.score))), h('td', {}, Math.round(b.done_share * 100) + ' %'), h('td', {}, Math.round(b.considered_share * 100) + ' %'), h('td', {}, Math.round(b.speed * 100) + ' %'), h('td', {}, String(b.open)), h('td', {}, b.overdue ? tag('tag-overdue', String(b.overdue)) : '0')))))),
-      h('div', { class: 'card' }, h('b', {}, 'Топ сотрудников'), h('div', { class: 'list mt8' }, d.top.map((u, i) => h('div', { class: 'item', onclick: () => { location.href = '/app#/u/' + u.id; } }, h('div', { class: 'row' }, h('b', {}, (i + 1) + '.'), avatarEl(u), h('div', {}, h('b', {}, u.name), h('div', { class: 'small muted' }, [u.position, u.branch].filter(Boolean).join(' · '))), h('div', { class: 'spacer' }), h('span', { class: 'small' }, '⭐ ' + u.points + ' · внедрено ' + u.implemented + ' · 🙏 ' + u.thanks)))))))));
+      h('div', { class: 'card' }, h('b', {}, 'Топ сотрудников'), h('div', { class: 'list mt8' }, d.top.map((u, i) => h('div', { class: 'item', onclick: () => { location.href = '/app#/u/' + u.id; } }, h('div', { class: 'row' }, h('b', {}, (i + 1) + '.'), avatarEl(u), h('div', {}, h('b', {}, u.name), h('div', { class: 'small muted' }, [u.position, u.branch].filter(Boolean).join(' · '))), h('div', { class: 'spacer' }), h('span', { class: 'small row' }, iconText('star', String(u.points)), 'внедрено ' + u.implemented, iconText('heart', String(u.thanks)))))))))));
 }
 
 async function adminScreen() {
@@ -300,14 +301,14 @@ async function adminScreen() {
   const staff = d.users.filter(u => u.role !== 'employee' && u.active);
   const userSel = (val) => h('select', {}, h('option', { value: '' }, '— вакансия —'), staff.map(u => h('option', { value: u.id, selected: u.id === val }, u.name + ' · ' + (u.position || u.role))));
   const catRows = d.categories.map(c => { const rs = userSel(c.responsible_user_id); const ss = userSel(c.suggestion_responsible_user_id); const sla = h('input', { type: 'number', value: c.sla, class: 'w70' });
-    const save = h('button', { class: 'btn btn-sm', onclick: async () => { try { await API.post('/api/admin/categories/' + c.id, { responsible_user_id: rs.value ? Number(rs.value) : null, suggestion_responsible_user_id: ss.value ? Number(ss.value) : null, sla: Number(sla.value) }); toast('Сохранено: ' + c.name); } catch (e) { toast(e.message, 'bad'); } } }, '✓');
+    const save = h('button', { class: 'btn btn-sm', onclick: async () => { try { await API.post('/api/admin/categories/' + c.id, { responsible_user_id: rs.value ? Number(rs.value) : null, suggestion_responsible_user_id: ss.value ? Number(ss.value) : null, sla: Number(sla.value) }); toast('Сохранено: ' + c.name); } catch (e) { toast(e.message, 'bad'); } }, title: 'Сохранить' }, icon('check'));
     return h('tr', {}, h('td', {}, h('b', {}, c.name), h('div', { class: 'small muted' }, c.appeals + ' обращений')), h('td', {}, rs), h('td', {}, ss), h('td', {}, sla), h('td', {}, save)); });
   const claimRows = claims.map(c => { const dec = (decision) => async () => { const comment = decision === 'rejected' ? prompt('Причина отказа') : ''; if (decision === 'rejected' && !comment) return; try { await API.post('/api/admin/reward-claims/' + c.id + '/decide', { decision, comment }); toast('Решено'); adminScreen(); } catch (e) { toast(e.message, 'bad'); } };
     return h('tr', {}, h('td', {}, c.user_name), h('td', {}, c.title + ' · ' + c.cost_points), h('td', {}, tag(c.status === 'approved' ? 'st-done' : c.status === 'rejected' ? 'st-rejected' : 'st-review', c.status)), h('td', { class: 'small' }, fmtDate(c.created_at)), h('td', {}, c.status === 'requested' ? h('div', { class: 'row' }, h('button', { class: 'btn btn-sm btn-ok', onclick: dec('approved') }, 'Одобрить'), h('button', { class: 'btn btn-sm btn-danger', onclick: dec('rejected') }, 'Отклонить')) : (c.comment || ''))); });
   const avatars = d.users.filter(u => u.avatar);
   // награды: добавить / изменить / отключить
   const rewardRow = (r) => { const title = h('input', { type: 'text', value: r.title || '', placeholder: 'Название' }); const descr = h('input', { type: 'text', value: r.description || '', placeholder: 'Описание' }); const cost = h('input', { type: 'number', value: r.cost_points || 100, class: 'w70' }); const act = h('input', { type: 'checkbox', checked: r.active !== 0 && r.active !== false });
-    const save = h('button', { class: 'btn btn-sm' + (r.id ? '' : ' btn-primary'), onclick: async () => { try { await API.post('/api/admin/rewards', { id: r.id || null, title: title.value, description: descr.value, cost_points: Number(cost.value), active: act.checked }); toast(r.id ? 'Награда сохранена' : 'Награда добавлена'); adminScreen(); } catch (e) { toast(e.message, 'bad'); } } }, r.id ? '✓' : '+ Добавить');
+    const save = h('button', { class: 'btn btn-sm' + (r.id ? '' : ' btn-primary'), onclick: async () => { try { await API.post('/api/admin/rewards', { id: r.id || null, title: title.value, description: descr.value, cost_points: Number(cost.value), active: act.checked }); toast(r.id ? 'Награда сохранена' : 'Награда добавлена'); adminScreen(); } catch (e) { toast(e.message, 'bad'); } }, title: r.id ? 'Сохранить' : 'Добавить' }, r.id ? icon('check') : iconText('plus', 'Добавить'));
     return h('tr', { class: r.active === 0 ? 'muted' : '' }, h('td', {}, title), h('td', {}, descr), h('td', {}, cost), h('td', {}, h('label', { class: 'check' }, act, 'активна')), h('td', {}, save)); };
   const rewardsCard = h('div', { class: 'card' }, h('b', {}, 'Витрина наград'), h('div', { class: 'hint' }, 'Состав определяет компания: добавьте, измените стоимость или отключите.'),
     h('table', { class: 'tbl mt8' }, h('thead', {}, h('tr', {}, ['Название', 'Описание', 'Баллы', '', ''].map(t => h('th', {}, t)))), h('tbody', {}, d.rewards.map(rewardRow), rewardRow({}))));
@@ -317,20 +318,27 @@ async function adminScreen() {
   const depSel = v => h('select', {}, h('option', { value: '' }, '—'), d.departments.map(x => h('option', { value: x.id, selected: x.id === v }, x.name)));
   const mgrSel = v => h('select', {}, h('option', { value: '' }, '—'), d.users.filter(u => u.role !== 'employee').map(u => h('option', { value: u.id, selected: u.id === v }, u.name)));
   const userRow = (u) => { const name = h('input', { type: 'text', value: u.name || '', placeholder: 'Имя Фамилия' }); const pos = h('input', { type: 'text', value: u.position || '', placeholder: 'Должность' }); const role = roleSel(u.role || 'employee'); const br = brSel(u.branch_id); const dep = depSel(u.department_id); const mgr = mgrSel(u.manager_id); const act = h('input', { type: 'checkbox', checked: u.active !== 0 && u.active !== false });
-    const save = h('button', { class: 'btn btn-sm' + (u.id ? '' : ' btn-primary'), onclick: async () => { try { await API.post('/api/admin/users', { id: u.id || null, name: name.value, role: role.value, position: pos.value, branch_id: br.value ? Number(br.value) : null, department_id: dep.value ? Number(dep.value) : null, manager_id: mgr.value ? Number(mgr.value) : null, active: act.checked }); toast(u.id ? 'Сохранено' : 'Сотрудник добавлен'); adminScreen(); } catch (e) { toast(e.message, 'bad'); } } }, u.id ? '✓' : '+ Добавить');
-    return h('tr', { class: u.active === 0 ? 'muted' : '' }, h('td', {}, name), h('td', {}, pos), h('td', {}, role), h('td', {}, br), h('td', {}, dep), h('td', {}, mgr), h('td', {}, h('label', { class: 'check' }, act, '')), h('td', {}, save)); };
-  const usersCard = h('details', { class: 'card' }, h('summary', {}, 'Сотрудники (' + d.users.filter(u => u.active).length + ' активных) — добавить, изменить, отключить'), h('div', { class: 'hint' }, 'В пилоте список и аватарки берутся из Битрикс24.'),
-    h('div', { class: 'tblwrap' }, h('table', { class: 'tbl mt8 compact' }, h('thead', {}, h('tr', {}, ['Имя', 'Должность', 'Роль', 'Город', 'Отдел', 'Руководитель', 'Акт.', ''].map(t => h('th', {}, t)))), h('tbody', {}, d.users.map(userRow), userRow({})))));
+    const email = h('input', { type: 'text', value: u.email || '', placeholder: 'почта' }); const bx = h('input', { type: 'number', value: u.bitrix_id || '', placeholder: 'ID', class: 'w70' });
+    const save = h('button', { class: 'btn btn-sm' + (u.id ? '' : ' btn-primary'), title: u.id ? 'Сохранить' : 'Добавить', onclick: async () => { try { await API.post('/api/admin/users', { id: u.id || null, name: name.value, role: role.value, position: pos.value, branch_id: br.value ? Number(br.value) : null, department_id: dep.value ? Number(dep.value) : null, manager_id: mgr.value ? Number(mgr.value) : null, active: act.checked, email: email.value, bitrix_id: bx.value ? Number(bx.value) : null }); toast(u.id ? 'Сохранено' : 'Сотрудник добавлен'); adminScreen(); } catch (e) { toast(e.message, 'bad'); } } }, u.id ? icon('check') : iconText('plus', 'Добавить'));
+    return h('tr', { class: u.active === 0 ? 'muted' : '' }, h('td', {}, name), h('td', {}, pos), h('td', {}, role), h('td', {}, br), h('td', {}, dep), h('td', {}, mgr), h('td', {}, email), h('td', {}, bx), h('td', {}, h('label', { class: 'check' }, act, '')), h('td', {}, save)); };
+  const usersCard = h('details', { class: 'card' }, h('summary', {}, 'Сотрудники (' + d.users.filter(u => u.active).length + ' активных) — добавить, изменить, отключить'), h('div', { class: 'hint' }, 'Почта и ID Битрикса — для сопоставления с учётной записью портала (иначе сопоставление по имени и фамилии). В пилоте список и аватарки берутся из Битрикс24.'),
+    h('div', { class: 'tblwrap' }, h('table', { class: 'tbl mt8 compact' }, h('thead', {}, h('tr', {}, ['Имя', 'Должность', 'Роль', 'Город', 'Отдел', 'Руководитель', 'Почта', 'ID Б24', 'Акт.', ''].map(t => h('th', {}, t)))), h('tbody', {}, d.users.map(userRow), userRow({})))));
+  const bx = d.bitrix || {};
+  const bitrixCard = h('div', { class: 'card' }, h('b', {}, 'Битрикс24'),
+    bx.configured ? h('div', { class: 'small mt8' }, h('div', {}, 'Портал: ', h('b', {}, bx.portal)), h('div', {}, 'Приложение установлено (токены портала): ', h('b', {}, bx.tokens ? 'да' + (bx.installed_at ? ' · ' + fmtDate(bx.installed_at) : '') : 'нет — откройте «Обратная связь» в меню портала или нажмите «Установить»')),
+      h('div', {}, 'Сопоставлено сотрудников: ', h('b', {}, String(bx.mapped_users || 0))), h('div', {}, 'Поручения в задачи Битрикса: ', h('b', {}, bx.tasks ? 'включено' : 'выключено (BITRIX_TASKS=1)')))
+      : h('div', { class: 'small mt8' }, bx.webhook ? 'Только входящий вебхук: уведомления дублируются в чат, входа через Битрикс24 нет.' : 'Не подключён: нет настроек в .env. Инструкция — docs/BITRIX24.md. Без настроек ничего не имитируется.'));
   root.replaceChildren(h('div', { class: 'wrap wrap-wide' }, h('div', { class: 'h1' }, 'Администрирование'),
     h('div', { class: 'split' },
       h('div', {},
-        h('div', { class: 'card' }, h('b', {}, 'Категории ↔ ответственные ↔ SLA'), h('div', { class: 'hint' }, 'Проблемы идут ответственному; предложения — ответственному за предложения, иначе в отдел развития.'),
+        h('div', { class: 'card' }, h('b', {}, 'Категории, ответственные, SLA'), h('div', { class: 'hint' }, 'Проблемы идут ответственному; предложения — ответственному за предложения, иначе в отдел развития.'),
           h('table', { class: 'tbl mt8' }, h('thead', {}, h('tr', {}, ['Категория', 'Ответственный', 'За предложения', 'SLA, ч', ''].map(t => h('th', {}, t)))), h('tbody', {}, catRows))),
         rewardsCard,
         h('div', { class: 'card' }, h('b', {}, 'Заявки на награды'), claims.length ? h('table', { class: 'tbl mt8' }, h('thead', {}, h('tr', {}, ['Кто', 'Награда', 'Статус', 'Когда', ''].map(t => h('th', {}, t)))), h('tbody', {}, claimRows)) : h('div', { class: 'muted small mt8' }, 'Заявок нет')),
         usersCard),
       h('div', {},
         h('div', { class: 'card' }, h('b', {}, 'Настройки'), h('div', { class: 'grid2 mt8' }, inputs), h('div', { class: 'mt8' }, saveBtn), h('div', { class: 'hint mt8' }, 'Пороги похожести и кластеров — для режима ИИ; без ключа действуют пороги по ключевым словам.')),
+        bitrixCard,
         h('div', { class: 'card' }, h('b', {}, 'Филиалы и QR'), h('div', { class: 'list mt8' }, d.branches.map(b => h('div', { class: 'item', onclick: () => window.open('/q/' + b.code, '_blank') }, h('div', { class: 'row' }, h('b', {}, b.name), tag('tag-type', b.kind), h('div', { class: 'spacer' }), h('span', { class: 'small muted' }, '/q/' + b.code))))), h('div', { class: 'hint mt8' }, 'QR-коды для печати — на стартовой странице; адрес — постоянный (туннель).')),
         h('div', { class: 'card' }, h('b', {}, 'Аватарки'), avatars.length ? h('div', { class: 'list mt8' }, avatars.map(u => h('div', { class: 'item' }, h('div', { class: 'row' }, avatarEl({ name: u.name, avatar: '/api/avatars/' + u.avatar }), h('span', {}, u.name), h('div', { class: 'spacer' }), h('button', { class: 'btn btn-sm btn-danger', onclick: async () => { await API.post('/api/admin/users/' + u.id + '/avatar/remove'); toast('Убрана'); adminScreen(); } }, 'Убрать'))))) : h('div', { class: 'muted small mt8' }, 'Пользовательских аватарок нет'))))));
 }

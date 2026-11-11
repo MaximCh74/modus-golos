@@ -258,16 +258,34 @@ def map_data() -> dict:
     return {"branches": out_b, "sites": list(sites.values())}
 
 
+def public_map_data(base_url: str) -> dict:
+    """Карта на стартовой без входа (этап 6 §3): города с типом, открытых и решённых за месяц, главной темой и QR; объекты — только
+    город и число открытых. Служебное (просрочки, «мешают сейчас», без ответственного, номера) наружу не отдаём."""
+    full = map_data()
+    since = db.iso(db.now() - timedelta(days=30))
+    done = {r["branch_id"]: r["n"] for r in db.q("SELECT branch_id, COUNT(*) AS n FROM appeals WHERE status IN ('done','closed') AND type != 'praise' AND closed_at >= ? GROUP BY branch_id", (since,))}
+    kind_label = {"office": "офис", "production": "производство", "field": "объект"}
+    branches = []
+    for b in full["branches"]:
+        branches.append({"id": b["id"], "code": b["code"], "name": b["name"], "city": b["city"], "kind": b["kind"],
+                         "kind_label": "головной офис" if b["code"] == "OMSK" else kind_label.get(b["kind"], b["kind"]), "lat": b["lat"], "lng": b["lng"],
+                         "open": b["open"], "done_month": done.get(b["id"], 0), "top_category": b["top_category"],
+                         "qr_url": f"{base_url}/q/{b['code']}", "qr_svg": f"/api/public/qr/{b['code']}.svg", "form_url": f"/q/{b['code']}"})
+    sites = [{"city": s["city"], "lat": s.get("lat"), "lng": s.get("lng"), "open": s["open"]} for s in full["sites"]]
+    field = db.one("SELECT id, code, name FROM branches WHERE kind='field'")
+    if field:
+        field = {**field, "qr_url": f"{base_url}/q/{field['code']}", "qr_svg": f"/api/public/qr/{field['code']}.svg", "form_url": f"/q/{field['code']}"}
+    return {"branches": branches, "sites": sites, "field": field}
+
+
 # ---------- озвучка сводки ----------
 
-def summary_audio(user: dict) -> tuple[bytes, str]:
-    """mp3 озвучки текущей сводки; кэш по хэшу текста в папке данных — повторные нажатия и reset не тратят вызовы."""
-    import os
+def tts_cached(text: str) -> tuple[bytes, str]:
+    """mp3 озвучки текста (OpenAI TTS); кэш по хэшу текста в папке данных — повторные нажатия и reset не тратят вызовы.
+    Используется для сводки и для голосового ответа на команду директора (этап 6 §2)."""
     from pathlib import Path
-    d = summary(user)
-    text = " ".join(s["text"] for s in d["sentences"])
-    key = hashlib.sha1((llm.TTS_MODEL + "|" + llm.TTS_VOICE + "|" + text).encode("utf-8")).hexdigest()[:16]
     from . import config
+    key = hashlib.sha1((llm.TTS_MODEL + "|" + llm.TTS_VOICE + "|" + text).encode("utf-8")).hexdigest()[:16]
     cache = Path(config.DATA_DIR) / "tts"
     cache.mkdir(exist_ok=True)
     f = cache / f"{key}.mp3"
@@ -276,3 +294,8 @@ def summary_audio(user: dict) -> tuple[bytes, str]:
     audio = llm.speak(text)
     f.write_bytes(audio)
     return audio, "openai"
+
+
+def summary_audio(user: dict) -> tuple[bytes, str]:
+    d = summary(user)
+    return tts_cached(" ".join(s["text"] for s in d["sentences"]))

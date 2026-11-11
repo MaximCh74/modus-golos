@@ -230,6 +230,48 @@ def analyze_meeting(transcript: str, users: list[dict], open_appeals: list[dict]
     return d
 
 
+# ---------- команды директора (этап 6 §2): только разбор в JSON, получателей считает сервер ----------
+
+COMMAND_INTENTS = ("remind_overdue_tasks", "request_progress", "remind_no_response", "open_decision", "read_briefing")
+COMMAND_SYSTEM = GLOSSARY + """
+Ты разбираешь короткую команду директора (голосом или текстом) в системе обратной связи сотрудников. Верни ТОЛЬКО JSON:
+{"intent": один из ["remind_overdue_tasks","request_progress","remind_no_response","open_decision","read_briefing"] или null,
+ "filters": {"city": город из списка или null, "department": подразделение из списка или null, "person": имя сотрудника из списка или null,
+             "stale_only": true только если директор просит тех, у кого давно нет новостей / «молчат», иначе false,
+             "overdue_only": true только если директор говорит именно о просроченных по SLA, иначе false},
+ "deadline": {"text": срок как прозвучал («сегодня», «до пятницы», «до 18:00», «завтра к обеду») или null},
+ "note": короткое нейтральное пояснение для получателей, если директор назвал причину или контекст (например «нужно для отчёта в пятницу»),
+         без оценок, упрёков и резких слов; иначе null,
+ "idea": для open_decision — ключевые слова идеи или номер обращения (A-027), которую нужно открыть; иначе null}
+Соответствие команд: remind_overdue_tasks — напомнить/поторопить исполнителей просроченных поручений с совещаний;
+request_progress — запросить новости, ход работ, статус, «как дела» по обращениям «В работе»;
+remind_no_response — напомнить ответственным об обращениях без первого ответа или просроченных по SLA;
+open_decision — открыть «На решение» с конкретной идеей или предложением (принять или отклонить директор решает сам кнопкой);
+read_briefing — прочитать, озвучить, рассказать сводку.
+Команда вне этого списка (например «закажи пиццу», «уволь Иванова») → intent null. Город, подразделение и сотрудника бери только из списков,
+иначе null. Резкий тон команды на разбор не влияет; получателей выбирает сервер, не ты."""
+
+
+def parse_command(text: str, ctx: dict) -> dict:
+    def validate(d: dict) -> None:
+        if not isinstance(d, dict) or "intent" not in d:
+            raise ValueError("нет поля intent")
+        if d["intent"] is not None and d["intent"] not in COMMAND_INTENTS:
+            raise ValueError(f"intent вне белого списка: {d['intent']}")
+        if d.get("filters") is not None and not isinstance(d["filters"], dict):
+            raise ValueError("filters не объект")
+        if d.get("deadline") is not None and not isinstance(d["deadline"], (dict, str)):
+            raise ValueError("deadline не объект")
+    user = ("Города: " + ", ".join(c["city"] for c in ctx["cities"]) + "\nПодразделения: " + ", ".join(d["name"] for d in ctx["departments"]) +
+            "\nСотрудники: " + ", ".join(p["name"] for p in ctx["people"]) + f"\n\nКоманда директора:\n{text}")
+    d = chat_json(COMMAND_SYSTEM, user, validate, max_tokens=350)
+    f = d.get("filters") or {}
+    dl = d.get("deadline")
+    return {"intent": d.get("intent"), "filters": {"city": f.get("city"), "department": f.get("department"), "person": f.get("person"),
+                                                   "stale_only": bool(f.get("stale_only")), "overdue_only": bool(f.get("overdue_only"))},
+            "deadline_text": (dl.get("text") if isinstance(dl, dict) else dl) or None, "note": d.get("note"), "idea": d.get("idea")}
+
+
 # ---------- озвучка (OpenAI TTS тем же ключом) ----------
 
 TTS_MODEL = os.environ.get("MF_TTS_MODEL", "gpt-4o-mini-tts")

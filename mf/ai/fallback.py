@@ -139,3 +139,50 @@ def brief(text: str) -> dict:
     if len(gist) > 240:
         gist = gist[:239].rstrip() + "…"
     return {"gist": gist, "proposes": None, "expects": None, "unclear": False, "question": None, "note": "автопересказ недоступен (без ключа)"}
+
+
+# ---------- команды директора без ключа (этап 6 §2): те же пять intent по ключевым словам ----------
+
+CITY_STEMS = {"омск": "Омск", "самар": "Самара", "тюмен": "Тюмень", "астан": "Астана", "павлодар": "Павлодар"}
+
+
+def parse_command(text: str, ctx: dict) -> dict:
+    """→ {intent, filters: {city, department, person, stale_only, overdue_only}, deadline_text, note, idea}. Та же форма, что у LLM."""
+    t = _norm(text)
+    intent = None
+    if re.search(r"сводк|бриф|что нового|расскажи|прочитай|озвуч", t):
+        intent = "read_briefing"
+    if re.search(r"идея|идею|идеи|предложени|на решение|прими|принять|открой|отклон", t) and not re.search(r"поручен|без ответа|сводк", t):
+        intent = "open_decision"
+    if re.search(r"поручен", t) and re.search(r"просроч|напомн|поторопи|срок", t):
+        intent = "remind_overdue_tasks"
+    if re.search(r"без ответа|не ответил|первого ответа|первый ответ|не отвеч|sla|сла\b", t) or (re.search(r"просроч", t) and re.search(r"обращен", t)):
+        intent = "remind_no_response"
+    if re.search(r"ход|новост|прогресс|статус|как дела|отчита|доложи|сообщи", t) and not re.search(r"поручен|без ответа|первого ответа", t) and intent not in ("open_decision",):
+        intent = "request_progress"
+    city = next((v for k, v in CITY_STEMS.items() if k in t), None)
+    department = next((d["name"] for d in ctx.get("departments", []) if len(d["name"]) > 2 and _norm(d["name"])[1:5] in t), None)
+    person = None
+    try:
+        from . import names as _names
+        others = [p for p in ctx.get("people", []) if p.get("role") != "director"]
+        for w in re.findall(r"[а-яa-z-]{3,}", t):
+            if w in ("омск", "омске", "самаре", "тюмени", "астане", "павлодаре"):
+                continue
+            m = _names.match(w, others)
+            if m["user"] and m["score"] >= 0.95:
+                person = m["user"]["name"]
+                break
+    except Exception:   # noqa: BLE001
+        person = None
+    dl = re.search(r"((?:сегодня|завтра|послезавтра)(?:\s+(?:до|к)\s+[\w:.]+(?:\s+час\w*)?)?|(?:до|к)\s+(?:конца\s+\w+|обеда|вечера|\d{1,2}(?:[:.]\d{2})?(?:\s+час\w*)?|[а-я]+(?:\s+\d{1,2}(?:[:.]\d{2})?)?)|через\s+\w+)", t)
+    deadline_text = dl.group(1).strip() if dl else None
+    if deadline_text and re.fullmatch(r"(?:до|к)\s+(?:ответственн\w*|исполнител\w*|сотрудник\w*|них|всех|них)", deadline_text):
+        deadline_text = None
+    idea = None
+    if intent == "open_decision":
+        m = re.search(r"(?:про|о|об|насчет|насчёт)\s+(.+)$", t) or re.search(r"(a-\d{3})", t)
+        idea = m.group(1).strip() if m else None
+    return {"intent": intent, "filters": {"city": city, "department": department, "person": person,
+                                          "stale_only": bool(re.search(r"без новостей|давно|молч", t)), "overdue_only": bool(re.search(r"просроч", t)) and intent == "remind_no_response"},
+            "deadline_text": deadline_text, "note": None, "idea": idea}
