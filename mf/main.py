@@ -125,6 +125,18 @@ async def rules_page():
     return page("rules.html")
 
 
+@app.get("/changes")
+async def changes_page():
+    """«Что изменили» без входа (этап 7): реализованные обращения без авторов."""
+    return page("changes.html")
+
+
+@app.get("/design")
+async def design_page():
+    """Живой справочник дизайн-системы: токены и компоненты (этап 7 §1)."""
+    return page("design.html")
+
+
 @app.get("/offline")
 async def offline_page():
     return page("offline.html")

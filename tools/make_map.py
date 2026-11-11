@@ -3,7 +3,8 @@
 тайлов (CSP без сторонних источников, работает офлайн). Рамка — полоса городов заказчика Самара — Тюмень — Омск — Астана — Павлодар
 с небольшим запасом (lon 45…82, lat 46.5…60.5; Атырау и объекты южнее ещё видны); страны целиком не рисуем — только то, что внутри рамки,
 контуры тонкие и спокойные. Проекция равнопромежуточная со сжатием по долготе cos(54°), чтобы фигуры не были растянуты.
-Запуск: python3 tools/make_map.py <ne_50m_admin_0_countries.geojson> > web/a/img/map.svg
+Запуск: python3 tools/make_map.py <ne_50m_admin_0_countries.geojson> [ne_50m_admin_1_states_provinces_lines.geojson] > web/a/img/map.svg
+Второй файл (необязательный) — границы регионов Natural Earth admin-1 (lines): едва заметная фактура внутри стран (этап 7).
 Маркеры рисует web/a/mapview.js в процентах той же рамки (константы MAP там должны совпадать с LON0/LON1/LAT0/LAT1)."""
 from __future__ import annotations
 
@@ -17,6 +18,8 @@ KX = W / (LON1 - LON0)                      # px на градус долгот�
 KY = KX / math.cos(math.radians(54.0))      # px на градус широты (средняя широта полосы — 54°)
 H = round((LAT1 - LAT0) * KY)
 LAND, WATER, LINE = "#f6f8fb", "#e9eff6", "#c3cbd6"
+FILLS = {"Russia": "#f7f9fc", "Kazakhstan": "#f1f5fa"}   # две очень лёгкие подложки (этап 7 §2.4)
+REGION_LINE = "#dbe2ea"                                   # линии регионов — едва заметно
 
 
 def proj(lon: float, lat: float) -> tuple[float, float]:
@@ -51,6 +54,32 @@ def clip(poly: list[tuple[float, float]]) -> list[tuple[float, float]]:
     return out
 
 
+def clip_line(pts: list[tuple[float, float]]) -> list[list[tuple[float, float]]]:
+    """Ломаная → куски внутри рамки (точки вне рамки просто рвут линию; для едва заметной фактуры этого достаточно)."""
+    out, cur = [], []
+    for x, y in pts:
+        if LON0 <= x <= LON1 and LAT0 <= y <= LAT1:
+            cur.append((x, y))
+        elif cur:
+            out.append(cur); cur = []
+    if cur:
+        out.append(cur)
+    return [c for c in out if len(c) >= 2]
+
+
+def regions(path: str) -> str:
+    data = json.load(open(path, encoding="utf-8"))
+    d = []
+    for f in data["features"]:
+        geom = f["geometry"]
+        lines = geom["coordinates"] if geom["type"] == "MultiLineString" else [geom["coordinates"]]
+        for line in lines:
+            for piece in clip_line([(float(x), float(y)) for x, y in line]):
+                pts = [proj(x, y) for x, y in piece]
+                d.append("M" + " L".join(f"{x:.1f},{y:.1f}" for x, y in pts))
+    return f'<path d="{" ".join(d)}" fill="none" stroke="{REGION_LINE}" stroke-width="0.5" stroke-linejoin="round" stroke-linecap="round"/>' if d else ""
+
+
 def main() -> None:
     data = json.load(open(sys.argv[1], encoding="utf-8"))
     paths = []
@@ -69,10 +98,12 @@ def main() -> None:
             pts = [proj(x, y) for x, y in c]
             d.append("M" + " L".join(f"{x:.1f},{y:.1f}" for x, y in pts) + " Z")
         if d:
-            paths.append(f'<path d="{" ".join(d)}" fill="{LAND}" stroke="{LINE}" stroke-width="0.7" stroke-linejoin="round"><title>{name}</title></path>')
+            paths.append(f'<path d="{" ".join(d)}" fill="{FILLS.get(name, LAND)}" stroke="{LINE}" stroke-width="0.7" stroke-linejoin="round"><title>{name}</title></path>')
     print(f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" width="{W}" height="{H}">')
     print(f'<rect width="{W}" height="{H}" fill="{WATER}"/>')
     print("\n".join(paths))
+    if len(sys.argv) > 2:
+        print(regions(sys.argv[2]))
     print("</svg>")
 
 

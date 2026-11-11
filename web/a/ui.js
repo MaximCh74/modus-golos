@@ -245,3 +245,16 @@ async function speakSummary(btn, sentences) {
   }
   btn.disabled = false;
 }
+
+
+// Шапка публичных страниц (стартовая, «Что изменили», /design): логотип | разделитель | «Модус Голос» / «Каждый голос услышан»; справа — вход.
+function siteHeader(me, cfg, opts) {
+  opts = opts || {}; cfg = cfg || {};
+  const right = me
+    ? h('div', { class: 'row' }, h('span', { class: 'small muted' }, me.name.split(' ')[0]), h('a', { href: me.role === 'employee' ? '/app' : '/panel', class: 'btn btn-sm' }, me.role === 'employee' ? 'Приложение' : 'Панель'))
+    : h('div', { class: 'row' }, cfg.bitrix ? h('a', { href: cfg.bitrix_login, class: 'btn btn-sm btn-outline' }, iconText('log-in', 'Войти через Битрикс24')) : null,
+        h('a', { href: '/login' + (opts.next ? '?next=' + encodeURIComponent(opts.next) : ''), class: 'btn btn-outline' }, iconText('user', 'Войти')));
+  return h('header', { class: 'site-head' },
+    h('a', { href: '/', class: 'brand-lock', title: 'Модус Голос — на главную' }, h('img', { src: '/a/img/logo.svg', alt: 'Модус Трейд' }), h('span', { class: 'div' }), h('span', {}, h('b', {}, 'Модус Голос'), h('small', {}, 'Каждый голос услышан'))),
+    h('div', { class: 'spacer' }), right);
+}

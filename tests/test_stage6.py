@@ -234,3 +234,28 @@ def test_command_demo_phrase_without_key(c):
     assert r["plan"]["recipients"] and r["plan"]["recipients"][0]["message"].startswith("Виктор просит сегодня до 18:00 сообщить о ходе работ по обращени")
     from mf import commands
     assert commands.parse_time("к часу") == "13:00" and commands.parse_time("до пяти") == "17:00" and commands.parse_time("к девяти утра") == "09:00" and commands.parse_time("до 18 ноября") is None
+
+
+# ---------- этап 7, шаг 1: дизайн-система (цвета только токенами), главная, /design, «Что изменили» без входа ----------
+
+def test_css_colors_only_in_tokens():
+    """§4 этапа 7: нет «сырых» hex-цветов вне блока токенов :root (кроме data-URI иконок в url())."""
+    css = (pathlib.Path(__file__).resolve().parent.parent / "web" / "a" / "style.css").read_text(encoding="utf-8")
+    root = re.search(r":root \{(.*?)\n\}", css, re.S).group(1)
+    rest = css.replace(root, "")
+    rest = re.sub(r"url\([^)]*\)", "", rest)
+    rest = re.sub(r"/\*.*?\*/", "", rest, flags=re.S)
+    raw = sorted(set(re.findall(r"#[0-9a-fA-F]{3,6}\b", rest)))
+    assert not raw, raw
+    assert "--navy: #082742" in root and "--red: #e40000" in root
+
+
+def test_design_changes_pages_and_public_changes(c):
+    c.cookies.clear()
+    for path in ("/design", "/changes", "/"):
+        r = c.get(path)
+        assert r.status_code == 200 and "Модус Голос" in r.text
+    rows = c.get("/api/public/changes").json()
+    assert rows and all({"number", "type_label", "text", "resolution_text", "closed_at", "thanks"} <= set(r) for r in rows)
+    assert all("author" not in r for r in rows)   # без входа авторов не показываем
+    assert any(r["number"] == "A-004" for r in rows)

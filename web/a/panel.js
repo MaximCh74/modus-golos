@@ -223,7 +223,7 @@ let MAPVIEW = null;
 async function summary() {
   const [d, ds, md] = await Promise.all([API.get('/api/panel/summary?days=30'), API.get('/api/panel/director-summary').catch(() => null), API.get('/api/panel/map').catch(() => null)]);
   const sumBlock = ds ? summaryBlockPanel(ds) : null;
-  MAPVIEW = md ? mapView(md, { staff: true, onBranch: b => { S.filters = { branch_id: b.id, open: true }; location.hash = '#/queue'; }, onSite: s => { S.filters = { q: s.city, open: true }; location.hash = '#/queue'; } }) : null;
+  MAPVIEW = md ? mapView(md, { staff: true, legend: true, onBranch: b => { S.filters = { branch_id: b.id, open: true }; location.hash = '#/queue'; }, onSite: s => { S.filters = { q: s.city, open: true }; location.hash = '#/queue'; } }) : null;
   const mapCard = h('div', { class: 'card' }, h('div', { class: 'row' }, h('b', {}, 'Карта'), h('span', { class: 'hint' }, 'клик по городу — очередь филиала; новое обращение — маркер мигает')), MAPVIEW || h('div', { class: 'muted small' }, 'карта недоступна'));
   const pct = x => x === null || x === undefined ? '—' : Math.round(x * 100) + ' %';
   const kpis = h('div', { class: 'kpis' },
