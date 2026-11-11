@@ -36,7 +36,8 @@ def test_seed_matches_dataset(c):
 
 
 def test_qr_anonymous_and_tracking(c):
-    r = c.post("/api/public/appeals", data={"type": "problem", "text": "Принтер на складе не печатает накладные уже неделю", "branch_code": "PVL"})
+    # текст без ключевых слов: ни ИИ (без ключа), ни словарь категорию не дают → очередь администратора «Без ответственного»
+    r = c.post("/api/public/appeals", data={"type": "problem", "text": "Нужна помощь, непонятно к кому обращаться", "branch_code": "PVL"})
     assert r.status_code == 200, r.text
     j = r.json()
     assert j["number"] == "A-021" and j["logged_in"] is False

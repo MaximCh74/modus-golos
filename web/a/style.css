@@ -136,3 +136,27 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 14px; }
 .hero .big { font-size: 26px; }
 .actions { display: flex; flex-direction: column; gap: 8px; }
 .actions .inline { display: flex; gap: 6px; flex-wrap: wrap; }
+
+/* этап 2: режим совещания */
+.tag-demo { background: #fef3c7; color: #92400e; border: 1px dashed #d97706; }
+.tag-ai { background: #dcfce7; color: #166534; }
+.tag-flag { background: #ffedd5; color: #9a3412; }
+.tag-director { background: #ede9fe; color: #5b21b6; font-weight: 500; }
+.rec { text-align: center; }
+.rec-dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: var(--bad); animation: blink 1s infinite; }
+@keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: .2; } }
+.timer { font-size: 48px; font-weight: 700; font-variant-numeric: tabular-nums; margin: 16px 0; }
+.spin { display: inline-block; width: 18px; height: 18px; border: 3px solid var(--line); border-top-color: var(--brand); border-radius: 50%; animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.steps { display: flex; gap: 8px; }
+.steps .step { flex: 1; padding: 8px 10px; border-radius: 8px; background: #f1f5f9; color: var(--muted); font-size: 14px; }
+.steps .step.cur { background: #eff6ff; color: var(--brand); font-weight: 600; }
+.steps .step.done { background: #f0fdf4; color: var(--ok); }
+.mi { padding: 10px 0; border-bottom: 1px dashed var(--line); }
+.mi:last-of-type { border-bottom: 0; }
+.mi.removed { opacity: .45; }
+.mi.removed .pre, .mi.removed textarea { text-decoration: line-through; }
+.mi textarea.mi-text { min-height: 56px; }
+.mi select.mi-sel { width: auto; max-width: 100%; padding: 6px 8px; font-size: 14px; }
+.mi input[type=date] { width: auto; padding: 6px 8px; font-size: 14px; }
+details.card > summary { cursor: pointer; font-weight: 600; }

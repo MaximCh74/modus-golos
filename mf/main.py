@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
+import threading
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
@@ -11,6 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.datastructures import MutableHeaders
 
 from . import api, appeals, db, seed
+from .ai import stt
 from .config import ROOT
 
 log = logging.getLogger("mf")
@@ -70,6 +73,8 @@ async def lifespan(app: FastAPI):
     db.conn()
     seed.ensure()
     task = asyncio.create_task(overdue_loop())
+    if os.environ.get("MF_STT_WARMUP", "1") == "1" and not os.environ.get("PYTEST_CURRENT_TEST"):
+        threading.Thread(target=stt.warmup, name="stt-warmup", daemon=True).start()   # модель грузится ~10 с, первая запись не ждёт
     yield
     task.cancel()
 

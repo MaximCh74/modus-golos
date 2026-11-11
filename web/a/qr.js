@@ -21,7 +21,7 @@
     h('div', { class: 'mt8' }, field('Фото или файл (необязательно)', file)),
     submit,
     me ? h('div', { class: 'hint mt8' }, 'Вы вошли как ' + me.name + ' — обращение будет привязано к вам и даст баллы.')
-       : h('div', { class: 'hint mt8' }, 'Без входа обращение анонимное. Категорию и ответственного подставит система.'));
+       : h('div', { class: 'hint mt8' }, 'Без входа обращение анонимное. Категорию и ответственного подставит ИИ (без ключа — словарь ключевых слов).'));
   btnProblem.addEventListener('click', () => { type = 'problem'; btnProblem.classList.add('on'); btnIdea.classList.remove('on'); });
   btnIdea.addEventListener('click', () => { type = 'suggestion'; btnIdea.classList.add('on'); btnProblem.classList.remove('on'); });
 
@@ -41,6 +41,9 @@
         h('div', { class: 'card card-ok' },
           h('div', { class: 'h1' }, 'Обращение ' + r.number + ' принято'),
           h('p', {}, 'Спасибо! Его увидит ответственный, а вы сможете следить за статусом по ссылке.'),
+          h('p', { class: 'small' }, r.category ? ['Категория: ', h('b', {}, r.category), ' · отвечает: ', h('b', {}, r.responsible || 'администратор (ответственный не назначен)'),
+            h('span', { class: 'muted' }, r.ai_engine === 'openai' ? ' — определил ИИ' : ' — по ключевым словам (без ИИ)')]
+            : ['Категорию определит администратор', h('span', { class: 'muted' }, r.ai_engine === 'openai' ? ' — ИИ не уверен' : ' — словарь без ИИ не уверен')]),
           h('a', { href: r.track_url, class: 'btn btn-primary btn-big' }, 'Следить за статусом'),
           h('p', { class: 'hint' }, 'Сохраните ссылку: ', h('code', {}, location.origin + r.track_url), r.logged_in ? '' : ' — без входа это единственный способ увидеть ответ.'),
           r.logged_in ? h('p', { class: 'small' }, 'Обращение привязано к вам: ', h('a', { href: '/app#/appeal/' + r.id }, 'открыть в приложении'))

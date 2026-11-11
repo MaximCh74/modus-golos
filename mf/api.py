@@ -9,12 +9,13 @@ from pathlib import Path
 
 import qrcode
 import qrcode.image.svg
-from fastapi import APIRouter, File, Form, HTTPException, Request, Response, UploadFile
+from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
-from . import appeals, auth, db, realtime
-from .config import PUBLIC_URL, UPLOAD_DIR
+from . import ai, appeals, auth, db, meetings, realtime
+from .ai import llm, stt
+from .config import LLM_MODEL, PUBLIC_URL, UPLOAD_DIR
 
 router = APIRouter()
 
@@ -112,7 +113,8 @@ async def public_qr(code: str, request: Request):
 @router.post("/public/appeals")
 async def public_create(request: Request, type: str = Form(...), text: str = Form(...), branch_code: str = Form(...),
                         file: UploadFile | None = File(None)):
-    """QR-форма: один экран, без входа. Категорию и приоритет ставит ИИ в фоне (этап 3); пока — очередь администратора.
+    """QR-форма: один экран, без входа. Категорию и приоритет ставит ИИ (mf/ai: LLM, без ключа — словарь ключевых слов);
+    «Без ответственного» — только при вакансии категории или если ни ИИ, ни словарь не уверены (ТЗ §7).
     Если в браузере уже есть демо-вход — обращение привязывается к пользователю и даёт баллы."""
     qr_limit.check(client_ip(request))
     branch = db.one("SELECT * FROM branches WHERE code=?", (branch_code.upper(),))
@@ -121,10 +123,23 @@ async def public_create(request: Request, type: str = Form(...), text: str = For
     if type not in ("problem", "suggestion"):
         raise HTTPException(422, "Выберите «Проблема» или «Идея»")
     user = auth.current(request)
-    a = appeals.create(type=type, text=text, branch_id=branch["id"], author=user, is_anonymous=user is None, source="qr")
+    cls = await classify(text, type)
+    a = appeals.create(type=type, text=text, category_id=cls["category_id"], priority=cls.get("priority") or "medium",
+                       branch_id=branch["id"], author=user, is_anonymous=user is None, source="qr", ai=cls)
     await save_attachment(a["id"], file)
     return {"id": a["id"], "number": a["number"], "tracking_token": a["tracking_token"],
-            "track_url": f"/t/{a['tracking_token']}", "logged_in": user is not None}
+            "track_url": f"/t/{a['tracking_token']}", "logged_in": user is not None,
+            "category": a["category"], "responsible": a["responsible"], "ai_engine": cls.get("engine")}
+
+
+async def classify(text: str, type_hint: str | None) -> dict:
+    """ИИ-категория: LLM в threadpool (сетевой вызов), без ключа — словарь. Любая ошибка → без категории, не 500."""
+    import asyncio
+    cats = db.q("SELECT id, name FROM categories ORDER BY id")
+    try:
+        return await asyncio.to_thread(ai.classify_appeal, text, cats, type_hint)
+    except Exception as e:   # noqa: BLE001
+        return {"category_id": None, "category": None, "confidence": 0.0, "priority": "medium", "engine": f"error: {e}"[:120]}
 
 
 @router.get("/public/track/{token}")
@@ -208,8 +223,12 @@ async def create_appeal(request: Request, type: str = Form(...), text: str = For
                         category_id: str = Form(""), priority: str = Form("medium"), is_anonymous: str = Form("0"),
                         file: UploadFile | None = File(None)):
     user = auth.require(request)
+    cls = None
+    if not category_id and type != "praise":   # «не знаю» → категорию подставляет ИИ (или словарь); сотрудник её видит в карточке
+        cls = await classify(text + ("\n" + proposed_solution if proposed_solution else ""), type)
+        category_id = cls["category_id"] or ""
     a = appeals.create(type=type, text=text, proposed_solution=proposed_solution, category_id=int(category_id) if category_id else None,
-                       priority=priority, author=user, is_anonymous=parse_bool(is_anonymous), source="app")
+                       priority=priority, author=user, is_anonymous=parse_bool(is_anonymous), source="app", ai=cls)
     await save_attachment(a["id"], file)
     return appeals.view(appeals.get(a["id"]), user)
 
@@ -369,3 +388,131 @@ async def panel_summary(request: Request, days: int = 30, branch_id: int | None 
 async def panel_check_overdue(request: Request):
     auth.require(request, "director", "admin")
     return {"escalated": appeals.check_overdue()}
+
+
+# ---------- ИИ: что реально доступно (честная плашка в интерфейсе) ----------
+
+@router.get("/ai/status")
+async def ai_status(request: Request):
+    auth.require(request)
+    return {"llm": llm.available(), "llm_model": LLM_MODEL if llm.available() else None, "stt": stt.available(),
+            "fallback": not llm.available(), "classifier": "openai" if llm.available() else "keywords"}
+
+
+# ---------- совещания (ТЗ §6.2) ----------
+
+MAX_AUDIO = 60 * 1024 * 1024
+AUDIO_EXT = {"audio/webm": ".webm", "video/webm": ".webm", "audio/ogg": ".ogg", "audio/mp4": ".m4a", "video/mp4": ".mp4", "audio/mpeg": ".mp3",
+             "audio/wav": ".wav", "audio/x-wav": ".wav", "audio/x-m4a": ".m4a", "audio/aac": ".aac", "audio/flac": ".flac", "audio/3gpp": ".3gp"}
+
+
+@router.post("/meetings")
+async def create_meeting(request: Request, background: BackgroundTasks, title: str = Form(""), transcript: str = Form(""),
+                         duration_sec: str = Form(""), audio: UploadFile | None = File(None)):
+    """Аудио (MediaRecorder / файл) или текстовая расшифровка → processing; обработка в фоне, фронт опрашивает GET /meetings/{id}."""
+    user = auth.require(request, *appeals.STAFF)
+    audio_path = None
+    if audio and audio.filename:
+        data = await audio.read(MAX_AUDIO + 1)
+        if len(data) > MAX_AUDIO:
+            raise HTTPException(413, "Запись больше 60 МБ — разбейте на части")
+        if len(data) < 1000:
+            raise HTTPException(422, "Запись пустая — попробуйте ещё раз")
+        mime = (audio.content_type or "").split(";")[0].strip()
+        ext = AUDIO_EXT.get(mime) or Path(audio.filename).suffix.lower()[:6] or ".bin"
+        audio_path = meetings.AUDIO_DIR / f"{secrets.token_hex(8)}{ext}"
+        audio_path.write_bytes(data)
+    elif len(transcript.strip()) < 20:
+        raise HTTPException(422, "Нужна запись или текст расшифровки (хотя бы пара фраз)")
+    mid = meetings.create(user, title, transcript=transcript if not audio_path else None, audio_path=audio_path,
+                          duration_sec=int(duration_sec) if duration_sec.isdigit() else None)
+    background.add_task(meetings.process, mid)
+    return {"id": mid, "status": "processing", "stage": "stt" if audio_path else "analysis"}
+
+
+@router.get("/meetings")
+async def list_meetings(request: Request):
+    return meetings.list_for(auth.require(request, *appeals.STAFF))
+
+
+@router.get("/meetings/{meeting_id}")
+async def get_meeting(meeting_id: int, request: Request):
+    return meetings.view(meeting_id, auth.require(request, *appeals.STAFF))
+
+
+class ItemPatch(BaseModel):
+    text: str | None = None
+    removed: bool | None = None
+    assignee_id: int | None = None
+    due_date: str | None = None
+    category_id: int | None = None
+    linked_appeal_id: int | None = None
+
+
+@router.post("/meetings/{meeting_id}/items/{item_id}")
+async def patch_item(meeting_id: int, item_id: int, body: ItemPatch, request: Request):
+    user = auth.require(request, *appeals.STAFF)
+    return meetings.update_item(meeting_id, item_id, user, body.model_dump(exclude_unset=True))
+
+
+class ItemNew(BaseModel):
+    kind: str
+    text: str
+    assignee_id: int | None = None
+    due_date: str | None = None
+    type: str | None = None
+    category_id: int | None = None
+    linked_appeal_id: int | None = None
+
+
+@router.post("/meetings/{meeting_id}/items")
+async def new_item(meeting_id: int, body: ItemNew, request: Request):
+    user = auth.require(request, *appeals.STAFF)
+    d = body.model_dump()
+    return meetings.add_item(meeting_id, user, d.pop("kind"), d.pop("text"), **d)
+
+
+@router.post("/meetings/{meeting_id}/send")
+async def send_meeting(meeting_id: int, request: Request):
+    return meetings.send(meeting_id, auth.require(request, *appeals.STAFF))
+
+
+# ---------- мои поручения ----------
+
+@router.get("/tasks/mine")
+async def my_tasks(request: Request):
+    return meetings.my_tasks(auth.require(request))
+
+
+class TaskStatus(BaseModel):
+    status: str
+
+
+@router.post("/tasks/{item_id}/status")
+async def task_status(item_id: int, body: TaskStatus, request: Request):
+    return meetings.set_task_status(item_id, auth.require(request), body.status)
+
+
+# ---------- «На решение» у директора (общий API для /app и /panel) ----------
+
+@router.get("/director/ideas")
+async def director_ideas(request: Request):
+    return meetings.director_ideas(auth.require(request, "director", "admin"))
+
+
+class Accept(BaseModel):
+    category_id: int | None = None
+
+
+class Reject(BaseModel):
+    reason: str
+
+
+@router.post("/director/ideas/{item_id}/accept")
+async def accept_idea(item_id: int, body: Accept, request: Request):
+    return meetings.accept_idea(item_id, auth.require(request, "director", "admin"), body.category_id)
+
+
+@router.post("/director/ideas/{item_id}/reject")
+async def reject_idea(item_id: int, body: Reject, request: Request):
+    return meetings.reject_idea(item_id, auth.require(request, "director", "admin"), body.reason)

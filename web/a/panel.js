@@ -19,6 +19,8 @@ async function boot() {
   API.sse(ev => {
     if (ev.type === 'notification') { toast(ev.text); ME.unread = (ME.unread || 0) + 1; renderTop(); }
     if (ev.type === 'appeal_created') toast('Новое обращение ' + ev.number);
+    if (ev.type === 'meeting_updated' && location.hash.startsWith('#/meetings/' + ev.id)) route();
+    if (ev.type === 'idea_pending' && location.hash === '#/decisions') route();
     if (['appeal_created', 'appeal_updated', 'escalated', 'notification'].includes(ev.type)) {
       clearTimeout(reloadTimer);
       reloadTimer = setTimeout(() => { if (S.view === 'queue') loadQueue(ev.type === 'appeal_created' ? ev.id : null); if (S.selected) loadCard(S.selected); }, 400);
@@ -33,6 +35,7 @@ function renderTop() {
   const nav = [['#/queue', 'Очередь']];
   if (ME.role !== 'responsible') nav.push(['#/summary', 'Сводка']);
   nav.push(['#/meetings', 'Совещания']);
+  if (ME.role !== 'responsible') nav.push(['#/decisions', 'На решение']);
   if (ME.role === 'admin') nav.push(['#/admin', 'Администрирование']);
   top.replaceChildren(
     h('a', { href: '#/queue', class: 'brand' }, 'Панель', h('small', {}, 'ГК «Модус Трейд» · обратная связь · демо')),
@@ -51,7 +54,10 @@ async function route() {
     if (p[0] === 'appeal') { S.view = 'queue'; S.selected = Number(p[1]); return await queue(); }
     if (p[0] === 'summary') { S.view = 'summary'; return await summary(); }
     if (p[0] === 'notifications') { S.view = 'notifications'; return await notifications(); }
-    if (p[0] === 'meetings') { S.view = 'meetings'; return placeholder('Совещания', 'Список совещаний: итог, поручения, идеи и решения директора — этап 2.'); }
+    if (p[0] === 'meetings' && p[1] === 'new') { S.view = 'meetings'; return await meetingStart({ backHref: '#/meetings', cardPrefix: '#/meetings/' }); }
+    if (p[0] === 'meetings' && p[1]) { S.view = 'meetings'; return await meetingCard(Number(p[1]), { backHref: '#/meetings', cardPrefix: '#/meetings/' }); }
+    if (p[0] === 'meetings') { S.view = 'meetings'; return await meetingsList(); }
+    if (p[0] === 'decisions') { S.view = 'decisions'; return await decisionsScreen({ backHref: '#/queue' }); }
     if (p[0] === 'admin') { S.view = 'admin'; return placeholder('Администрирование', 'Категории ↔ ответственные ↔ SLA, пользователи, филиалы и QR, награды, баллы — этап 4. Сейчас всё задаётся в mf/seed.py.'); }
     S.view = 'queue'; return await queue();
   } catch (e) { root.replaceChildren(h('div', { class: 'wrap' }, h('div', { class: 'card card-bad' }, e.message))); }
@@ -168,6 +174,25 @@ async function loadCard(id) {
   box.replaceChildren(head, result, actions, h('div', { class: 'card' }, h('div', { class: 'h2' }, 'История'), history(a.events)));
   const row = [...document.querySelectorAll('#queue-table tbody tr')].find(tr => tr.textContent.startsWith(a.number));
   if (row) row.classList.add('sel');
+}
+
+// ---------- совещания ----------
+
+async function meetingsList() {
+  const list = await API.get('/api/meetings');
+  const st = s => s === 'sent' ? 'st-done' : s === 'review' ? 'st-review' : s === 'failed' ? 'st-rejected' : 'st-new';
+  const tbl = h('table', { class: 'tbl' },
+    h('thead', {}, h('tr', {}, ['Дата', 'Совещание', 'Филиал', 'Ведущий', 'Итог', 'Статус', 'Поручения', 'Идеи'].map(t => h('th', {}, t)))),
+    h('tbody', {}, list.map(m => h('tr', { onclick: () => { location.hash = '#/meetings/' + m.id; } },
+      h('td', { class: 'small' }, fmtDate(m.created_at)), h('td', {}, h('b', {}, m.title), m.fallback ? h('div', {}, tag('tag-demo', m.demo ? 'демо-разбор без ИИ' : 'без ИИ')) : null),
+      h('td', {}, m.branch || '—'), h('td', {}, m.creator || '—'), h('td', { class: 'small' }, m.summary_line || (m.error ? h('span', { class: 'muted' }, m.error) : '—')),
+      h('td', {}, tag(st(m.status), m.status_label)),
+      h('td', {}, 'выполнено ' + m.counts.tasks_done + ' / ' + m.counts.tasks + (m.counts.flags ? ' ' : ''), m.counts.flags ? tag('tag-flag', 'флагов ' + m.counts.flags) : null),
+      h('td', {}, 'принято ' + m.counts.ideas_accepted + ' · на решении ' + m.counts.ideas_pending + (m.counts.ideas_rejected ? ' · отклонено ' + m.counts.ideas_rejected : ''))))));
+  root.replaceChildren(h('div', { class: 'wrap wrap-wide' }, h('div', { class: 'row' }, h('div', { class: 'h1' }, 'Совещания'), h('div', { class: 'spacer' }),
+    h('a', { href: '#/meetings/new', class: 'btn btn-primary btn-sm' }, '+ Записать или загрузить планёрку')),
+    h('p', { class: 'hint' }, 'Запись планёрки → расшифровка → разбор: итог, решения, поручения, идеи директору, связанные обращения. Ответственные видят свои совещания, директор и администратор — все.'),
+    h('div', { class: 'card' }, list.length ? tbl : h('div', { class: 'muted' }, 'Совещаний пока нет'))));
 }
 
 // ---------- сводка ----------

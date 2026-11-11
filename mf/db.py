@@ -68,6 +68,16 @@ CREATE TRIGGER IF NOT EXISTS t_ledger_no_update BEFORE UPDATE ON points_ledger B
 CREATE TRIGGER IF NOT EXISTS t_ledger_no_delete BEFORE DELETE ON points_ledger BEGIN SELECT RAISE(ABORT, 'points_ledger: append-only'); END;
 """
 
+# Колонки, добавленные после этапа 1: базы, созданные раньше, доводятся ALTER TABLE при старте (без пересоздания).
+MIGRATIONS = [
+    ("meetings", "stage", "TEXT"), ("meetings", "stt_engine", "TEXT"), ("meetings", "llm_engine", "TEXT"), ("meetings", "error", "TEXT"),
+    ("meetings", "sent_at", "TEXT"), ("meetings", "open_questions", "TEXT"), ("meetings", "language", "TEXT"),
+    ("meetings", "demo", "INTEGER NOT NULL DEFAULT 0"), ("meetings", "audio_path", "TEXT"),
+    ("meeting_items", "assignee_name", "TEXT"), ("meeting_items", "due_text", "TEXT"), ("meeting_items", "removed", "INTEGER NOT NULL DEFAULT 0"),
+    ("meeting_items", "sort", "INTEGER NOT NULL DEFAULT 0"), ("meeting_items", "candidates", "TEXT"), ("meeting_items", "decided_at", "TEXT"),
+    ("meeting_items", "decided_by", "INTEGER"), ("meeting_items", "done_at", "TEXT"), ("meeting_items", "linked_number", "TEXT"),
+]
+
 _conn: sqlite3.Connection | None = None
 
 
@@ -97,6 +107,11 @@ def conn() -> sqlite3.Connection:
         c.execute("PRAGMA journal_mode=WAL")
         c.execute("PRAGMA foreign_keys=ON")
         c.executescript(SCHEMA)
+        for table, col, decl in MIGRATIONS:
+            cols = {r[1] for r in c.execute(f"PRAGMA table_info({table})").fetchall()}
+            if col not in cols:
+                c.execute(f"ALTER TABLE {table} ADD COLUMN {col} {decl}")
+        c.commit()
         _conn = c
     return _conn
 

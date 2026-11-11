@@ -72,7 +72,9 @@ function eventText(e) {
     case 'clarification_requested': return 'Запрошено уточнение: ' + p.text;
     case 'clarification_answered': return 'Ответ автора: ' + p.text;
     case 'escalated': return 'Просрочено: нет первого ответа при SLA ' + p.sla_hours + ' ч — уведомлён руководитель';
-    case 'discussed_at_meeting': return 'Обсуждено на совещании' + (p.text ? ': ' + p.text : '');
+    case 'discussed_at_meeting': return 'Обсуждено на совещании' + (p.meeting_title ? ' «' + p.meeting_title + '»' : '') + (p.text ? ': ' + p.text : '');
+    case 'ai_classified': return p.category ? 'Категория определена ' + (p.engine === 'openai' ? 'ИИ' : 'по ключевым словам (без ИИ)') + ': ' + p.category + (p.confidence ? ' (' + Math.round(p.confidence * 100) + ' %)' : '')
+      : 'Категория не определена ' + (p.engine === 'openai' ? 'ИИ' : 'по ключевым словам') + ' — передано администратору';
     case 'supported': return '«У меня так же» — уже ' + p.count;
     case 'points_awarded': return '+' + p.amount + ' баллов автору (' + (REASON[p.reason] || p.reason) + ')';
     default: return e.kind;

@@ -192,7 +192,9 @@ def route(a: dict, actor_id: int | None = None) -> dict | None:
 
 def create(*, type: str, text: str, proposed_solution: str | None = None, category_id: int | None = None,
            priority: str = "medium", branch_id: int | None = None, department_id: int | None = None,
-           author: dict | None = None, is_anonymous: bool = False, source: str = "app", meeting_id: int | None = None) -> dict:
+           author: dict | None = None, is_anonymous: bool = False, source: str = "app", meeting_id: int | None = None,
+           ai: dict | None = None) -> dict:
+    """ai — результат mf.ai.classify_appeal (категория подставлена ИИ или словарём): пишется событием ai_classified до маршрутизации."""
     if type not in TYPES:
         raise HTTPException(422, "Неверный тип обращения")
     if priority not in PRIORITIES:
@@ -219,6 +221,9 @@ def create(*, type: str, text: str, proposed_solution: str | None = None, catego
         db.ex("INSERT INTO appeal_authors(appeal_id, user_id) VALUES(?,?)", (aid, author["id"]))
     actor = None if (is_anonymous or not author) else author["id"]
     add_event(aid, actor, "created", {"source": source, "type": type, "anonymous": bool(is_anonymous)})
+    if ai:
+        add_event(aid, None, "ai_classified", {"engine": ai.get("engine"), "category_id": ai.get("category_id"), "category": ai.get("category"),
+                                               "confidence": ai.get("confidence"), "priority": ai.get("priority"), "summary": ai.get("summary")})
     a = get(aid)
     route(a)
     realtime.publish_roles(("director", "admin"), {"type": "appeal_created", "id": aid, "number": number,

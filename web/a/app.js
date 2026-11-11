@@ -17,6 +17,8 @@ async function boot() {
       if (hsh.startsWith('#/appeal/') || hsh === '#/notifications' || hsh === '#/') route();
     }
     if (ev.type === 'points') { ME.points = (ME.points || 0) + ev.amount; renderTop(); }
+    if (ev.type === 'meeting_updated' && location.hash === '#/meeting/' + ev.id) route();
+    if (ev.type === 'idea_pending' && (location.hash === '#/decisions' || location.hash === '#/')) route();
   });
 }
 
@@ -45,8 +47,10 @@ async function route() {
     if (p[0] === 'points') return await points();
     if (p[0] === 'rewards') return placeholder('Награды', 'Витрина наград и заявки — этап 4.');
     if (p[0] === 'league') return placeholder('Лига филиалов', 'Лига филиалов и топ сотрудников — этап 4.');
-    if (p[0] === 'tasks') return placeholder('Мои поручения', 'Поручения с совещаний — этап 2.');
-    if (p[0] === 'meeting') return placeholder('Режим совещания', 'Запись планёрки и разбор ИИ — этап 2.');
+    if (p[0] === 'tasks') return await tasksScreen({ backHref: '#/' });
+    if (p[0] === 'meeting' && p[1]) return await meetingCard(Number(p[1]), { backHref: '#/meeting', cardPrefix: '#/meeting/' });
+    if (p[0] === 'meeting') return await meetingStart({ backHref: '#/', cardPrefix: '#/meeting/' });
+    if (p[0] === 'decisions') return await decisionsScreen({ backHref: '#/' });
     return placeholder('Нет такой страницы', '');
   } catch (e) {
     root.replaceChildren(h('div', { class: 'wrap' }, h('div', { class: 'card card-bad' }, e.message), h('a', { href: '#/' }, '← На главную')));
@@ -60,7 +64,9 @@ function placeholder(title, text) {
 
 function tabs(active) {
   const items = [['#/changes', 'Что изменили'], ['#/rewards', 'Награды'], ['#/league', 'Лига']];
-  if (ME.role !== 'employee') items.push(['#/tasks', 'Мои поручения'], ['#/meeting', 'Совещание']);
+  items.push(['#/tasks', 'Мои поручения']);
+  if (ME.role !== 'employee') items.push(['#/meeting', 'Совещание']);
+  if (ME.role === 'director' || ME.role === 'admin') items.push(['#/decisions', 'На решение']);
   return h('div', { class: 'tabs' }, items.map(([href, label]) => h('a', { href, class: href === active ? 'active' : '' }, label)));
 }
 
@@ -73,9 +79,10 @@ function item(a) {
 }
 
 async function home() {
-  const [mine, pts] = await Promise.all([API.get('/api/appeals/mine'), API.get('/api/me/points')]);
+  const [mine, pts, decisions] = await Promise.all([API.get('/api/appeals/mine'), API.get('/api/me/points'),
+    (ME.role === 'director' || ME.role === 'admin') ? decisionsBlock('/app#/decisions') : null]);
   ME.points = pts.balance; renderTop();
-  root.replaceChildren(h('div', { class: 'wrap' },
+  root.replaceChildren(h('div', { class: 'wrap' }, decisions,
     h('div', { class: 'grid2' },
       h('a', { href: '#/new?type=problem', class: 'btn btn-primary btn-big' }, 'Сообщить о проблеме'),
       h('a', { href: '#/new?type=suggestion', class: 'btn btn-primary btn-big' }, 'Предложить улучшение')),
@@ -106,7 +113,7 @@ async function newAppeal(startType) {
     switchEl,
     h('div', { class: 'row' }, h('div', { class: 'spacer' }, text), h('button', { type: 'button', class: 'btn mic', disabled: true, title: 'Голосовой ввод и черновик ИИ — этап 3' }, '🎤')),
     field('Предлагаемое решение', sol),
-    h('div', { class: 'grid2' }, field('Категория', cat, 'На этапе 3 категорию подскажет ИИ'), field('Приоритет', prio)),
+    h('div', { class: 'grid2' }, field('Категория', cat, 'Если не выбрать — категорию подставит ИИ (без ключа — словарь ключевых слов)'), field('Приоритет', prio)),
     field('Вложение (необязательно)', file),
     h('label', { class: 'check mb8' }, anon, 'Анонимно', h('span', { class: 'hint' }, '— анонимные обращения не дают баллов')),
     h('div', { class: 'card card-info small' }, 'Блок «Похоже, об этом уже сообщали» (поиск похожих обращений) — этап 3.'),

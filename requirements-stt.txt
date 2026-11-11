@@ -1,0 +1,7 @@
+# Локальный STT на GPU (Legion, RTX 2060): ставится в user-site, в Docker-образ не входит (там STT = openai или off).
+# pip install --user -r requirements-stt.txt ; модель large-v3-turbo (~1,6 ГБ) скачается при первом запуске.
+faster-whisper==1.2.1
+nvidia-cublas-cu12
+nvidia-cudnn-cu12>=9,<10
+# синтез тестовых фраз для tools/stt_bench.py (необязательно)
+edge-tts
