@@ -11,7 +11,11 @@ from pathlib import Path
 
 log = logging.getLogger("mf.ai.stt")
 
-MODE = os.environ.get("MF_STT", "faster-whisper").strip().lower()          # faster-whisper | openai | off
+def mode() -> str:
+    """faster-whisper | openai | off — читается при каждом вызове (тесты и .env без перезапуска)."""
+    return os.environ.get("MF_STT", "faster-whisper").strip().lower()
+
+
 WHISPER_MODEL = os.environ.get("MF_WHISPER_MODEL", "large-v3-turbo")       # выбор по tools/stt_bench.py → docs/STATUS.md
 WHISPER_COMPUTE = os.environ.get("MF_WHISPER_COMPUTE", "int8_float16")
 WHISPER_DEVICE = os.environ.get("MF_WHISPER_DEVICE", "auto")               # auto | cuda | cpu
@@ -58,13 +62,13 @@ def preload_cuda_libs() -> list[str]:
 
 def available() -> dict:
     """Что реально доступно — для /api/ai/status и честной плашки в интерфейсе."""
-    local = MODE == "faster-whisper" and _model_error is None
+    local = mode() == "faster-whisper" and _model_error is None
     if local:
         try:
             import faster_whisper  # noqa: F401
         except ImportError:
             local = False
-    return {"mode": MODE, "local": local, "local_model": WHISPER_MODEL if local else None,
+    return {"mode": mode(), "local": local, "local_model": WHISPER_MODEL if local else None,
             "openai": bool(os.environ.get("OPENAI_API_KEY")), "loaded": _model is not None, "error": _model_error}
 
 
@@ -94,7 +98,7 @@ def _load():
 
 def warmup() -> None:
     """Прогрев при старте сервера (в фоне), чтобы первая запись не ждала загрузку модели."""
-    if MODE == "faster-whisper":
+    if mode() == "faster-whisper":
         try:
             _load()
         except STTError:
@@ -104,13 +108,18 @@ def warmup() -> None:
 def _local(path: Path, language: str | None) -> dict:
     model = _load()
     t0 = time.time()
-    segments, info = model.transcribe(str(path), language=language, beam_size=5, vad_filter=True,
-                                      vad_parameters={"min_silence_duration_ms": 500})
-    lines = []
-    for s in segments:
-        txt = s.text.strip()
-        if txt:
-            lines.append(txt)
+    try:
+        segments, info = model.transcribe(str(path), language=language, beam_size=5, vad_filter=True,
+                                          vad_parameters={"min_silence_duration_ms": 500})
+        lines = []
+        for s in segments:
+            txt = s.text.strip()
+            if txt:
+                lines.append(txt)
+    except STTError:
+        raise
+    except Exception as e:   # noqa: BLE001 — битый файл, неизвестный формат, сбой GPU
+        raise STTError(f"не удалось расшифровать запись: {type(e).__name__}") from e
     return {"text": "\n".join(lines), "language": info.language, "duration": round(info.duration, 1),
             "engine": f"faster-whisper:{WHISPER_MODEL}", "seconds": round(time.time() - t0, 1)}
 
@@ -136,9 +145,10 @@ def transcribe(path: str | Path, language: str | None = None) -> dict:
     if not path.is_file() or path.stat().st_size < 1000:
         raise STTError("Аудио пустое или слишком короткое")
     language = language or LANGUAGE
-    if MODE == "off":
+    m = mode()
+    if m == "off":
         raise STTError("STT выключен (MF_STT=off) — вставьте текстовую расшифровку")
-    if MODE == "openai":
+    if m == "openai":
         return _openai(path, language)
     try:
         return _local(path, language)

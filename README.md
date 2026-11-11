@@ -36,11 +36,12 @@ python3 -m uvicorn mf.main:app --port 8070
 разбор совещания — «Демо-разбор без ИИ», категория обращения — «по ключевым словам (без ИИ)».
 
 Пересоздать демо-данные: `python3 -m mf.seed --force` (при остановленном сервере).
-Тесты: `python3 -m pytest -q tests` (18 тестов, без ключа и без GPU).
+Тесты: `python3 -m pytest -q tests` (23 теста, без ключа и без GPU).
 
 ## ИИ: ключ, STT на GPU, выбор модели
 
-- **LLM** — OpenAI: `OPENAI_API_KEY` и `MF_LLM_MODEL` в `.env` (ключ кладёт владелец, в git не попадает). Все вызовы — через `mf/ai/`.
+- **LLM** — OpenAI: `OPENAI_API_KEY` и `MF_LLM_MODEL` в `.env` (ключ кладёт владелец, в git не попадает). Все вызовы — через `mf/ai/`:
+  разбор совещаний и черновик обращения (chat), похожие обращения и кластеры (`text-embedding-3-small`, `MF_EMBED_MODEL`).
 - **STT локально** (машина с GPU, RTX 2060 6 ГБ): пакеты ставятся в user-site, в Docker-образ не входят:
 
 ```bash

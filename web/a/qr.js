@@ -12,13 +12,17 @@
   const btnProblem = h('button', { type: 'button', class: 'btn on' }, 'Проблема');
   const btnIdea = h('button', { type: 'button', class: 'btn' }, 'Идея');
   const text = h('textarea', { name: 'text', required: true, placeholder: 'Что происходит? Если есть идея, как исправить — напишите.' });
-  const mic = h('button', { type: 'button', class: 'btn mic', title: 'Голосовой ввод появится на этапе 3', disabled: true }, '🎤');
+  const mic = h('button', { type: 'button', class: 'btn mic' }, '🎤');
+  Voice.attach(mic, text, { public: !me });
+  let similarShown = false, anyway = false;
+  const simBox = h('div', {});
   const file = h('input', { type: 'file', name: 'file', accept: 'image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt' });
   const submit = h('button', { type: 'submit', class: 'btn btn-primary btn-big' }, 'Отправить');
   const form = h('form', { class: 'card' },
     h('div', { class: 'type-switch' }, btnProblem, btnIdea),
     h('div', { class: 'row' }, h('div', { class: 'spacer' }, text), mic),
     h('div', { class: 'mt8' }, field('Фото или файл (необязательно)', file)),
+    simBox,
     submit,
     me ? h('div', { class: 'hint mt8' }, 'Вы вошли как ' + me.name + ' — обращение будет привязано к вам и даст баллы.')
        : h('div', { class: 'hint mt8' }, 'Без входа обращение анонимное. Категорию и ответственного подставит ИИ (без ключа — словарь ключевых слов).'));
@@ -31,6 +35,20 @@
 
   form.addEventListener('submit', async ev => {
     ev.preventDefault();
+    if (!anyway && !similarShown && text.value.trim().length >= 8) {
+      submit.disabled = true;
+      try {
+        const r = await API.post('/api/public/similar', { text: text.value });
+        if (r.items.length) {
+          similarShown = true;
+          simBox.replaceChildren(similarBlock(r, { canSupport: !!me, onAnyway: () => { anyway = true; simBox.replaceChildren(); form.requestSubmit(); },
+            onSupported: i => { root.replaceChildren(h('div', { class: 'wrap' }, h('div', { class: 'card card-ok' }, h('div', { class: 'h1' }, 'Спасибо — учтено'), h('p', {}, 'Вы поддержали обращение ' + i.number + ': автор получил +2 балла, а ответственный видит, что проблема повторяется.'), h('a', { href: '/app#/appeal/' + i.id, class: 'btn btn-primary' }, 'Открыть ' + i.number)), h('a', { href: location.pathname, class: 'btn btn-outline' }, 'Отправить своё обращение'))); } }));
+          submit.disabled = false;
+          return;
+        }
+      } catch (e) { /* похожие не нашлись или сервис недоступен — отправляем как есть */ }
+      submit.disabled = false;
+    }
     const fd = new FormData();
     fd.set('type', type); fd.set('text', text.value); fd.set('branch_code', branch.code);
     if (file.files && file.files[0]) fd.set('file', file.files[0]);

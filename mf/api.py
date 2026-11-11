@@ -14,7 +14,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
 from . import ai, appeals, auth, db, meetings, realtime
-from .ai import llm, stt
+from .ai import llm, similar, stt
 from .config import LLM_MODEL, PUBLIC_URL, UPLOAD_DIR
 
 router = APIRouter()
@@ -43,6 +43,7 @@ class RateLimit:
 
 
 qr_limit = RateLimit(10, 600)
+stt_limit = RateLimit(20, 600)
 
 
 def client_ip(request: Request) -> str:
@@ -517,3 +518,86 @@ async def accept_idea(item_id: int, body: Accept, request: Request):
 @router.post("/director/ideas/{item_id}/reject")
 async def reject_idea(item_id: int, body: Reject, request: Request):
     return meetings.reject_idea(item_id, auth.require(request, "director", "admin"), body.reason)
+
+
+# ---------- этап 3: голос, черновик ИИ, похожие обращения, кластеры ----------
+
+async def _transcribe_upload(audio: UploadFile | None, language: str | None) -> dict:
+    """Аудио → текст тем же адаптером, что и совещания; файл живёт только на время расшифровки."""
+    if not audio or not audio.filename:
+        raise HTTPException(422, "Нет аудио")
+    data = await audio.read(MAX_AUDIO + 1)
+    if len(data) > MAX_AUDIO:
+        raise HTTPException(413, "Запись больше 60 МБ")
+    if len(data) < 1000:
+        raise HTTPException(422, "Запись пустая — попробуйте ещё раз")
+    mime = (audio.content_type or "").split(";")[0].strip()
+    ext = AUDIO_EXT.get(mime) or Path(audio.filename).suffix.lower()[:6] or ".bin"
+    path = meetings.AUDIO_DIR / f"v-{secrets.token_hex(8)}{ext}"
+    path.write_bytes(data)
+    import asyncio
+    try:
+        r = await asyncio.to_thread(stt.transcribe, path, (language or "").strip() or None)
+    except stt.STTError as e:
+        raise HTTPException(503, f"Распознавание речи недоступно: {e}")
+    finally:
+        path.unlink(missing_ok=True)
+    return {"text": r["text"].replace("\n", " ").strip(), "language": r.get("language"), "engine": r["engine"], "seconds": r.get("seconds")}
+
+
+@router.post("/stt")
+async def stt_app(request: Request, audio: UploadFile | None = File(None), language: str = Form("")):
+    auth.require(request)
+    return await _transcribe_upload(audio, language)
+
+
+@router.post("/public/stt")
+async def stt_public(request: Request, audio: UploadFile | None = File(None), language: str = Form("")):
+    """Голосовой ввод в QR-форме без входа: ограничение частоты по IP, аудио удаляется сразу."""
+    stt_limit.check(client_ip(request))
+    return await _transcribe_upload(audio, language)
+
+
+class Draft(BaseModel):
+    text: str
+    type: str | None = None
+
+
+@router.post("/ai/draft")
+async def ai_draft(body: Draft, request: Request):
+    """Черновик ИИ по схеме «Структурирование обращения» (ТЗ §7); без ключа — словарь: категория есть, сути и вопроса нет."""
+    auth.require(request)
+    text = (body.text or "").strip()
+    if len(text) < 5:
+        raise HTTPException(422, "Напишите хотя бы несколько слов")
+    return await classify(text, body.type)
+
+
+class SimilarQ(BaseModel):
+    text: str
+    exclude_id: int | None = None
+
+
+@router.post("/ai/similar")
+async def ai_similar(body: SimilarQ, request: Request):
+    auth.require(request)
+    import asyncio
+    return await asyncio.to_thread(similar.similar, body.text, body.exclude_id)
+
+
+@router.post("/public/similar")
+async def public_similar(body: SimilarQ, request: Request):
+    """«Похоже, об этом уже сообщали» в QR-форме: номер и короткий текст, без авторов; максимум два."""
+    import asyncio
+    r = await asyncio.to_thread(similar.similar, body.text, None, 2)
+    for i in r["items"]:
+        i.pop("supports", None)
+    r["logged_in"] = auth.current(request) is not None
+    return r
+
+
+@router.get("/panel/clusters")
+async def panel_clusters(request: Request):
+    auth.require(request, *appeals.STAFF)
+    import asyncio
+    return await asyncio.to_thread(similar.clusters)

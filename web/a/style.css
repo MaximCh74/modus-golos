@@ -202,3 +202,8 @@ details.card > summary { cursor: pointer; font-weight: 700; color: var(--navy); 
   .tracker .step { font-size: 10px; padding: 22px 1px 0; }
   .grid2 .btn-big { padding: 14px 10px; font-size: 16px; }
 }
+.mic.recording { background: var(--red); color: #fff; border-color: var(--red); font-size: 13px; font-weight: 700; animation: pulse 1s infinite; }
+@keyframes pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(228, 0, 0, .35); } 50% { box-shadow: 0 0 0 8px rgba(228, 0, 0, 0); } }
+.cluster { padding: 10px 0; border-bottom: 1px solid var(--line-soft); }
+.cluster:last-child { border-bottom: 0; }
+.cluster .nums a { margin-right: 6px; font-weight: 600; }

@@ -97,3 +97,57 @@ function toast(msg, kind) {
 }
 function qs(name) { return new URLSearchParams(location.search).get(name); }
 function field(label, input, hint) { return h('label', { class: 'field' }, h('span', {}, label), input, hint ? h('div', { class: 'hint' }, hint) : null); }
+
+// Голосовой ввод (этап 3): кнопка-микрофон → MediaRecorder → /api/stt (или /api/public/stt без входа) → текст в поле.
+const Voice = {
+  pick() { return ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus', ''].find(m => !m || (window.MediaRecorder && MediaRecorder.isTypeSupported(m))); },
+  supported() { return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder); },
+  attach(btn, textarea, opts) {
+    opts = opts || {};
+    let rec = null, chunks = [], stream = null, timer = null, t0 = 0;
+    const idle = () => { btn.textContent = '🎤'; btn.classList.remove('recording'); btn.disabled = false; btn.title = 'Голосовой ввод: нажмите и говорите, нажмите ещё раз — стоп'; };
+    if (!this.supported()) { btn.disabled = true; btn.title = 'Голосовой ввод доступен по HTTPS (адрес туннеля) или на localhost'; return; }
+    idle();
+    btn.addEventListener('click', async () => {
+      if (rec && rec.state === 'recording') { clearInterval(timer); rec.stop(); btn.disabled = true; btn.textContent = '…'; return; }
+      try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); } catch (e) { toast('Нет доступа к микрофону: ' + e.message, 'bad'); return; }
+      const mime = this.pick();
+      rec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+      chunks = [];
+      rec.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
+      rec.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        const blob = new Blob(chunks, { type: rec.mimeType || 'audio/webm' });
+        const ext = (rec.mimeType || '').includes('mp4') ? 'm4a' : (rec.mimeType || '').includes('ogg') ? 'ogg' : 'webm';
+        const fd = new FormData();
+        fd.set('audio', new File([blob], 'voice.' + ext, { type: blob.type }));
+        try {
+          const r = await API.postForm(opts.public ? '/api/public/stt' : '/api/stt', fd);
+          if (r.text) { textarea.value = (textarea.value ? textarea.value.trim() + ' ' : '') + r.text; textarea.dispatchEvent(new Event('input')); if (opts.onText) opts.onText(r.text, r); }
+          else toast('Речь не распознана — попробуйте ещё раз', 'bad');
+        } catch (e) { toast(e.message, 'bad'); }
+        idle();
+      };
+      rec.start(1000);
+      t0 = Date.now();
+      btn.classList.add('recording');
+      timer = setInterval(() => { const s = Math.round((Date.now() - t0) / 1000); btn.textContent = '■ ' + s; }, 500);
+      btn.textContent = '■ 0';
+      btn.title = 'Идёт запись — нажмите, чтобы остановить';
+    });
+  },
+};
+
+// Блок «Похоже, об этом уже сообщали» (этап 3): перед отправкой — похожие открытые обращения.
+function similarBlock(r, opts) {
+  opts = opts || {};
+  const note = r.engine === 'embeddings' ? 'сходство по смыслу (ИИ)' : 'по ключевым словам (без ИИ)';
+  const items = r.items.map(i => h('div', { class: 'item' },
+    h('div', { class: 'row' }, h('b', {}, i.number), i.category ? h('span', { class: 'small muted' }, i.category) : null, h('span', { class: 'small muted' }, Math.round(i.score * 100) + ' %'),
+      h('div', { class: 'spacer' }),
+      opts.canSupport ? h('button', { class: 'btn btn-sm', onclick: async ev => { ev.preventDefault(); try { await API.post('/api/appeals/' + i.id + '/support'); toast('«У меня так же» учтено — автору ' + i.number + ' начислены баллы'); if (opts.onSupported) opts.onSupported(i); } catch (e) { toast(e.message, 'bad'); } } }, '👍 У меня так же') : null),
+    h('div', { class: 'small' }, i.text)));
+  return h('div', { class: 'card card-warn' }, h('b', {}, 'Похоже, об этом уже сообщали'), h('div', { class: 'hint' }, note + '. Если это то же самое — отметьте «У меня так же» вместо нового обращения' + (opts.canSupport ? '' : ' (нужен вход)') + '.'),
+    h('div', { class: 'list mt8' }, items),
+    h('div', { class: 'row mt8' }, h('button', { class: 'btn btn-outline', onclick: ev => { ev.preventDefault(); if (opts.onAnyway) opts.onAnyway(); } }, 'Всё равно отправить')));
+}

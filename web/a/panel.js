@@ -214,10 +214,19 @@ async function summary() {
       h('tbody', {}, d.by_branch.map(b => h('tr', { onclick: () => { S.filters = { branch_id: b.id }; location.hash = '#/queue'; } },
         h('td', {}, b.name), h('td', {}, b.total), h('td', {}, b.open), h('td', {}, b.overdue ? tag('tag-overdue', String(b.overdue)) : '0'),
         h('td', {}, pct(b.considered_share)), h('td', {}, fmtHours(b.avg_first_response_hours)), h('td', {}, b.done_total), h('td', { class: 'small' }, b.top_category || '—'))))));
-  const cats = h('div', { class: 'card' }, h('b', {}, 'Открытые обращения по категориям'), h('div', { class: 'hint' }, 'Кластеры «Повторяющиеся темы» (ИИ) — этап 3.'),
+  const clustersBox = h('div', { class: 'card' }, h('b', {}, 'Повторяющиеся темы'), h('div', { class: 'hint' }, 'Считаем…'));
+  API.get('/api/panel/clusters').then(c => {
+    const note = c.engine === 'embeddings' ? 'кластеры по смыслу (эмбеддинги ИИ), порог ' + c.threshold : 'по ключевым словам (без ИИ), порог ' + c.threshold;
+    clustersBox.replaceChildren(h('b', {}, 'Повторяющиеся темы'), h('div', { class: 'hint' }, 'Группы из двух и более открытых обращений об одном и том же — ' + note + '. Открытых всего: ' + c.open_total + '.'),
+      c.clusters.length ? h('div', { class: 'mt8' }, c.clusters.map(k => h('div', { class: 'cluster' },
+        h('div', { class: 'row' }, h('b', {}, k.size + ' обращения'), k.category ? tag('tag-type', k.category) : null, k.supports ? h('span', { class: 'small muted' }, '👍 ' + k.supports) : null, h('div', { class: 'spacer' }), h('span', { class: 'small muted' }, k.branches.join(' · '))),
+        h('div', { class: 'small' }, k.label),
+        h('div', { class: 'small nums mt8' }, k.items.map(i => h('a', { href: '#/appeal/' + i.id }, i.number)))))) : h('div', { class: 'muted small mt8' }, 'Повторов не найдено'));
+  }).catch(e => clustersBox.replaceChildren(h('b', {}, 'Повторяющиеся темы'), h('div', { class: 'card-bad small' }, e.message)));
+  const cats = h('div', { class: 'card' }, h('b', {}, 'Открытые обращения по категориям'),
     h('div', { class: 'list mt8' }, d.top_categories.map(c => h('div', { class: 'item', onclick: () => { const id = (DICTS.categories.find(x => x.name === c.category) || {}).id; S.filters = { category_id: id, open: true }; location.hash = '#/queue'; } }, h('div', { class: 'row' }, c.category, h('div', { class: 'spacer' }), h('b', {}, String(c.open)))))));
   const check = ME.role !== 'responsible' ? h('button', { class: 'btn btn-sm', onclick: async () => { const r = await API.post('/api/panel/check-overdue'); toast(r.escalated.length ? 'Эскалировано: ' + r.escalated.join(', ') : 'Новых просрочек нет'); summary(); } }, 'Проверить просрочки сейчас') : null;
-  root.replaceChildren(h('div', { class: 'wrap wrap-wide' }, h('div', { class: 'row' }, h('div', { class: 'h1' }, 'Сводка'), h('div', { class: 'spacer' }), check), kpis, h('div', { class: 'split mt16' }, h('div', {}, branches, cats), byType)));
+  root.replaceChildren(h('div', { class: 'wrap wrap-wide' }, h('div', { class: 'row' }, h('div', { class: 'h1' }, 'Сводка'), h('div', { class: 'spacer' }), check), kpis, h('div', { class: 'split mt16' }, h('div', {}, branches, clustersBox, cats), byType)));
 }
 
 async function notifications() {

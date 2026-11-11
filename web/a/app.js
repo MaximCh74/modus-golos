@@ -109,17 +109,58 @@ async function newAppeal(startType) {
   const anon = h('input', { type: 'checkbox' });
   const file = h('input', { type: 'file', accept: 'image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt' });
   const submit = h('button', { type: 'submit', class: 'btn btn-primary btn-big' }, 'Отправить');
+  const mic = h('button', { type: 'button', class: 'btn mic' }, '🎤');
+  const draftBox = h('div', {});
+  const simBox = h('div', {});
+  let similarShown = false, anyway = false;
+  const setType = code => { type = code; for (const k in btns) btns[k].classList.toggle('on', k === code); };
+  const draftBtn = h('button', { type: 'button', class: 'btn btn-sm', onclick: () => draft() }, '✨ Черновик ИИ');
+  async function draft() {
+    if (text.value.trim().length < 5) { toast('Сначала опишите, что происходит', 'bad'); return; }
+    draftBtn.disabled = true;
+    try {
+      const d = await API.post('/api/ai/draft', { text: text.value, type });
+      if (d.type && ['problem', 'suggestion', 'praise'].includes(d.type)) setType(d.type);
+      if (d.category_id) cat.value = String(d.category_id);
+      if (d.priority) prio.value = d.priority;
+      if (d.proposed_solution && !sol.value.trim()) sol.value = d.proposed_solution;
+      const ai = d.engine === 'openai';
+      draftBox.replaceChildren(h('div', { class: 'card card-info small' }, h('b', {}, ai ? 'Черновик ИИ' : 'Черновик без ИИ (словарь ключевых слов)'),
+        d.summary ? h('div', { class: 'mt8' }, 'Суть: ' + d.summary) : null,
+        h('div', { class: 'mt8' }, 'Категория: ' + (d.category || 'не определена — выберите сами') + (d.confidence ? ' (' + Math.round(d.confidence * 100) + ' %)' : '') + ' · приоритет: ' + (PRIO[d.priority] || '—') + ' · тип: ' + (TYPES[d.type] || '—')),
+        d.clarifying_question ? h('div', { class: 'mt8' }, h('b', {}, 'Уточните сразу: '), d.clarifying_question) : null,
+        h('div', { class: 'hint mt8' }, 'Поля подставлены — проверьте и поправьте перед отправкой.')));
+    } catch (e) { toast(e.message, 'bad'); }
+    draftBtn.disabled = false;
+  }
+  Voice.attach(mic, text, { onText: () => draft() });
   const form = h('form', { class: 'card' },
     switchEl,
-    h('div', { class: 'row' }, h('div', { class: 'spacer' }, text), h('button', { type: 'button', class: 'btn mic', disabled: true, title: 'Голосовой ввод и черновик ИИ — этап 3' }, '🎤')),
+    h('div', { class: 'row' }, h('div', { class: 'spacer' }, text), mic),
+    h('div', { class: 'row mb8' }, draftBtn, h('span', { class: 'hint' }, 'голос → текст → ИИ подставит категорию, приоритет и решение')),
+    draftBox,
     field('Предлагаемое решение', sol),
     h('div', { class: 'grid2' }, field('Категория', cat, 'Если не выбрать — категорию подставит ИИ (без ключа — словарь ключевых слов)'), field('Приоритет', prio)),
     field('Вложение (необязательно)', file),
     h('label', { class: 'check mb8' }, anon, 'Анонимно', h('span', { class: 'hint' }, '— анонимные обращения не дают баллов')),
-    h('div', { class: 'card card-info small' }, 'Блок «Похоже, об этом уже сообщали» (поиск похожих обращений) — этап 3.'),
+    simBox,
     submit);
   form.addEventListener('submit', async ev => {
     ev.preventDefault();
+    if (!anyway && !similarShown && type !== 'praise' && text.value.trim().length >= 8) {
+      submit.disabled = true;
+      try {
+        const r = await API.post('/api/ai/similar', { text: text.value });
+        if (r.items.length) {
+          similarShown = true;
+          simBox.replaceChildren(similarBlock(r, { canSupport: true, onAnyway: () => { anyway = true; simBox.replaceChildren(); form.requestSubmit(); },
+            onSupported: i => { location.hash = '#/appeal/' + i.id; } }));
+          submit.disabled = false;
+          return;
+        }
+      } catch (e) { /* сервис похожих недоступен — отправляем как есть */ }
+      submit.disabled = false;
+    }
     const fd = new FormData();
     fd.set('type', type); fd.set('text', text.value); fd.set('proposed_solution', sol.value);
     fd.set('category_id', cat.value); fd.set('priority', prio.value); fd.set('is_anonymous', anon.checked ? '1' : '0');
