@@ -24,7 +24,7 @@ async function meetingStart(opts) {
   const canRecord = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder);
   const recBtn = h('button', { class: 'btn btn-primary btn-big', disabled: !canRecord }, '● Начать запись');
   const file = h('input', { type: 'file', accept: 'audio/*,video/webm,video/mp4,.m4a,.mp3,.wav,.ogg,.webm,.opus', class: 'hidden' });
-  const uploadBtn = h('button', { class: 'btn btn-big', onclick: () => file.click() }, 'Загрузить аудио');
+  const uploadBtn = h('button', { class: 'btn btn-outline btn-big', onclick: () => file.click() }, 'Загрузить аудио');
   const ta = h('textarea', { placeholder: 'Вставьте текст расшифровки — для отладки без микрофона. Формат «Имя: реплика» помогает разбору.' });
   const textBtn = h('button', { class: 'btn btn-sm btn-primary', onclick: () => submitMeeting({ title: title.value, transcript: ta.value }, opts) }, 'Разобрать текст');
   const demoBtn = h('button', { class: 'btn btn-sm', onclick: () => { ta.value = DEMO_TRANSCRIPT; } }, 'Подставить демо-планёрку из ТЗ §10');

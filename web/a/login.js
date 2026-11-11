@@ -7,7 +7,7 @@
   const order = ['employee', 'responsible', 'director', 'admin'];
   const names = { employee: 'Сотрудники', responsible: 'Ответственные', director: 'Директор', admin: 'Администратор' };
   const page = h('div', { class: 'wrap' },
-    h('div', { class: 'h1' }, 'Войти как…'),
+    h('div', { class: 'hero dots' }, h('a', { href: '/', class: 'brand' }, h('img', { src: '/a/img/logo.svg', alt: 'Модус Трейд' })), h('div', { class: 'lbl mt16' }, 'Обратная связь · демо'), h('div', { class: 'h1' }, 'Войти как…')),
     h('p', { class: 'muted small' }, 'Демо-вход без паролей. Все пользователи вымышленные.'),
     me ? h('div', { class: 'card card-info row' }, 'Сейчас вы — ', h('b', {}, me.name), h('div', { class: 'spacer' }),
       h('a', { href: me.role === 'employee' ? '/app' : '/panel', class: 'btn btn-sm' }, 'Продолжить'),
@@ -19,6 +19,7 @@
       h('div', { class: 'user-card', onclick: () => loginAs(u) },
         h('b', {}, u.name), h('div', { class: 'small' }, u.position || ''), h('div', { class: 'small muted' }, [u.branch, u.department].filter(Boolean).join(' · '))))));
   }
+  page.append(h('div', { class: 'dev' }, 'разработано ', h('b', {}, 'Cyber QALQAN Systems'), ' · демо-вход без паролей, в пилоте — Битрикс24 или корпоративная учётка'));
   root.replaceChildren(page);
 
   async function loginAs(u) {

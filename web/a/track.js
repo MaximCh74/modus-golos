@@ -31,7 +31,7 @@
       });
     }
     root.replaceChildren(h('div', { class: 'wrap' },
-      h('div', { class: 'hero' }, h('div', { class: 'brand' }, 'Обратная связь', h('small', {}, 'ГК «Модус Трейд» · статус обращения'))),
+      h('div', { class: 'hero' }, h('div', { class: 'brand' }, h('img', { src: '/a/img/logo.svg', alt: 'Модус Трейд' })), h('div', { class: 'lbl mt16' }, 'Статус обращения')),
       card, result, answer,
       h('div', { class: 'card' }, h('div', { class: 'h2' }, 'История'), history(a.events)),
       h('p', { class: 'hint' }, 'Сохраните эту ссылку — без входа она единственный способ увидеть ответ. ', h('a', { href: '/login?next=' + encodeURIComponent('/app') }, 'Войти в приложение'))));

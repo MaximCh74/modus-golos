@@ -26,7 +26,7 @@
   btnIdea.addEventListener('click', () => { type = 'suggestion'; btnIdea.classList.add('on'); btnProblem.classList.remove('on'); });
 
   root.replaceChildren(h('div', { class: 'wrap' },
-    h('div', { class: 'hero' }, h('div', { class: 'brand' }, 'Обратная связь', h('small', {}, 'ГК «Модус Трейд» · демо')), h('div', { class: 'h1' }, 'Филиал: ' + branch.name)),
+    h('div', { class: 'hero dots' }, h('div', { class: 'brand' }, h('img', { src: '/a/img/logo.svg', alt: 'Модус Трейд' })), h('div', { class: 'lbl mt16' }, 'Обратная связь'), h('div', { class: 'h1' }, 'Филиал: ' + branch.name)),
     form));
 
   form.addEventListener('submit', async ev => {
@@ -48,7 +48,7 @@
           h('p', { class: 'hint' }, 'Сохраните ссылку: ', h('code', {}, location.origin + r.track_url), r.logged_in ? '' : ' — без входа это единственный способ увидеть ответ.'),
           r.logged_in ? h('p', { class: 'small' }, 'Обращение привязано к вам: ', h('a', { href: '/app#/appeal/' + r.id }, 'открыть в приложении'))
                       : h('p', { class: 'small' }, h('a', { href: '/login?next=' + encodeURIComponent('/app') }, 'Войти, чтобы получать баллы за идеи'))),
-        h('a', { href: location.pathname, class: 'btn' }, 'Отправить ещё одно')));
+        h('a', { href: location.pathname, class: 'btn btn-outline' }, 'Отправить ещё одно')));
     } catch (e) { toast(e.message, 'bad'); submit.disabled = false; }
   });
 })();

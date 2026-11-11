@@ -38,7 +38,7 @@ function renderTop() {
   if (ME.role !== 'responsible') nav.push(['#/decisions', 'На решение']);
   if (ME.role === 'admin') nav.push(['#/admin', 'Администрирование']);
   top.replaceChildren(
-    h('a', { href: '#/queue', class: 'brand' }, 'Панель', h('small', {}, 'ГК «Модус Трейд» · обратная связь · демо')),
+    h('a', { href: '#/queue', class: 'brand' }, h('img', { src: '/a/img/logo.svg', alt: 'Модус Трейд' }), h('span', {}, 'Панель', h('small', {}, 'обратная связь · демо'))),
     h('div', { class: 'nav' }, nav.map(([href, label]) => h('a', { href, class: hash.startsWith(href) || (href === '#/queue' && hash.startsWith('#/appeal')) ? 'active' : '' }, label))),
     h('div', { class: 'spacer' }),
     h('a', { href: '#/notifications', class: 'btn btn-sm bell' }, '🔔', ME.unread ? h('span', { class: 'n' }, String(ME.unread)) : null),

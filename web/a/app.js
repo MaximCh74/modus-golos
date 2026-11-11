@@ -26,7 +26,7 @@ function renderTop() {
   let top = document.getElementById('top');
   if (!top) { top = h('div', { class: 'topbar', id: 'top' }); document.body.prepend(top); }
   top.replaceChildren(
-    h('a', { href: '#/', class: 'brand' }, 'Обратная связь', h('small', {}, 'ГК «Модус Трейд» · демо')),
+    h('a', { href: '#/', class: 'brand' }, h('img', { src: '/a/img/logo.svg', alt: 'Модус Трейд' }), h('span', {}, 'Обратная связь', h('small', {}, 'демо'))),
     h('div', { class: 'spacer' }),
     h('span', { class: 'small muted' }, '⭐ ' + (ME.points || 0)),
     h('a', { href: '#/notifications', class: 'btn btn-sm bell', title: 'Уведомления' }, '🔔', ME.unread ? h('span', { class: 'n' }, String(ME.unread)) : null),
@@ -85,11 +85,11 @@ async function home() {
   root.replaceChildren(h('div', { class: 'wrap' }, decisions,
     h('div', { class: 'grid2' },
       h('a', { href: '#/new?type=problem', class: 'btn btn-primary btn-big' }, 'Сообщить о проблеме'),
-      h('a', { href: '#/new?type=suggestion', class: 'btn btn-primary btn-big' }, 'Предложить улучшение')),
+      h('a', { href: '#/new?type=suggestion', class: 'btn btn-outline btn-big' }, 'Предложить улучшение')),
     h('div', { class: 'row mt8' }, h('a', { href: '#/new?type=praise', class: 'btn btn-sm' }, 'Сказать спасибо'), h('div', { class: 'spacer' }),
       h('a', { href: '#/points', class: 'small' }, 'Мои баллы: ', h('b', {}, String(pts.balance)))),
     tabs(null),
-    h('div', { class: 'h2' }, 'Мои обращения'),
+    h('div', { class: 'lbl mt16' }, 'Мои обращения'),
     h('div', { class: 'card list' }, mine.length ? mine.map(item) : h('div', { class: 'muted' }, 'Пока нет обращений — нажмите одну из кнопок выше.'))));
 }
 
