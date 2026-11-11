@@ -3,12 +3,14 @@
 (async function () {
   const root = document.getElementById('root');
   const next = qs('next') || '';
-  const [users, me] = await Promise.all([API.get('/api/auth/users'), API.me()]);
+  const [users, me, cfg] = await Promise.all([API.get('/api/auth/users'), API.me(), API.get('/api/public/config').catch(() => ({}))]);
   const order = ['employee', 'responsible', 'director', 'admin'];
   const names = { employee: 'Сотрудники', responsible: 'Ответственные', director: 'Директор', admin: 'Администратор' };
   const page = h('div', { class: 'wrap' },
     h('div', { class: 'hero dots' }, h('a', { href: '/', class: 'brand' }, h('img', { src: '/a/img/logo.svg', alt: 'Модус Трейд' })), h('div', { class: 'lbl mt16' }, 'Обратная связь · демо'), h('div', { class: 'h1' }, 'Войти как…')),
-    h('p', { class: 'muted small' }, 'Демо-вход без паролей. Все пользователи вымышленные.'),
+    cfg.bitrix ? h('div', { class: 'card card-info' }, h('div', { class: 'row' }, h('div', {}, h('b', {}, 'Сотрудникам компании'), h('div', { class: 'small muted' }, 'Вход учётной записью портала ' + (cfg.bitrix_portal || 'Битрикс24') + '; внутри портала пункт «Обратная связь» открывается без входа.')),
+      h('div', { class: 'spacer' }), h('a', { href: cfg.bitrix_login + (next ? '?next=' + encodeURIComponent(next) : ''), class: 'btn btn-primary' }, iconText('log-in', 'Войти через Битрикс24')))) : null,
+    h('p', { class: 'muted small' }, cfg.bitrix ? 'Запасной демо-вход без паролей. Все пользователи вымышленные.' : 'Демо-вход без паролей. Все пользователи вымышленные.'),
     me ? h('div', { class: 'card card-info row' }, 'Сейчас вы — ', h('b', {}, me.name), h('div', { class: 'spacer' }),
       h('a', { href: me.role === 'employee' ? '/app' : '/panel', class: 'btn btn-sm' }, 'Продолжить'),
       h('button', { class: 'btn btn-sm', onclick: async () => { await API.post('/api/auth/logout'); location.reload(); } }, 'Выйти')) : null);

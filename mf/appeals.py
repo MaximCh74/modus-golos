@@ -9,6 +9,7 @@ from datetime import timedelta
 from fastapi import HTTPException
 
 from . import db, realtime
+from .integrations import bitrix
 
 STATUSES = {
     "new": "Новое", "review": "На рассмотрении", "clarify": "Ожидает уточнения", "in_progress": "В работе",
@@ -33,7 +34,8 @@ DEFAULT_POINTS = {"accepted": 10, "done": 50, "support": 2, "support_cap": 20}
 POINT_REASONS = {"accepted": "принято к рассмотрению", "done": "реализовано", "support": "«У меня так же» от коллеги"}
 DEFAULT_SLA = 48
 PUBLIC_EVENT_KINDS = ("created", "assigned", "status_changed", "comment", "clarification_requested",
-                      "clarification_answered", "discussed_at_meeting", "supported", "director_requested", "director_decided", "progress", "thanked", "priority_changed")
+                      "clarification_answered", "discussed_at_meeting", "supported", "director_requested", "director_decided", "progress", "thanked", "priority_changed",
+                      "director_requested_news")
 DIRECTOR_DECISIONS = {"pending": "На решении", "accepted": "Принято", "rejected": "Отклонено"}
 # Оценка автора (этап 4): один необязательный вопрос вместо «выберите приоритет» — итоговый приоритет ставит система с ответственным
 URGENCY = {"now": "Прямо сейчас мешает", "workaround": "Мешает, но обхожусь", "minor": "Мелочь"}
@@ -204,6 +206,10 @@ def notify(user_id: int | None, text: str, link: str | None = None) -> None:
         return
     nid = db.ex("INSERT INTO notifications(user_id, text, link, created_at) VALUES(?,?,?,?)", (user_id, text, link, db.now_iso()))
     realtime.publish(user_id, {"type": "notification", "id": nid, "text": text, "link": link})
+    try:
+        bitrix.notify(user_id, text, link)   # дубль в чат Битрикс24, если интеграция настроена и сотрудник сопоставлен (этап 6 §1)
+    except Exception:   # noqa: BLE001
+        pass
 
 
 def admins() -> list[int]:

@@ -91,6 +91,8 @@ MIGRATIONS = [
     ("appeals", "last_news_at", "TEXT"), ("appeals", "news_reminded_at", "TEXT"), ("appeals", "input_mode", "TEXT"),
     ("users", "avatar", "TEXT"),
     ("reward_claims", "comment", "TEXT"), ("reward_claims", "decided_at", "TEXT"), ("reward_claims", "decided_by", "INTEGER"),
+    # этап 6: Битрикс24 (сопоставление сотрудников по ID или почте, поручение → задача), команды директора
+    ("users", "bitrix_id", "INTEGER"), ("users", "email", "TEXT"), ("meeting_items", "bitrix_task_id", "INTEGER"),
 ]
 
 _conn: sqlite3.Connection | None = None

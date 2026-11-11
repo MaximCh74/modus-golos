@@ -7,21 +7,25 @@ import os
 import threading
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from starlette.datastructures import MutableHeaders
 
-from . import api, appeals, db, meetings, seed
+from . import api, appeals, auth, db, meetings, seed
 from .ai import stt
 from .config import ROOT
+from .integrations import bitrix
 
 log = logging.getLogger("mf")
 WEB = ROOT / "web"
 # стили и скрипты только из файлов (без inline) — 'unsafe-inline' не нужен; blob: — для записи аудио (этап 2)
-CSP = ("default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; "
-       "connect-src 'self'; media-src 'self' blob:; worker-src 'self'; object-src 'none'; frame-ancestors 'none'; "
-       "base-uri 'self'; form-action 'self'")
+CSP_BASE = ("default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; "
+            "connect-src 'self'; media-src 'self' blob:; worker-src 'self'; object-src 'none'; frame-ancestors {frame}; "
+            "base-uri 'self'; form-action 'self'")
+CSP = CSP_BASE.format(frame="'none'")
+# страница установки приложения Битрикс24 грузит их JS SDK (BX24.installFinish) — только на этом маршруте
+CSP_BITRIX_INSTALL = CSP_BASE.format(frame="'self' " + bitrix.FRAME_ANCESTORS).replace("script-src 'self'", "script-src 'self' https://api.bitrix24.com")
 SECURITY_HEADERS = {
     "Content-Security-Policy": CSP,
     "X-Content-Type-Options": "nosniff",
@@ -30,6 +34,17 @@ SECURITY_HEADERS = {
     "Permissions-Policy": "camera=(self), microphone=(self), geolocation=(), payment=(), usb=()",   # микрофон — голосовой ввод
     "Cross-Origin-Opener-Policy": "same-origin",
 }
+
+
+def security_headers() -> dict:
+    """С настроенным Битрикс24 система открывается в iframe портала: frame-ancestors вместо 'none', X-Frame-Options снимается
+    (он не умеет список источников; современные браузеры и так предпочитают CSP)."""
+    if not bitrix.configured():
+        return SECURITY_HEADERS
+    h = {k: v for k, v in SECURITY_HEADERS.items() if k != "X-Frame-Options"}
+    h["Content-Security-Policy"] = CSP_BASE.format(frame="'self' " + bitrix.FRAME_ANCESTORS)
+    h["Cross-Origin-Opener-Policy"] = "unsafe-none"
+    return h
 PAGES = {"/": "index.html", "/login": "login.html", "/app": "app.html", "/panel": "panel.html"}
 
 
@@ -47,7 +62,7 @@ class Headers:
         async def send_wrapped(message):
             if message["type"] == "http.response.start":
                 headers = MutableHeaders(scope=message)
-                for k, v in SECURITY_HEADERS.items():
+                for k, v in security_headers().items():
                     if k not in headers:
                         headers.append(k, v)
                 if path.startswith("/a/") or not path.startswith("/api/"):
@@ -145,3 +160,105 @@ async def app_page(rest: str = ""):
 @app.get("/panel/{rest:path}")
 async def panel_page(rest: str = ""):
     return page("panel.html")
+
+
+# ---------- Битрикс24 (этап 6 §1): вход OAuth 2.0, приложение внутри портала, установка. Без настроек в .env — 404 ----------
+
+def _bitrix_required() -> None:
+    if not bitrix.configured():
+        raise HTTPException(404, "Битрикс24 не подключён: нет BITRIX_PORTAL / BITRIX_CLIENT_ID / BITRIX_CLIENT_SECRET в .env")
+
+
+def _home_for(user: dict) -> str:
+    return "/app" if user["role"] == "employee" else "/panel"
+
+
+async def _form(request: Request) -> dict:
+    try:
+        f = await request.form()
+        return {k: (v if isinstance(v, str) else "") for k, v in f.items()}
+    except Exception:   # noqa: BLE001 — не form-data
+        return {}
+
+
+@app.get("/bitrix/login")
+async def bitrix_login(next: str = ""):
+    """Снаружи: кнопка «Войти через Битрикс24» → страница авторизации портала (redirect_uri задан в настройках приложения: /bitrix/callback)."""
+    _bitrix_required()
+    return RedirectResponse(bitrix.authorize_url(next if next.startswith("/") else ""), status_code=302)
+
+
+@app.get("/bitrix/callback")
+async def bitrix_callback(request: Request, code: str = "", state: str = ""):
+    _bitrix_required()
+    next_url = bitrix.check_state(state)
+    if next_url is None or not code:
+        raise HTTPException(400, "Битрикс24: неверный или устаревший запрос входа — попробуйте ещё раз")
+    try:
+        user = await _run(bitrix.login_with_code, code)
+    except bitrix.BitrixError as e:
+        raise HTTPException(502, f"Битрикс24: {e}")
+    if not user:
+        return HTMLResponse(_not_mapped_page(), status_code=403)
+    auth.logout(request.cookies.get(auth.COOKIE))
+    resp = RedirectResponse(next_url or _home_for(user), status_code=302)
+    auth.set_cookie(resp, auth.login(user["id"]))
+    return resp
+
+
+@app.api_route("/bitrix/app", methods=["GET", "POST"])
+async def bitrix_app(request: Request):
+    """Внутри портала (iframe): Битрикс открывает этот адрес POST-ом с AUTH_ID и т. д. → сотрудник опознаётся автоматически."""
+    _bitrix_required()
+    form = await _form(request) if request.method == "POST" else {}
+    if request.method == "GET" and request.query_params.get("code") and request.query_params.get("state"):
+        # для локального приложения redirect_uri OAuth = «Путь обработчика», т. е. этот адрес; логика та же, что в /bitrix/callback
+        return await bitrix_callback(request, request.query_params["code"], request.query_params["state"])
+    if not form.get("AUTH_ID"):
+        user = auth.current(request)
+        if user:
+            return RedirectResponse(_home_for(user), status_code=302)
+        return HTMLResponse("<!doctype html><meta charset='utf-8'><link rel='stylesheet' href='/a/style.css'><div class='wrap'><div class='card card-info'>"
+                            "Откройте «Обратная связь» из левого меню Битрикс24 — вход произойдёт автоматически.</div></div>")
+    try:
+        user = await _run(bitrix.login_from_app, form)
+    except bitrix.BitrixError as e:
+        raise HTTPException(502, f"Битрикс24: {e}")
+    if not user:
+        return HTMLResponse(_not_mapped_page(), status_code=403)
+    auth.logout(request.cookies.get(auth.COOKIE))
+    resp = RedirectResponse(_home_for(user), status_code=303)
+    auth.set_cookie(resp, auth.login(user["id"]), cross_site=True)
+    return resp
+
+
+@app.api_route("/bitrix/install", methods=["GET", "POST"])
+async def bitrix_install(request: Request):
+    """«Путь для первоначальной установки»: сохраняем токены портала и отвечаем страницей с BX24.installFinish()."""
+    _bitrix_required()
+    form = await _form(request) if request.method == "POST" else {}
+    if form.get("event", "").upper() == "ONAPPINSTALL" or form.get("auth[access_token]"):
+        return bitrix.install_from_form(form)   # установка без интерфейса: ответ JSON, installFinish не нужен
+    if not form.get("AUTH_ID"):
+        raise HTTPException(400, "Этот адрес вызывает портал Битрикс24 при установке приложения")
+    bitrix.install_from_form(form)
+    try:
+        user = await _run(bitrix.login_from_app, form)
+    except bitrix.BitrixError:
+        user = None
+    resp = HTMLResponse(bitrix.INSTALL_PAGE, headers={"Content-Security-Policy": CSP_BITRIX_INSTALL})
+    if user:
+        auth.set_cookie(resp, auth.login(user["id"]), cross_site=True)
+    return resp
+
+
+async def _run(fn, *args):
+    import asyncio
+    return await asyncio.to_thread(fn, *args)
+
+
+def _not_mapped_page() -> str:
+    return ("<!doctype html><meta charset='utf-8'><link rel='stylesheet' href='/a/style.css'><div class='wrap'><div class='card card-warn'>"
+            "<div class='h1'>Учётная запись Битрикс24 не сопоставлена</div><p>В системе обратной связи нет сотрудника с таким ID, почтой или именем. "
+            "Попросите администратора указать почту или ID Битрикса в карточке сотрудника (Панель → Администрирование → Сотрудники).</p>"
+            "<a href='/login' class='btn'>Демо-вход</a></div></div>")

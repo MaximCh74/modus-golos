@@ -42,6 +42,14 @@ def login(user_id: int) -> str:
     return token
 
 
+def set_cookie(response, token: str, cross_site: bool = False) -> None:
+    """Сессионная cookie. cross_site=True — вход из iframe Битрикс24: браузер отдаёт cookie третьей стороне только с SameSite=None; Secure."""
+    if cross_site:
+        response.set_cookie(COOKIE, token, httponly=True, samesite="none", secure=True, max_age=30 * 86400, path="/")
+    else:
+        response.set_cookie(COOKIE, token, httponly=True, samesite="lax", max_age=30 * 86400, path="/")
+
+
 def logout(token: str | None) -> None:
     if token:
         db.ex("DELETE FROM sessions WHERE token=?", (token,))

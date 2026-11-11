@@ -15,6 +15,7 @@ from fastapi import HTTPException
 from . import appeals, db, realtime
 from .ai import fallback, llm, names, stt
 from . import config
+from .integrations import bitrix
 
 log = logging.getLogger("mf.meetings")
 
@@ -396,6 +397,9 @@ def send(meeting_id: int, user: dict) -> dict:
                 due = f" — срок {i['due_date']}" if i["due_date"] else " — срок не назван"
                 appeals.notify(i["assignee_id"], f"Поручение с совещания «{title}»: {appeals.short(i['text'], 90)}{due}", "/app#/tasks")
                 sent_tasks += 1
+                tid = bitrix.create_task(i["assignee_id"], appeals.short(i["text"], 120), f"Поручение с совещания «{title}».\n{i['text']}\n\n{config.PUBLIC_URL}/app#/tasks", i["due_date"])
+                if tid:   # по желанию (BITRIX_TASKS=1): поручение → задача Битрикса со ссылкой обратно
+                    db.ex("UPDATE meeting_items SET bitrix_task_id=? WHERE id=?", (tid, i["id"]))
         elif i["kind"] == "idea":
             db.ex("UPDATE meeting_items SET director_decision='pending' WHERE id=?", (i["id"],))
             for d in directors:
