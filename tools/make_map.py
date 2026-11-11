@@ -1,24 +1,30 @@
 #!/usr/bin/env python3
-"""Схематичная карта для панели директора: контуры стран из Natural Earth (public domain, 50m) в SVG без внешних тайлов
-(CSP без сторонних источников, работает офлайн). Проекция — равнопромежуточная, окно lon 44…92, lat 38…64 → 900×520.
+"""Схематичная карта для стартовой и панели директора: контуры стран из Natural Earth (public domain, 50m) в SVG без внешних
+тайлов (CSP без сторонних источников, работает офлайн). Рамка — полоса городов заказчика Самара — Тюмень — Омск — Астана — Павлодар
+с небольшим запасом (lon 45…82, lat 46.5…60.5; Атырау и объекты южнее ещё видны); страны целиком не рисуем — только то, что внутри рамки,
+контуры тонкие и спокойные. Проекция равнопромежуточная со сжатием по долготе cos(54°), чтобы фигуры не были растянуты.
 Запуск: python3 tools/make_map.py <ne_50m_admin_0_countries.geojson> > web/a/img/map.svg
-Маркеры рисует web/a/mapview.js той же проекцией (константы ниже должны совпадать с MAP в mapview.js)."""
+Маркеры рисует web/a/mapview.js в процентах той же рамки (константы MAP там должны совпадать с LON0/LON1/LAT0/LAT1)."""
 from __future__ import annotations
 
 import json
+import math
 import sys
 
-LON0, LON1, LAT0, LAT1 = 44.0, 92.0, 38.0, 64.0
-W, H = 900, 520
-HIGHLIGHT = {"Kazakhstan": "#e6edf6", "Russia": "#eef2f7"}
+LON0, LON1, LAT0, LAT1 = 45.0, 82.0, 46.5, 60.5
+W = 900
+KX = W / (LON1 - LON0)                      # px на градус долготы
+KY = KX / math.cos(math.radians(54.0))      # px на градус широты (средняя широта полосы — 54°)
+H = round((LAT1 - LAT0) * KY)
+LAND, WATER, LINE = "#f6f8fb", "#e9eff6", "#c3cbd6"
 
 
 def proj(lon: float, lat: float) -> tuple[float, float]:
-    return (lon - LON0) / (LON1 - LON0) * W, (LAT1 - lat) / (LAT1 - LAT0) * H
+    return (lon - LON0) * KX, (LAT1 - lat) * KY
 
 
 def clip(poly: list[tuple[float, float]]) -> list[tuple[float, float]]:
-    """Сазерленд — Ходжман: обрезка полигона прямоугольником окна (в координатах lon/lat)."""
+    """Сазерленд — Ходжман: обрезка полигона прямоугольником рамки (в координатах lon/lat)."""
     def inside(p, edge):
         k, v, sign = edge
         return (p[k] - v) * sign >= 0
@@ -63,10 +69,9 @@ def main() -> None:
             pts = [proj(x, y) for x, y in c]
             d.append("M" + " L".join(f"{x:.1f},{y:.1f}" for x, y in pts) + " Z")
         if d:
-            fill = HIGHLIGHT.get(name, "#f3f5f8")
-            paths.append(f'<path d="{" ".join(d)}" fill="{fill}" stroke="#c9d1dc" stroke-width="0.8"><title>{name}</title></path>')
+            paths.append(f'<path d="{" ".join(d)}" fill="{LAND}" stroke="{LINE}" stroke-width="0.7" stroke-linejoin="round"><title>{name}</title></path>')
     print(f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" width="{W}" height="{H}">')
-    print(f'<rect width="{W}" height="{H}" fill="#dde7f3"/>')
+    print(f'<rect width="{W}" height="{H}" fill="{WATER}"/>')
     print("\n".join(paths))
     print("</svg>")
 
