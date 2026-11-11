@@ -256,3 +256,23 @@ def map_data() -> dict:
         if key in CITY_COORDS:
             s["lat"], s["lng"] = CITY_COORDS[key]
     return {"branches": out_b, "sites": list(sites.values())}
+
+
+# ---------- озвучка сводки ----------
+
+def summary_audio(user: dict) -> tuple[bytes, str]:
+    """mp3 озвучки текущей сводки; кэш по хэшу текста в папке данных — повторные нажатия и reset не тратят вызовы."""
+    import os
+    from pathlib import Path
+    d = summary(user)
+    text = " ".join(s["text"] for s in d["sentences"])
+    key = hashlib.sha1((llm.TTS_MODEL + "|" + llm.TTS_VOICE + "|" + text).encode("utf-8")).hexdigest()[:16]
+    from . import config
+    cache = Path(config.DATA_DIR) / "tts"
+    cache.mkdir(exist_ok=True)
+    f = cache / f"{key}.mp3"
+    if f.is_file():
+        return f.read_bytes(), "cache"
+    audio = llm.speak(text)
+    f.write_bytes(audio)
+    return audio, "openai"

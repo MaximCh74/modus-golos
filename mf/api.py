@@ -790,6 +790,20 @@ async def director_summary(request: Request, refresh: str = "", engine: str = ""
     return await asyncio.to_thread(director.summary, user, parse_bool(refresh), engine == "template")
 
 
+@router.get("/panel/director-summary/audio")
+async def director_summary_audio(request: Request):
+    """Озвучка сводки через OpenAI TTS (кэш); без ключа — 503, фронт переключается на голос браузера."""
+    user = auth.require(request, *appeals.STAFF)
+    if not llm.available():
+        raise HTTPException(503, "Озвучка через OpenAI недоступна без ключа — используется голос браузера")
+    import asyncio
+    try:
+        audio, src = await asyncio.to_thread(director.summary_audio, user)
+    except Exception as e:   # noqa: BLE001
+        raise HTTPException(503, f"Озвучка недоступна: {e}"[:200])
+    return Response(audio, media_type="audio/mpeg", headers={"Cache-Control": "no-store", "X-TTS-Source": src})
+
+
 @router.get("/panel/map")
 async def panel_map(request: Request):
     auth.require(request, *appeals.STAFF)

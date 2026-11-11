@@ -228,3 +228,20 @@ def analyze_meeting(transcript: str, users: list[dict], open_appeals: list[dict]
     d["engine"] = ENGINE
     d["demo"] = False
     return d
+
+
+# ---------- озвучка (OpenAI TTS тем же ключом) ----------
+
+TTS_MODEL = os.environ.get("MF_TTS_MODEL", "gpt-4o-mini-tts")
+TTS_VOICE = os.environ.get("MF_TTS_VOICE", "alloy")
+
+
+def speak(text: str) -> bytes:
+    """Текст → mp3. Деловой спокойный тон; кэширует вызывающий код (один и тот же текст — один вызов)."""
+    if not available():
+        raise LLMError("OPENAI_API_KEY не задан")
+    kwargs = {"model": TTS_MODEL, "voice": TTS_VOICE, "input": text[:4000], "response_format": "mp3"}
+    if TTS_MODEL.startswith("gpt-4o"):
+        kwargs["instructions"] = "Деловой, спокойный тон, русский язык, без спешки. Это короткая сводка для директора компании."
+    r = _client().audio.speech.create(**kwargs)
+    return r.content

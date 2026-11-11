@@ -256,14 +256,14 @@ async function summary() {
 }
 
 function summaryBlockPanel(d) {
-  const canSpeak = !!(window.speechSynthesis && speechSynthesis.getVoices().some(v => v.lang && v.lang.toLowerCase().startsWith('ru')));
-  const speak = () => { const u = new SpeechSynthesisUtterance(d.sentences.map(s => s.text).join(' ')); u.lang = 'ru-RU'; const v = speechSynthesis.getVoices().find(v => v.lang && v.lang.toLowerCase().startsWith('ru')); if (v) u.voice = v; speechSynthesis.cancel(); speechSynthesis.speak(u); };
+  const speakBtn = h('button', { class: 'btn btn-sm', title: 'Озвучить сводку' }, '🔊 Озвучить');
+  speakBtn.addEventListener('click', () => speakSummary(speakBtn, d.sentences));
   const refreshBtn = h('button', { class: 'btn btn-sm', onclick: async () => { refreshBtn.disabled = true; try { await API.get('/api/panel/director-summary?refresh=1'); summary(); } catch (e) { toast(e.message, 'bad'); refreshBtn.disabled = false; } } }, '↻ Обновить');
   const tplBtn = d.engine === 'openai' ? h('button', { class: 'btn btn-sm', title: 'Показать шаблон без ИИ для сравнения', onclick: async () => { const t = await API.get('/api/panel/director-summary?engine=template'); const box = document.querySelector('.summary-ai'); if (box) box.replaceWith(summaryBlockPanel(t)); } }, 'шаблон') : null;
   const l = d.lines || {};
   const link = href => href && href.startsWith('/panel') ? href.slice(6) : href;
   return h('div', { class: 'card summary-ai mt16' },
-    h('div', { class: 'row' }, h('div', { class: 'lbl' }, 'Сводка для директора'), tag(d.engine === 'openai' ? 'tag-ai' : 'tag-demo', d.engine === 'openai' ? 'пересказ ИИ по фактам сервера' : 'шаблон без ИИ'), h('div', { class: 'spacer' }), h('span', { class: 'small muted' }, fmtDate(d.at)), canSpeak ? h('button', { class: 'btn btn-sm', onclick: speak }, '🔊 Озвучить') : null, tplBtn, refreshBtn),
+    h('div', { class: 'row' }, h('div', { class: 'lbl' }, 'Сводка для директора'), tag(d.engine === 'openai' ? 'tag-ai' : 'tag-demo', d.engine === 'openai' ? 'пересказ ИИ по фактам сервера' : 'шаблон без ИИ'), h('div', { class: 'spacer' }), h('span', { class: 'small muted' }, fmtDate(d.at)), speakBtn, tplBtn, refreshBtn),
     d.sentences.map(s => h('p', {}, s.href ? h('a', { href: link(s.href) }, s.text) : s.text)),
     h('div', { class: 'lines mt8' },
       l.urgent_open ? h('a', { href: '#/queue?open=1&urgency=now' }, tag('tag-flag', 'Мешают работать сейчас: ' + l.urgent_open)) : null,

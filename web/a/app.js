@@ -258,12 +258,12 @@ async function points() {
 // ---------- этап 4: сводка директора, профиль, награды, лига ----------
 
 function summaryBlock(d, refresh) {
-  const canSpeak = !!(window.speechSynthesis && speechSynthesis.getVoices().some(v => v.lang && v.lang.toLowerCase().startsWith('ru')));
-  const speak = () => { const u = new SpeechSynthesisUtterance(d.sentences.map(s => s.text).join(' ')); u.lang = 'ru-RU'; const v = speechSynthesis.getVoices().find(v => v.lang && v.lang.toLowerCase().startsWith('ru')); if (v) u.voice = v; speechSynthesis.cancel(); speechSynthesis.speak(u); };
+  const speakBtn = h('button', { class: 'btn btn-sm', title: 'Озвучить сводку' }, '🔊 Озвучить');
+  speakBtn.addEventListener('click', () => speakSummary(speakBtn, d.sentences));
   const refreshBtn = h('button', { class: 'btn btn-sm', onclick: async () => { refreshBtn.disabled = true; try { await API.get('/api/panel/director-summary?refresh=1'); refresh(); } catch (e) { toast(e.message, 'bad'); refreshBtn.disabled = false; } } }, '↻ Обновить');
   const l = d.lines || {};
   return h('div', { class: 'card summary-ai' },
-    h('div', { class: 'row' }, h('div', { class: 'lbl' }, 'Сводка'), tag(d.engine === 'openai' ? 'tag-ai' : 'tag-demo', d.engine === 'openai' ? 'пересказ ИИ по фактам' : 'шаблон без ИИ'), h('div', { class: 'spacer' }), h('span', { class: 'small muted' }, fmtDate(d.at)), canSpeak ? h('button', { class: 'btn btn-sm', onclick: speak }, '🔊 Озвучить') : null, refreshBtn),
+    h('div', { class: 'row' }, h('div', { class: 'lbl' }, 'Сводка'), tag(d.engine === 'openai' ? 'tag-ai' : 'tag-demo', d.engine === 'openai' ? 'пересказ ИИ по фактам' : 'шаблон без ИИ'), h('div', { class: 'spacer' }), h('span', { class: 'small muted' }, fmtDate(d.at)), speakBtn, refreshBtn),
     d.sentences.map(s => h('p', {}, s.href ? h('a', { href: s.href }, s.text) : s.text)),
     h('div', { class: 'lines mt8' },
       l.urgent_open ? h('a', { href: '/panel#/queue?open=1&urgency=now' }, tag('tag-flag', 'Мешают работать сейчас: ' + l.urgent_open)) : null,

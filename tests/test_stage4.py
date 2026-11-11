@@ -162,3 +162,9 @@ def test_rebrief_without_key(c):
     aid = nid("A-005")
     r = c.post(f"/api/panel/appeals/{aid}/rebrief").json()
     assert r["brief"]["gist"] and r["brief_engine"] == "keywords" and any(e["kind"] == "rebriefed" for e in r["events"])
+
+
+def test_summary_audio_without_key(c):
+    login(c, 1)
+    r = c.get("/api/panel/director-summary/audio")
+    assert r.status_code == 503 and "голос браузера" in r.json()["detail"]

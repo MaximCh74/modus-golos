@@ -222,3 +222,25 @@ function chips(options, onPick) {
   box.value = () => value;
   return box;
 }
+
+
+// Озвучка сводки директора: OpenAI TTS с кэшем на сервере; если недоступно — голос браузера (если есть русский).
+let _summaryAudio = null;
+async function speakSummary(btn, sentences) {
+  if (_summaryAudio && !_summaryAudio.paused) { _summaryAudio.pause(); _summaryAudio = null; btn.textContent = '🔊 Озвучить'; return; }
+  btn.disabled = true; btn.textContent = '…';
+  try {
+    const r = await fetch('/api/panel/director-summary/audio', { credentials: 'same-origin' });
+    if (!r.ok) throw new Error('tts ' + r.status);
+    const blob = await r.blob();
+    _summaryAudio = new Audio(URL.createObjectURL(blob));
+    _summaryAudio.onended = () => { btn.textContent = '🔊 Озвучить'; };
+    await _summaryAudio.play();
+    btn.textContent = '⏹ Стоп'; btn.title = 'Озвучка OpenAI' + (r.headers.get('X-TTS-Source') === 'cache' ? ' (из кэша)' : '');
+  } catch (e) {
+    const ru = window.speechSynthesis && speechSynthesis.getVoices().find(v => v.lang && v.lang.toLowerCase().startsWith('ru'));
+    if (ru) { const u = new SpeechSynthesisUtterance(sentences.map(s => s.text).join(' ')); u.lang = 'ru-RU'; u.voice = ru; u.onend = () => { btn.textContent = '🔊 Озвучить'; }; speechSynthesis.cancel(); speechSynthesis.speak(u); btn.textContent = '⏹ Стоп'; btn.title = 'голос браузера: ' + ru.name; }
+    else { toast('Озвучка недоступна: нет ключа и русского голоса в браузере', 'bad'); btn.textContent = '🔊 Озвучить'; }
+  }
+  btn.disabled = false;
+}
