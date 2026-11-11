@@ -41,14 +41,22 @@ def main() -> None:
                                   record_video_dir=None if a.no_video else str(vid_dir), record_video_size={"width": 1440, "height": 900})
         page = ctx.new_page()
         # Шаг 1: QR-форма жюри (телефон) — отдельный контекст с мобильным размером
-        phone = browser.new_context(viewport={"width": 390, "height": 844}, device_scale_factor=2, is_mobile=True, locale="ru-RU")
+        phone = browser.new_context(viewport={"width": 390, "height": 844}, device_scale_factor=2, is_mobile=True, locale="ru-RU",
+                                    record_video_dir=None if a.no_video else str(vid_dir / "phone"), record_video_size={"width": 390, "height": 844})
         ph = phone.new_page()
         ph.goto(f"{base}/q/PVL"); ph.wait_for_selector("textarea")
         ph.fill("textarea", "На складе сканер штрихкодов не читает этикетки номенклатуры из 1С, артикулы вбиваем вручную. Прошу заменить сканер.")
         ph.click("text=Прямо сейчас мешает")
         shot(ph, "01_qr_form_phone")
         ph.click("button:has-text('Отправить')")
-        ph.wait_for_selector("text=принято", timeout=60000)
+        # «Похоже, об этом уже сообщали» — как на сцене: показать и нажать «Всё равно отправить»
+        try:
+            ph.wait_for_selector("button:has-text('Всё равно отправить')", timeout=25000)
+            shot(ph, "01b_qr_similar_phone")
+            ph.click("button:has-text('Всё равно отправить')")
+        except Exception:   # noqa: BLE001 — похожих не нашлось, форма ушла сразу
+            pass
+        ph.wait_for_selector("text=принято", timeout=90000)
         shot(ph, "02_qr_accepted_phone")
         track_url = ph.eval_on_selector("a:has-text('Следить за статусом')", "e => e.href")
         # Ноутбук: директор, сводка с картой
@@ -61,7 +69,7 @@ def main() -> None:
         login(ph, base, 2)
         ph.goto(f"{base}/app#/meeting"); ph.wait_for_selector("text=Режим совещания")
         ph.click("summary:has-text('Вставить текст')"); ph.fill("textarea", TRANSCRIPT); ph.click("button:has-text('Разобрать текст')")
-        ph.wait_for_selector("text=Поручения", timeout=120000); ph.wait_for_timeout(800); shot(ph, "06_meeting_review_phone", full=True)
+        ph.wait_for_selector("button:has-text('Отправить')", timeout=180000); ph.wait_for_timeout(800); shot(ph, "06_meeting_review_phone", full=True)
         ph.click("button:has-text('Отправить')"); ph.wait_for_selector("text=Отправлено", timeout=30000); shot(ph, "07_meeting_sent_phone")
         # Шаг 3: «Сообщить о ходе» → стадия у автора
         page.goto(f"{base}/panel#/queue"); page.wait_for_selector("table"); page.click("tbody tr >> nth=0"); page.wait_for_selector("text=Сообщить о ходе")
@@ -84,12 +92,13 @@ def main() -> None:
         page.goto(f"{base}/panel#/meetings"); page.wait_for_selector("table"); shot(page, "17_meetings")
         ctx.close(); phone.close(); browser.close()
     if not a.no_video:
-        webm = next(vid_dir.glob("*.webm"), None)
-        if webm:
-            out = ROOT / "demo" / "backup.mp4"
-            subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(webm), "-vf", "fps=15", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "28", str(out)], check=True)
-            shutil.rmtree(vid_dir, ignore_errors=True)
-            print("видео:", out, out.stat().st_size // 1024, "КБ")
+        for sub, name in (("", "backup.mp4"), ("phone", "backup_phone.mp4")):
+            webm = next((vid_dir / sub).glob("*.webm"), None)
+            if webm:
+                out = ROOT / "demo" / name
+                subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(webm), "-vf", "fps=15", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "28", str(out)], check=True)
+                print("видео:", out, out.stat().st_size // 1024, "КБ")
+        shutil.rmtree(vid_dir, ignore_errors=True)
     print("скрины:", sorted(x.name for x in SLIDES.glob("*.png")))
 
 
