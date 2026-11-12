@@ -46,6 +46,11 @@ export BUBBLEWRAP_KEYSTORE_PASSWORD=… BUBBLEWRAP_KEY_PASSWORD=… JAVA_HOME=~/
 cp app-release-signed.apk ~/MODUS_FEEDBACK/demo/android/modus-golos.apk        # для boss — modus-golos-director.apk
 ```
 
+**Версия 1.1 (12.11.2026, вечер): новые иконки** из SVG-знака логотипа (`tools/make_icons.py`: «Модус Голос» — знак на белом, «Директор» —
+знак и тёмно-синяя с красной волна внизу; 180/192/512 и maskable). `appVersionCode` 2, `appVersionName` 1.1, `bubblewrap update` в обоих
+проектах выполнен — иконки уже в `mipmap-*`. Осталось собрать с паролями ключа (`bubblewrap build`, команды выше) и положить APK в `demo/android/`;
+до этого в репозитории — APK 1.0 со старыми иконками. На телефоне: удалить старое приложение или поставить поверх (тот же ключ — встанет поверх).
+
 При новой версии поднять `appVersionCode`/`appVersionName` в `twa-manifest.json`. Если ключ подписи меняется — обновить отпечаток
 в `web/.well-known/assetlinks.json` (`keytool -list -v -keystore … | grep SHA256`) и переустановить приложения.
 

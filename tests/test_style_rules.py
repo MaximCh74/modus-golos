@@ -45,3 +45,23 @@ def test_labels_navy_links_system_color_errors_dot():
 def test_points_is_chip_not_link():
     js = (ROOT / "web" / "a" / "app.js").read_text(encoding="utf-8")
     assert "class: 'chip chip-points'" in js
+
+
+def test_app_icons_from_logo_mark():
+    """Иконки из SVG-знака (tools/make_icons.py): «Модус Голос» — знак на белом, «Директор» — знак и тёмно-синяя с красной волна внизу;
+    180 (apple-touch-icon), 192, 512 и maskable."""
+    from PIL import Image
+    d = ROOT / "web" / "a" / "img" / "icons"
+    for name, sizes in (("icon", (180, 192, 512)), ("maskable", (192, 512)), ("boss", (180, 192, 512)), ("boss-maskable", (192, 512))):
+        for s in sizes:
+            im = Image.open(d / f"{name}-{s}.png").convert("RGB")
+            assert im.size == (s, s), (name, s)
+    app = Image.open(d / "icon-512.png").convert("RGB")
+    assert app.getpixel((8, 8)) == (255, 255, 255) and app.getpixel((256, 504)) == (255, 255, 255)   # белый фон, без своей рамки
+    boss = Image.open(d / "boss-512.png").convert("RGB")
+    assert boss.getpixel((256, 500)) == (8, 39, 66)   # тёмно-синяя волна внизу
+    assert any(boss.getpixel((x, y))[0] > 200 and boss.getpixel((x, y))[1] < 60 for x in range(0, 512, 8) for y in range(360, 440, 2))   # красная волна
+    for html in (ROOT / "web").glob("*.html"):
+        t = html.read_text(encoding="utf-8")
+        if "apple-touch-icon" in t:
+            assert "-180.png" in t, html.name
