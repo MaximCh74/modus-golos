@@ -265,6 +265,8 @@ async def bitrix_callback(request: Request, code: str = "", state: str = ""):
         raise HTTPException(400, "Битрикс24: неверный или устаревший запрос входа — попробуйте ещё раз")
     try:
         user = await _run(bitrix.login_with_code, code)
+    except bitrix.BitrixRejected as e:
+        raise HTTPException(403, f"Битрикс24: {e}")
     except bitrix.BitrixError as e:
         raise HTTPException(502, f"Битрикс24: {e}")
     if not user:
@@ -292,13 +294,15 @@ async def bitrix_app(request: Request):
         return page("bitrix_app.html")   # сессии в cookie нет: страница сама подхватит токен из sessionStorage фрейма или попросит открыть из меню
     try:
         user = await _run(bitrix.login_from_app, form)
+    except bitrix.BitrixRejected as e:
+        raise HTTPException(403, f"Битрикс24: {e}")
     except bitrix.BitrixError as e:
         raise HTTPException(502, f"Битрикс24: {e}")
     if not user:
         return HTMLResponse(_not_mapped_page(), status_code=403)
-    if not bitrix.load_tokens():   # первое открытие: токены портала для уведомлений, если установка до нас не дошла
+    if not bitrix.load_tokens():   # первое открытие: токены портала для уведомлений, если установка до нас не дошла (с той же проверкой)
         try:
-            bitrix.install_from_form(form)
+            await _run(bitrix.install_from_form, form)
         except bitrix.BitrixError:
             pass
     auth.logout(request.cookies.get(auth.COOKIE))
@@ -313,11 +317,16 @@ async def bitrix_install(request: Request):
     """«Путь для первоначальной установки»: сохраняем токены портала и отвечаем страницей с BX24.installFinish()."""
     _bitrix_required()
     form = await _form(request) if request.method == "POST" else {}
-    if form.get("event", "").upper() == "ONAPPINSTALL" or form.get("auth[access_token]"):
-        return bitrix.install_from_form(form)   # установка без интерфейса: ответ JSON, installFinish не нужен
-    if not form.get("AUTH_ID"):
-        raise HTTPException(400, "Этот адрес вызывает портал Битрикс24 при установке приложения")
-    bitrix.install_from_form(form)
+    try:
+        if form.get("event", "").upper() == "ONAPPINSTALL" or form.get("auth[access_token]"):
+            return await _run(bitrix.install_from_form, form)   # установка без интерфейса: ответ JSON, installFinish не нужен
+        if not form.get("AUTH_ID"):
+            raise HTTPException(400, "Этот адрес вызывает портал Битрикс24 при установке приложения")
+        await _run(bitrix.install_from_form, form)
+    except bitrix.BitrixRejected as e:
+        raise HTTPException(403, f"Битрикс24: {e}")
+    except bitrix.BitrixError as e:
+        raise HTTPException(502, f"Битрикс24: {e}")
     try:
         user = await _run(bitrix.login_from_app, form)
     except bitrix.BitrixError:

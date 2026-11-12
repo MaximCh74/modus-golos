@@ -58,10 +58,14 @@ def test_bitrix_oauth_login_notify_iframe_install(c, monkeypatch):
             return {"result": {"ID": "17", "NAME": "Айгерим", "LAST_NAME": "Нурланова", "EMAIL": "aigerim@modus-test.kz", "WORK_POSITION": "Руководитель продаж"}}
         if url.endswith("/rest/im.notify.system.add"):
             return {"result": 101}
+        if url.endswith("/rest/app.info"):   # проверка токена установки на нашем портале (аудит 12.11, F-01)
+            assert url.startswith("https://modus-test.bitrix24.kz/rest/") and params["auth"] == "at1"
+            return {"result": {"ID": 2, "CODE": "local.abc", "STATUS": "L", "INSTALLED": True}}
         raise AssertionError(url)
 
     monkeypatch.setattr(bitrix, "request_fn", fake)
     bitrix.tokens_path().unlink(missing_ok=True)
+    db.ex("UPDATE users SET email='aigerim@modus-test.kz' WHERE id=4")   # сопоставление по почте (только по имени — не склеивается, F-02)
     assert bitrix.configured() and c.get("/api/public/config").json()["bitrix"] is True
     r = c.get("/")   # с настроенным порталом встраивание разрешено только ему — на всех путях (переходы внутри фрейма)
     assert "frame-ancestors 'self' https://modus-test.bitrix24.kz;" in r.headers["content-security-policy"] and "x-frame-options" not in r.headers
@@ -79,7 +83,7 @@ def test_bitrix_oauth_login_notify_iframe_install(c, monkeypatch):
     assert c.get("/bitrix/callback", params={"code": "c0de", "state": "bogus"}, follow_redirects=False).status_code == 400
     r = c.get("/bitrix/callback", params={"code": "c0de", "state": state, "domain": "modus-test.bitrix24.kz", "member_id": "m1"}, follow_redirects=False)
     assert r.status_code == 302 and r.headers["location"] == "/app" and "mf_sid=" in r.headers.get("set-cookie", "")
-    assert c.get("/api/me").json()["name"] == "Айгерим Нурланова"   # по имени и фамилии (демо-имена на тестовом портале); ID запомнен
+    assert c.get("/api/me").json()["name"] == "Айгерим Нурланова"   # по почте из портала; ID запомнен
     u = db.one("SELECT bitrix_id, email FROM users WHERE id=4")
     assert u["bitrix_id"] == 17 and u["email"] == "aigerim@modus-test.kz"
     assert bitrix.load_tokens()["access_token"] == "at1" and bitrix.notify_available()

@@ -80,7 +80,7 @@ function staffSection(d, reload) {
       inviteBlock,
       h('div', { class: 'card' }, h('b', {}, 'Данные сотрудника'),
         h('div', { class: 'grid2 mt8' }, field('Имя и фамилия', name), field('Должность', pos), field('Роль', role), field('Город / филиал', br), field('Отдел', dep), field('Руководитель', mgr), field('Телефон (WhatsApp)', phone), field('Почта', email)),
-        h('details', { class: 'sect mt8' }, h('summary', {}, 'Битрикс24'), h('div', { class: 'mt8' }, field('ID пользователя портала', bx, u.bitrix_id ? 'Сопоставлен с порталом: синхронизация обновляет отдел и должность' : 'Заполняется синхронизацией — по почте, телефону или имени; вручную — если склейка не удалась'))),
+        h('details', { class: 'sect mt8' }, h('summary', {}, 'Битрикс24'), h('div', { class: 'mt8' }, field('ID пользователя портала', bx, u.bitrix_id ? 'Сопоставлен с порталом: синхронизация обновляет отдел и должность' : 'Заполняется синхронизацией — по почте или телефону; совпадение только по имени не склеивается — укажите ID вручную'))),
         h('div', { class: 'row mt16' }, save, h('div', { class: 'spacer' }), u.active ? (() => { const off = h('button', { class: 'btn', title: 'Вход закроется, обращения, баллы и история останутся', onclick: () => { if (!off.dataset.armed) { off.dataset.armed = '1'; off.replaceChildren(iconText('user-x', 'Подтвердить отключение')); return; } setActive(u, false); } }, iconText('user-x', 'Отключить')); return off; })() : h('button', { class: 'btn btn-outline', onclick: () => setActive(u, true) }, iconText('user-plus', 'Включить')))));
     openDrawer(content, { label: u.name, onClose: () => { STAFF_UI.openId = null; } });
   }

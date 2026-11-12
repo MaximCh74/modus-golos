@@ -9,7 +9,12 @@
 токены портала — в папке данных (var/bitrix_tokens.json, в git не попадает). Без настроек модуль неактивен: кнопок входа нет,
 уведомления не дублируются. Проверено на живом портале владельца 12.11.2026: открытие во фрейме, синхронизация, уведомление в чат
 (docs/BITRIX24.md «Статус»). Сотрудники без Битрикса (ручное добавление, импорт, приглашения) — mf/staff.py; склейка с порталом —
-match_user по почте и телефону, спорные случаи — merge_issue → отчёт синхронизации (settings bitrix_sync.conflicts)."""
+match_user по почте и телефону, спорные случаи — merge_issue → отчёт синхронизации (settings bitrix_sync.conflicts).
+
+Проверка запросов портала (аудит безопасности 12.11, F-01/F-02): адрес REST — ТОЛЬКО из BITRIX_PORTAL (поля DOMAIN и client_endpoint из
+запроса не используются); member_id сверяется с BITRIX_MEMBER_ID из .env или с запомненным при первой установке; события, кроме установки,
+должны нести тот же application_token; токен из запроса проверяется вызовом app.info на нашем портале, прежде чем сохраняться или
+опознавать сотрудника. Сопоставление «только по имени» автоматически не делается — администратор указывает ID портала в карточке."""
 from __future__ import annotations
 
 import base64
@@ -21,6 +26,7 @@ import os
 import threading
 import time
 from pathlib import Path
+from urllib.parse import urlparse
 
 from .. import config, db
 
@@ -35,6 +41,10 @@ class BitrixError(Exception):
     pass
 
 
+class BitrixRejected(BitrixError):
+    """Запрос не от нашего портала или не от нашего приложения (чужой member_id, application_token, токен не принят порталом) → 403."""
+
+
 # ---------- настройки ----------
 
 def portal() -> str:
@@ -46,6 +56,22 @@ def portal_origin() -> str:
     """Источник портала для frame-ancestors: https://<портал>; http:// — только если так явно записано в .env (локальная проверка фрейма)."""
     raw = (os.environ.get("BITRIX_PORTAL") or "").strip().lower()
     return ("http://" if raw.startswith("http://") else "https://") + portal()
+
+
+def portal_endpoint() -> str:
+    """Адрес REST нашего портала — только из .env (никогда из запроса)."""
+    return f"{portal_origin()}/rest/"
+
+
+def expected_member_id() -> str | None:
+    """member_id нашего портала: из .env (BITRIX_MEMBER_ID) или запомненный при первой проверенной установке."""
+    return (os.environ.get("BITRIX_MEMBER_ID") or "").strip() or (load_tokens() or {}).get("member_id") or None
+
+
+def check_member(member_id: str | None) -> None:
+    exp = expected_member_id()
+    if exp and member_id and str(member_id).strip() != exp:
+        raise BitrixRejected("запрос от другого портала (member_id не совпадает)")
 
 
 def client_id() -> str:
@@ -99,11 +125,14 @@ def load_tokens() -> dict | None:
 
 
 def save_tokens(t: dict) -> None:
-    keep = {k: t.get(k) for k in ("access_token", "refresh_token", "expires_in", "client_endpoint", "server_endpoint", "member_id", "domain", "scope", "status")}
+    prev = load_tokens() or {}
+    keep = {k: t.get(k) for k in ("access_token", "refresh_token", "expires_in", "member_id", "scope", "status", "application_token")}
+    keep["member_id"] = keep["member_id"] or prev.get("member_id")
+    keep["application_token"] = keep["application_token"] or prev.get("application_token")
+    keep["client_endpoint"] = portal_endpoint()   # адрес REST не берём из ответа или запроса — только наш портал
+    keep["domain"] = portal()
     keep["saved_at"] = int(time.time())
-    keep["installed_at"] = (load_tokens() or {}).get("installed_at") or db.now_iso()
-    if not keep.get("client_endpoint"):
-        keep["client_endpoint"] = f"https://{portal()}/rest/"
+    keep["installed_at"] = prev.get("installed_at") or db.now_iso()
     p = tokens_path()
     p.write_text(json.dumps(keep, ensure_ascii=False, indent=1), encoding="utf-8")
     try:
@@ -155,7 +184,7 @@ def call_full(method: str, params: dict | None = None) -> dict:
         t = load_tokens()
         if not t:
             raise BitrixError("нет токенов портала — приложение не установлено")
-        endpoint = (t.get("client_endpoint") or f"https://{portal()}/rest/").rstrip("/") + "/"
+        endpoint = portal_endpoint()
         j = request_fn(f"{endpoint}{method}", params={"auth": t["access_token"]}, data=params)
         if isinstance(j, dict) and j.get("error") == "expired_token":
             save_tokens(refresh(t["refresh_token"]))
@@ -219,6 +248,10 @@ def sync_users() -> dict:
         cands = merge_candidates(email, phone) if not known else {}   # первая склейка: кто из наших без ID совпал по почте/телефону
         u = match_user({**bx, "PHONE": phone}, create=True)
         if not u:
+            twin = namesake(bx) if not known else None
+            if twin and active:
+                conflicts.append({"bitrix_id": bid, "bitrix_name": " ".join(x for x in ((bx.get("NAME") or "").strip(), (bx.get("LAST_NAME") or "").strip()) if x),
+                                  "name": twin["name"], "user_id": twin["id"], "reason": "same_name", "candidates": [{"id": twin["id"], "name": twin["name"], "by": "имя"}]})
             continue
         if db.one("SELECT COUNT(*) AS n FROM users")["n"] > before:
             created += 1
@@ -278,8 +311,9 @@ def merge_issue(bid: int, u: dict, bx: dict, cands: dict[int, str]) -> dict | No
     return None
 
 
-def call(method: str, params: dict | None = None, *, token: str | None = None, endpoint: str | None = None, _retry: bool = True):
-    """REST-метод: вебхук (если задан и токен не передан) или {client_endpoint}{method}?auth=token. expired_token → обновить токены портала и повторить."""
+def call(method: str, params: dict | None = None, *, token: str | None = None, _retry: bool = True):
+    """REST-метод: вебхук (если задан и токен не передан) или https://<BITRIX_PORTAL>/rest/{method}?auth=token — адрес только из .env.
+    expired_token → обновить токены портала и повторить."""
     params = params or {}
     if token is None and webhook_url():
         j = request_fn(f"{webhook_url()}/{method}", data=params)
@@ -288,9 +322,8 @@ def call(method: str, params: dict | None = None, *, token: str | None = None, e
         if token is None:
             if not t:
                 raise BitrixError("нет токенов портала — приложение не установлено")
-            token, endpoint = t["access_token"], t.get("client_endpoint")
-        endpoint = (endpoint or f"https://{portal()}/rest/").rstrip("/") + "/"
-        j = request_fn(f"{endpoint}{method}", params={"auth": token}, data=params)
+            token = t["access_token"]
+        j = request_fn(f"{portal_endpoint()}{method}", params={"auth": token}, data=params)
         if isinstance(j, dict) and j.get("error") == "expired_token" and t and _retry:
             nt = refresh(t["refresh_token"])
             save_tokens(nt)
@@ -330,11 +363,29 @@ def authorize_url(next_url: str = "") -> str:
     return f"{portal_origin()}/oauth/authorize/?client_id={client_id()}&state={make_state(next_url)}"
 
 
-def user_current(token: str, endpoint: str | None = None) -> dict:
-    r = call("user.current", {}, token=token, endpoint=endpoint)
+def user_current(token: str) -> dict:
+    """Кто владелец токена — спрашиваем только НАШ портал: токен другого портала здесь не работает → BitrixRejected."""
+    try:
+        r = call("user.current", {}, token=token)
+    except BitrixError as e:
+        raise BitrixRejected(f"портал {portal()} не принял токен: {e}") from e
     if not isinstance(r, dict) or not r.get("ID"):
-        raise BitrixError("user.current не вернул пользователя")
+        raise BitrixRejected("user.current не вернул пользователя")
     return r
+
+
+def verify_app_token(token: str) -> dict:
+    """Токен из запроса установки — действительно от нашего приложения на нашем портале: app.info на адресе из .env.
+    Код приложения (CODE) у локального приложения совпадает с client_id — если оба известны и различаются, это чужое приложение."""
+    try:
+        info = call("app.info", {}, token=token)
+    except BitrixError as e:
+        raise BitrixRejected(f"портал {portal()} не принял токен установки: {e}") from e
+    info = info if isinstance(info, dict) else {}
+    code = str(info.get("CODE") or info.get("code") or "")
+    if code and client_id() and code.startswith("local.") and client_id().startswith("local.") and code != client_id():
+        raise BitrixRejected("токен другого приложения портала")
+    return info
 
 
 def _norm_name(s: str) -> str:
@@ -342,10 +393,11 @@ def _norm_name(s: str) -> str:
 
 
 def match_user(bx: dict, create: bool = True) -> dict | None:
-    """Сопоставление с нашим сотрудником: по сохранённому ID Битрикса → по почте → по имени и фамилии (демо-имена на тестовом портале).
-    Найденное соответствие запоминается (users.bitrix_id), чтобы дальше работал только ID. Незнакомый сотрудник портала (create=True)
-    заводится у нас как «Сотрудник» с именем, должностью и почтой из Битрикса — любой человек из портала может пользоваться системой;
-    город, отдел и роль администратор уточняет в «Сотрудниках» (полная синхронизация — sync_users)."""
+    """Сопоставление с нашим сотрудником: по сохранённому ID Битрикса → по почте → по телефону. Найденное соответствие запоминается
+    (users.bitrix_id), дальше работает только ID. Совпадение ТОЛЬКО по имени автоматически не склеивается (аудит 12.11, F-02): если у нас
+    есть тёзка без ID портала, возвращается None — администратор указывает ID портала в карточке сотрудника (sync_users пишет это в отчёт).
+    Незнакомый сотрудник портала без тёзки (create=True) заводится у нас как «Сотрудник» с именем, должностью и почтой из Битрикса;
+    город, отдел и роль администратор уточняет в «Сотрудниках»."""
     try:
         bid = int(bx.get("ID") or 0)
     except (TypeError, ValueError):
@@ -361,14 +413,6 @@ def match_user(bx: dict, create: bool = True) -> dict | None:
     phone = _digits(bx.get("PHONE") or bx.get("PERSONAL_MOBILE") or bx.get("WORK_PHONE"))
     if not u and phone:
         u = next((r for r in db.q("SELECT * FROM users WHERE active=1 AND phone IS NOT NULL AND phone != ''") if _digits(r["phone"]) == phone), None)
-    if not u:
-        first, last = _norm_name(bx.get("NAME") or ""), _norm_name(bx.get("LAST_NAME") or "")
-        if first:
-            for row in db.q("SELECT * FROM users WHERE active=1"):
-                n = _norm_name(row["name"])
-                if n in (f"{first} {last}".strip(), f"{last} {first}".strip()):
-                    u = row
-                    break
     if u:
         db.ex("UPDATE users SET bitrix_id=? WHERE id=?", (bid, u["id"]))
         if email and not u.get("email"):
@@ -377,6 +421,9 @@ def match_user(bx: dict, create: bool = True) -> dict | None:
         return u
     if not create or bx.get("ACTIVE") is False:
         return None
+    if namesake(bx):
+        log.warning("Битрикс24: пользователь %s совпал с нашим сотрудником только по имени — не склеиваем, нужен ID в карточке", bid)
+        return None
     name = " ".join(x.strip() for x in (bx.get("NAME") or "", bx.get("LAST_NAME") or "") if x and x.strip()) or f"Сотрудник Битрикс24 {bid}"
     uid = db.ex("INSERT INTO users(name, role, position, branch_id, department_id, manager_id, active, email, bitrix_id) VALUES(?,?,?,?,?,?,1,?,?)",
                 (name, "employee", (bx.get("WORK_POSITION") or "").strip() or None, None, None, None, email or None, bid))
@@ -384,36 +431,61 @@ def match_user(bx: dict, create: bool = True) -> dict | None:
     return db.one("SELECT * FROM users WHERE id=?", (uid,))
 
 
+def namesake(bx: dict) -> dict | None:
+    """Наш активный сотрудник без ID портала с тем же именем и фамилией — кандидат на РУЧНУЮ склейку (не автоматическую)."""
+    first, last = _norm_name(bx.get("NAME") or ""), _norm_name(bx.get("LAST_NAME") or "")
+    if not first:
+        return None
+    for row in db.q("SELECT * FROM users WHERE active=1 AND bitrix_id IS NULL"):
+        if _norm_name(row["name"]) in (f"{first} {last}".strip(), f"{last} {first}".strip()):
+            return row
+    return None
+
+
 def login_with_code(code: str) -> dict | None:
-    """Внешний вход «Войти через Битрикс24»: code → токены → user.current → наш пользователь. Первые токены сохраняются как токены портала."""
+    """Внешний вход «Войти через Битрикс24»: code → токены (OAuth-сервер Битрикса, наш client_secret) → проверка, что портал наш
+    (member_id, client_endpoint) → user.current на НАШЕМ портале → наш пользователь. Первые токены сохраняются как токены портала."""
     t = exchange_code(code)
-    bx = user_current(t["access_token"], t.get("client_endpoint"))
+    check_member(t.get("member_id"))
+    host = urlparse(t.get("client_endpoint") or "").netloc.lower()
+    if host and host != portal():
+        raise BitrixRejected("код входа выдан другим порталом")
+    bx = user_current(t["access_token"])
     if not load_tokens():
         save_tokens(t)
     return match_user(bx)
 
 
 def login_from_app(form: dict) -> dict | None:
-    """Открытие внутри портала: POST с AUTH_ID (token) и т. д. → user.current → наш пользователь."""
+    """Открытие внутри портала: POST с AUTH_ID и member_id → сверка member_id → user.current на НАШЕМ портале (DOMAIN из запроса
+    не используется) → наш пользователь."""
     token = form.get("AUTH_ID")
     if not token:
         return None
-    endpoint = f"https://{form.get('DOMAIN') or portal()}/rest/"
-    bx = user_current(token, endpoint)
-    return match_user(bx)
+    check_member(form.get("member_id"))
+    return match_user(user_current(token))
 
 
 def install_from_form(form: dict) -> dict:
-    """Установка локального приложения: сохраняем токены портала из POST (AUTH_ID/REFRESH_ID или auth[access_token]/auth[refresh_token])."""
-    t = {"access_token": form.get("AUTH_ID") or form.get("auth[access_token]"), "refresh_token": form.get("REFRESH_ID") or form.get("auth[refresh_token]"),
-         "expires_in": form.get("AUTH_EXPIRES") or form.get("auth[expires_in]"), "member_id": form.get("member_id") or form.get("auth[member_id]"),
-         "domain": form.get("DOMAIN") or form.get("auth[domain]"), "scope": form.get("APPLICATION_SCOPE") or form.get("auth[scope]"),
-         "client_endpoint": form.get("auth[client_endpoint]") or (f"https://{form.get('DOMAIN')}/rest/" if form.get("DOMAIN") else None),
-         "server_endpoint": form.get("SERVER_ENDPOINT") or form.get("auth[server_endpoint]"), "status": form.get("status") or form.get("auth[status]")}
-    if not t["access_token"]:
+    """Установка локального приложения (страница установки с AUTH_ID или событие ONAPPINSTALL с auth[...]): сверка member_id; событие,
+    кроме установки, — только с тем же application_token; токен проверяется app.info на нашем портале; только потом сохраняется."""
+    token = form.get("AUTH_ID") or form.get("auth[access_token]")
+    if not token:
         raise BitrixError("в запросе установки нет токена (AUTH_ID)")
+    member = form.get("member_id") or form.get("auth[member_id]")
+    app_token = form.get("auth[application_token]") or form.get("APPLICATION_TOKEN")
+    event = (form.get("event") or "").upper()
+    check_member(member)
+    saved = load_tokens() or {}
+    if event and event != "ONAPPINSTALL" and (not saved.get("application_token") or app_token != saved.get("application_token")):
+        raise BitrixRejected("событие без верного application_token")
+    verify_app_token(token)
+    t = {"access_token": token, "refresh_token": form.get("REFRESH_ID") or form.get("auth[refresh_token]"),
+         "expires_in": form.get("AUTH_EXPIRES") or form.get("auth[expires_in]"), "member_id": member,
+         "scope": form.get("APPLICATION_SCOPE") or form.get("auth[scope]"), "status": form.get("status") or form.get("auth[status]"),
+         "application_token": app_token}
     save_tokens(t)
-    return {"ok": True, "member_id": t["member_id"], "domain": t["domain"]}
+    return {"ok": True, "member_id": member or saved.get("member_id"), "domain": portal()}
 
 
 # ---------- уведомления и задачи ----------
