@@ -98,6 +98,6 @@ async function speakReply(planId, text) {
     await a.play();
   } catch (e) {
     const ru = window.speechSynthesis && speechSynthesis.getVoices().find(v => v.lang && v.lang.toLowerCase().startsWith('ru'));
-    if (ru) { const u = new SpeechSynthesisUtterance(text); u.lang = 'ru-RU'; u.voice = ru; speechSynthesis.cancel(); speechSynthesis.speak(u); }
+    if (ru) { const u = new SpeechSynthesisUtterance(text); u.lang = 'ru-RU'; u.voice = ru; u.rate = 1.1; speechSynthesis.cancel(); speechSynthesis.speak(u); }
   }
 }

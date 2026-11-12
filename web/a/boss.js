@@ -195,7 +195,7 @@
       if (btn) btn.replaceChildren(iconText('square', 'Стоп'));
     } catch (e) {
       const ru = window.speechSynthesis && speechSynthesis.getVoices().find(v => v.lang && v.lang.toLowerCase().startsWith('ru'));
-      if (ru && text) { const u = new SpeechSynthesisUtterance(text); u.lang = 'ru-RU'; u.voice = ru; speechSynthesis.cancel(); speechSynthesis.speak(u); }
+      if (ru && text) { const u = new SpeechSynthesisUtterance(text); u.lang = 'ru-RU'; u.voice = ru; u.rate = 1.1; speechSynthesis.cancel(); speechSynthesis.speak(u); }
     }
   }
 })();

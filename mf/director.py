@@ -289,7 +289,7 @@ def tts_cached(text: str) -> tuple[bytes, str]:
     Используется для сводки и для голосового ответа на команду директора (этап 6 §2)."""
     from pathlib import Path
     from . import config
-    key = hashlib.sha1((llm.TTS_MODEL + "|" + llm.TTS_VOICE + "|" + text).encode("utf-8")).hexdigest()[:16]
+    key = hashlib.sha1((llm.TTS_MODEL + "|" + llm.TTS_VOICE + "|" + f"{llm.TTS_SPEED:.2f}" + "|" + text).encode("utf-8")).hexdigest()[:16]
     cache = Path(config.DATA_DIR) / "tts"
     cache.mkdir(exist_ok=True)
     f = cache / f"{key}.mp3"

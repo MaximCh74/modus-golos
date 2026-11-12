@@ -453,6 +453,23 @@ def boss_greeting(facts: dict) -> str:
 
 TTS_MODEL = os.environ.get("MF_TTS_MODEL", "gpt-4o-mini-tts")
 TTS_VOICE = os.environ.get("MF_TTS_VOICE", "alloy")
+# Скорость озвучки (замечание владельца 12.11: «слишком медленно» → +10 %). У gpt-4o-mini-tts параметр speed не действует —
+# ускоряем готовый mp3 через ffmpeg atempo (высота голоса сохраняется).
+TTS_SPEED = float(os.environ.get("MF_TTS_SPEED", "1.1") or 1.0)
+
+
+def faster(mp3: bytes, speed: float = TTS_SPEED) -> bytes:
+    """mp3 → mp3 с темпом speed; без ffmpeg или при ошибке — как было."""
+    if not mp3 or abs(speed - 1.0) < 0.01:
+        return mp3
+    import subprocess
+    try:
+        r = subprocess.run(["ffmpeg", "-loglevel", "error", "-i", "pipe:0", "-filter:a", f"atempo={speed:.2f}", "-b:a", "96k", "-f", "mp3", "pipe:1"],
+                           input=mp3, capture_output=True, timeout=60, check=True)
+        return r.stdout or mp3
+    except Exception as e:   # noqa: BLE001
+        log.warning("ускорение озвучки не удалось: %s", e)
+        return mp3
 
 
 def speak(text: str) -> bytes:
@@ -468,4 +485,4 @@ def speak(text: str) -> bytes:
     if TTS_MODEL.startswith("gpt-4o"):
         kwargs["instructions"] = "Деловой, спокойный тон, русский язык, без спешки. Это короткая сводка для директора компании."
     r = _client().audio.speech.create(**kwargs)
-    return r.content
+    return faster(r.content)

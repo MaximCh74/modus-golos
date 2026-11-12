@@ -254,7 +254,7 @@ async function speakSummary(btn, sentences) {
     btn.replaceChildren(iconText('square', 'Стоп')); btn.title = 'Озвучка OpenAI' + (r.headers.get('X-TTS-Source') === 'cache' ? ' (из кэша)' : '');
   } catch (e) {
     const ru = window.speechSynthesis && speechSynthesis.getVoices().find(v => v.lang && v.lang.toLowerCase().startsWith('ru'));
-    if (ru) { const u = new SpeechSynthesisUtterance(sentences.map(s => s.text).join(' ')); u.lang = 'ru-RU'; u.voice = ru; u.onend = () => { btn.replaceChildren(iconText('volume', 'Озвучить')); }; speechSynthesis.cancel(); speechSynthesis.speak(u); btn.replaceChildren(iconText('square', 'Стоп')); btn.title = 'голос браузера: ' + ru.name; }
+    if (ru) { const u = new SpeechSynthesisUtterance(sentences.map(s => s.text).join(' ')); u.lang = 'ru-RU'; u.voice = ru; u.rate = 1.1; u.onend = () => { btn.replaceChildren(iconText('volume', 'Озвучить')); }; speechSynthesis.cancel(); speechSynthesis.speak(u); btn.replaceChildren(iconText('square', 'Стоп')); btn.title = 'голос браузера: ' + ru.name; }
     else { toast('Озвучка недоступна: нет ключа и русского голоса в браузере', 'bad'); btn.replaceChildren(iconText('volume', 'Озвучить')); }
   }
   btn.disabled = false;
