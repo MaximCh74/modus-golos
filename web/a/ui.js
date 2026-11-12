@@ -433,7 +433,9 @@ function menuButton(items, opts) {
 
 // ---------- выбор даты без нативного календаря (пункт 4 очереди 12.11): список готовых сроков + «другая дата» дд.мм; el.value — ISO или '' ----------
 function isoLocal(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
-function fmtDay(iso) { if (!iso) return ''; const [, m, d] = iso.split('-'); return d + '.' + m; }
+function fmtDay(iso) { if (!iso) return ''; const [, m, d] = iso.split('-'); return d + '.' + m; }   // только для 'ГГГГ-ММ-ДД' (сроки поручений)
+// Метка времени ISO (…Z) → местная дата «ДД.ММ.ГГГГ» (срок приглашения, вход сотрудника); fmtDay для неё давал «26T23:37:20Z.11».
+function fmtStamp(iso) { if (!iso) return ''; const d = new Date(iso); return isNaN(d) ? '' : d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' }); }
 function datePick(opts) {
   opts = opts || {};
   const today = new Date(); today.setHours(12, 0, 0, 0);

@@ -17,8 +17,8 @@ function staffSection(d, reload) {
     if (!u.active) return { code: 'off', label: 'отключён', cls: 'st-rejected' };
     if (u.bitrix_id) return { code: 'bitrix', label: 'Битрикс24', cls: 'st-closed' };
     if (!inv) return { code: 'none' };
-    if (inv.status === 'used') return { code: 'used', label: 'в системе с ' + fmtDay(inv.used_at), cls: 'st-done', inv };
-    if (inv.status === 'active') return { code: 'active', label: 'до ' + fmtDay(inv.expires_at), cls: 'st-new', inv };
+    if (inv.status === 'used') return { code: 'used', label: 'в системе с ' + fmtStamp(inv.used_at), cls: 'st-done', inv };
+    if (inv.status === 'active') return { code: 'active', label: 'до ' + fmtStamp(inv.expires_at), cls: 'st-new', inv };
     return { code: inv.status, label: inv.status === 'expired' ? 'истекло' : 'отозвано', cls: 'tag-overdue', inv };
   };
   const issue = async u => { await post(() => API.post('/api/admin/invites', { user_id: u.id }), 'Приглашение выдано: ' + u.name); STAFF_UI.openId = u.id; reload(); };
@@ -26,7 +26,7 @@ function staffSection(d, reload) {
     await post(() => API.post('/api/admin/users/' + u.id + '/active', { active }), (active ? 'Включён: ' : 'Отключён: ') + u.name);
     STAFF_UI.openId = active ? u.id : null; reload();
   };
-  const inviteText = (u, inv) => 'Здравствуйте, ' + u.name.split(' ')[0] + '! Это ваше личное приглашение в «Модус Голос» (ГК «Модус Трейд»): ' + inv.url + ' — откройте ссылку и нажмите «Войти». Паролей нет, ссылка одноразовая, действует до ' + fmtDay(inv.expires_at, true) + '.';
+  const inviteText = (u, inv) => 'Здравствуйте, ' + u.name.split(' ')[0] + '! Это ваше личное приглашение в «Модус Голос» (ГК «Модус Трейд»): ' + inv.url + ' — откройте ссылку и нажмите «Войти». Паролей нет, ссылка одноразовая, действует до ' + fmtStamp(inv.expires_at) + '.';
   const waLink = (u, inv) => { const digits = String(u.phone || '').replace(/\D/g, ''); return digits ? 'https://wa.me/' + digits + '?text=' + encodeURIComponent(inviteText(u, inv)) : null; };
   const copy = async (text, ok) => { try { await navigator.clipboard.writeText(text); toast(ok); } catch (e) { toast('Буфер недоступен — скопируйте из ссылки выше'); } };
   const latestInvite = async u => { const inv = invites[u.id]; if (!inv) return null; try { return await API.get('/api/admin/invites/' + inv.id); } catch (e) { return null; } };
@@ -58,7 +58,7 @@ function staffSection(d, reload) {
       const link = h('input', { type: 'text', value: inv.url, readonly: true, class: 'inv-link' });
       const wa = waLink(u, inv);
       inviteBlock = h('div', { class: 'card card-ok' },
-        h('div', { class: 'row' }, h('b', {}, 'Личное приглашение'), tag('st-new', 'действует до ' + fmtDay(inv.expires_at, true))),
+        h('div', { class: 'row' }, h('b', {}, 'Личное приглашение'), tag('st-new', 'действует до ' + fmtStamp(inv.expires_at))),
         h('div', { class: 'inv-body mt8' }, h('img', { src: inv.qr_svg, alt: 'QR приглашения', class: 'inv-qr' }),
           h('div', { class: 'inv-text' },
             h('div', { class: 'small' }, 'Сотрудник открывает QR камерой телефона или ссылку, нажимает «Войти» — и телефон запомнил его. Паролей нет, ссылка одноразовая.'),

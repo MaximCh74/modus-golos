@@ -504,7 +504,10 @@ def cards_pdf(invites: list[dict], base: str) -> bytes:
         c.drawImage(ImageReader(img), qx, qy, width=qs, height=qs)
         rgb(NAVY); c.setFont(fonts["semibold"], 10.5); c.drawCentredString(x0 + cw / 2, qy - 10 * mm, "Откройте камерой — и вы в системе")
         rgb(MUTED); c.setFont(fonts["regular"], 7)
-        c.drawCentredString(x0 + cw / 2, qy - 15.5 * mm, f"Ссылка личная, вход один раз · действует до {local_date(inv['expires_at'])} · паролей нет")
+        until = local_date(inv.get("expires_at"))
+        if not until and inv.get("created_at"):   # страховка: срока нет в данных — считаем от выдачи (замечание владельца 13.11: дата была пустой)
+            until = local_date(db.iso(db.parse(inv["created_at"]) + timedelta(days=invite_days())))
+        c.drawCentredString(x0 + cw / 2, qy - 15.5 * mm, "Ссылка личная, вход один раз · " + (f"действует до {until} · " if until else "") + "паролей нет")
         c.setFont(fonts["regular"], 6.5); c.drawCentredString(x0 + cw / 2, y0 + 9 * mm, "ГК «Модус Трейд» · «Модус Голос» — каждый голос услышан")
 
     def marks() -> None:
