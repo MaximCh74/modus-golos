@@ -14,6 +14,8 @@ import io
 import re
 import secrets
 import tempfile
+import threading
+import time
 from datetime import timedelta
 from pathlib import Path
 
@@ -23,6 +25,24 @@ from . import db
 from .config import ROOT
 
 DEFAULT_INVITE_DAYS = 14
+# Аудит 12.11, F-15: в базе — только хэш токена приглашения. Сама ссылка (для QR, WhatsApp, карточки PDF) живёт в памяти процесса
+# час после выдачи; потом — «Выдать заново». Так ссылку нельзя достать из копии базы или демо-снапшота.
+FRESH_TTL = 3600
+_FRESH: dict[int, tuple[str, float]] = {}
+_fresh_lock = threading.Lock()
+
+
+def _remember(invite_id: int, token: str) -> None:
+    with _fresh_lock:
+        now = time.time()
+        for k in [k for k, (_, at) in _FRESH.items() if now - at > FRESH_TTL]:
+            _FRESH.pop(k, None)
+        _FRESH[invite_id] = (token, now)
+
+
+def fresh_token(invite_id: int) -> str | None:
+    v = _FRESH.get(invite_id)
+    return v[0] if v and time.time() - v[1] <= FRESH_TTL else None
 ROLES_IMPORT = {"сотрудник": "employee", "employee": "employee", "работник": "employee", "рабочий": "employee",
                 "ответственный": "responsible", "responsible": "responsible", "руководитель": "responsible"}
 ROLE_WORD = {"employee": "Сотрудник", "responsible": "Ответственный"}
@@ -115,7 +135,9 @@ def _decorate(i: dict | None) -> dict | None:
         return None
     u = db.one("""SELECT u.id, u.name, u.active, u.bitrix_id, u.position, b.city, b.name AS branch, b.kind, d.name AS department
                   FROM users u LEFT JOIN branches b ON b.id=u.branch_id LEFT JOIN departments d ON d.id=u.department_id WHERE u.id=?""", (i["user_id"],))
-    out = dict(i)
+    out = {k: v for k, v in i.items() if k != "token"}   # хэш наружу не отдаём
+    out["token"] = fresh_token(i["id"])   # ссылка — только час после выдачи (F-15)
+    out["fresh"] = out["token"] is not None
     out["status"] = status_of(i) if (u and u["active"]) else "deactivated"
     out["user"] = {"id": u["id"], "name": u["name"], "position": u["position"], "city": u["city"] or ("Объект" if (u["kind"] == "field") else None),
                    "branch": u["branch"], "department": u["department"], "active": bool(u["active"]), "bitrix_id": u["bitrix_id"]} if u else None
@@ -129,7 +151,7 @@ def get(invite_id: int) -> dict | None:
 def by_token(token: str) -> dict | None:
     if not token or len(token) < 20:
         return None
-    return _decorate(db.one("SELECT * FROM invites WHERE token=?", (token,)))
+    return _decorate(db.one("SELECT * FROM invites WHERE token=?", (db.token_hash(token),)))
 
 
 def latest_by_user() -> dict[int, dict]:
@@ -138,7 +160,7 @@ def latest_by_user() -> dict[int, dict]:
     out = {}
     for i in db.q("SELECT * FROM invites WHERE id IN (SELECT MAX(id) FROM invites GROUP BY user_id)"):
         out[i["user_id"]] = {"id": i["id"], "status": status_of(i, now), "expires_at": i["expires_at"], "used_at": i["used_at"],
-                             "revoked_at": i["revoked_at"], "created_at": i["created_at"]}
+                             "revoked_at": i["revoked_at"], "created_at": i["created_at"], "fresh": fresh_token(i["id"]) is not None}
     return out
 
 
@@ -161,7 +183,8 @@ def issue(user_id: int, actor_id: int | None = None, days: int | None = None) ->
         db.ex("DELETE FROM sessions WHERE user_id=?", (user_id,))   # «Выдать заново»: прежний телефон больше не в системе
     token = secrets.token_urlsafe(32)
     iid = db.ex("INSERT INTO invites(user_id, token, created_by, created_at, expires_at) VALUES(?,?,?,?,?)",
-                (user_id, token, actor_id, db.iso(now), db.iso(now + timedelta(days=days or invite_days()))))
+                (user_id, db.token_hash(token), actor_id, db.iso(now), db.iso(now + timedelta(days=days or invite_days()))))
+    _remember(iid, token)
     return get(iid)
 
 

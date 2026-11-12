@@ -1,6 +1,7 @@
 """SQLite: соединение, схема, помощники. Журнал событий и журнал баллов — только добавление (триггеры)."""
 from __future__ import annotations
 
+import hashlib
 import json
 import sqlite3
 from datetime import datetime, timezone
@@ -107,6 +108,11 @@ MIGRATIONS = [
 _conn: sqlite3.Connection | None = None
 
 
+def token_hash(token: str) -> str:
+    """Как храним секретные токены (приглашения): «h:» + SHA-256. Токены 256-битные случайные — соль не нужна."""
+    return "h:" + hashlib.sha256((token or "").encode("utf-8")).hexdigest()
+
+
 def now() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -137,6 +143,9 @@ def conn() -> sqlite3.Connection:
             cols = {r[1] for r in c.execute(f"PRAGMA table_info({table})").fetchall()}
             if col not in cols:
                 c.execute(f"ALTER TABLE {table} ADD COLUMN {col} {decl}")
+        # аудит 12.11, F-15: токены приглашений — только хэш (старые открытые токены переводятся при первом открытии базы)
+        for iid, tok in c.execute("SELECT id, token FROM invites WHERE token NOT LIKE 'h:%'").fetchall():
+            c.execute("UPDATE invites SET token=? WHERE id=?", (token_hash(tok), iid))
         c.commit()
         _conn = c
     return _conn

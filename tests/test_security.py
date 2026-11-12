@@ -555,3 +555,33 @@ def test_F20_cross_origin_post_rejected_same_origin_ok(c):
     assert c.post(f"/api/appeals/{a}/support", headers={"Origin": "http://testserver", "Sec-Fetch-Site": "same-origin"}).status_code == 200
     # формы портала Битрикс24 (/bitrix/*) приходят с портала — их это правило не касается
     assert c.post("/bitrix/install", data={"x": "1"}, headers={"Origin": f"https://{PORTAL}"}).status_code == 400
+
+
+# ---------- F-15: токены приглашений — хэш; ссылка показывается только час после выдачи ----------
+
+def test_F15_invite_token_stored_as_hash_and_link_shown_only_after_issue(monkeypatch):
+    from mf import staff
+    with TestClient(app, client=("127.0.0.1", 50000)) as local:   # выдача приглашений — с ноутбука (F-03)
+        login(local, 15)
+        inv = local.post("/api/admin/invites", json={"user_id": 20}).json()
+        raw = inv["token"]
+        row = db.one("SELECT token FROM invites WHERE id=?", (inv["id"],))
+        assert row["token"] == db.token_hash(raw) and raw not in row["token"]
+        assert local.get(f"/api/admin/invites/{inv['id']}").json()["url"].endswith("/i/" + raw)
+        # прошёл час (или перезапуск сервера) — ссылку показать нельзя, только выдать заново; вход по ней работает
+        monkeypatch.setattr(staff, "fresh_token", lambda iid: None)
+        later = local.get(f"/api/admin/invites/{inv['id']}").json()
+        assert later["url"] is None and later["qr_svg"] is None and "Выдать заново" in later["note"]
+        assert local.get(f"/api/admin/invites/{inv['id']}/qr.svg").status_code == 404
+        assert local.get(f"/api/admin/invites/cards.pdf?ids={inv['id']}").status_code == 404
+        local.cookies.clear()
+        assert local.get(f"/api/public/invite/{raw}").json()["status"] == "active"
+
+
+def test_F15_old_plaintext_invites_are_hashed_on_open(tmp_path):
+    import sqlite3
+    from mf import config
+    tok = "W" * 43
+    db.ex("INSERT INTO invites(user_id, token, created_at, expires_at) VALUES(23, ?, ?, ?)", (tok, db.now_iso(), db.iso(db.now() + timedelta(days=3))))
+    db.use(config.DATA_DIR)   # переоткрыть базу — как перезапуск сервера
+    assert db.one("SELECT token FROM invites WHERE user_id=23 ORDER BY id DESC LIMIT 1")["token"] == db.token_hash(tok)

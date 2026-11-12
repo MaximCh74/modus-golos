@@ -57,7 +57,8 @@ def test_add_worker_with_phone_invite_enters_once(c):
     me = c.get("/api/me").json()
     assert me["id"] == u["id"] and me["points"] == 0 and me["branch"] == "Павлодар — производство"
     assert c.get(f"/api/public/invite/{token}").json()["status"] == "already_in"   # то же устройство открыло ссылку снова
-    assert db.one("SELECT used_at FROM invites WHERE token=?", (token,))["used_at"]
+    assert db.one("SELECT used_at FROM invites WHERE token=?", (db.token_hash(token),))["used_at"]   # в базе — хэш (аудит 12.11, F-15)
+    assert not db.one("SELECT 1 FROM invites WHERE token=?", (token,))
     # другое устройство — ссылка уже использована
     c.cookies.clear()
     assert c.get(f"/api/public/invite/{token}").json()["status"] == "used"
@@ -70,7 +71,9 @@ def test_add_worker_with_phone_invite_enters_once(c):
 def test_reissue_revokes_old_link_and_device_expiry_and_setting(c):
     login(c, 15)
     uid = db.one("SELECT id FROM users WHERE name='Асхат Бекжанов'")["id"]
-    old = db.one("SELECT token FROM invites WHERE user_id=? ORDER BY id DESC LIMIT 1", (uid,))["token"]
+    from mf import staff
+    old = staff.fresh_token(db.one("SELECT id FROM invites WHERE user_id=? ORDER BY id DESC LIMIT 1", (uid,))["id"])   # ссылка — в памяти час после выдачи
+    assert old and len(old) >= 40
     sid = auth.login(uid)   # «телефон, который потеряли»: живая сессия
     assert c.get("/api/me", headers={"Authorization": "Bearer " + sid}).status_code == 200
     r = c.post("/api/admin/invites", json={"user_id": uid}).json()

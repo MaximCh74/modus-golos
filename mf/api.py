@@ -1257,9 +1257,15 @@ class InviteBody(BaseModel):
     user_id: int
 
 
+INVITE_GONE = "Ссылку, QR и карточку можно получить только в течение часа после выдачи — в базе хранится не сама ссылка. Нажмите «Выдать заново»"
+
+
 def _invite_out(inv: dict, request: Request) -> dict:
-    return {**inv, "url": staff.url_for(inv["token"], base_url(request)), "qr_svg": f"/api/admin/invites/{inv['id']}/qr.svg",
-            "card_url": f"/api/admin/invites/cards.pdf?ids={inv['id']}"}
+    """Ссылка, QR и карточка — только пока токен в памяти (час после выдачи, F-15); потом — «Выдать заново»."""
+    fresh = bool(inv.get("token"))
+    return {**inv, "url": staff.url_for(inv["token"], base_url(request)) if fresh else None,
+            "qr_svg": f"/api/admin/invites/{inv['id']}/qr.svg" if fresh else None,
+            "card_url": f"/api/admin/invites/cards.pdf?ids={inv['id']}" if fresh else None, "note": None if fresh else INVITE_GONE}
 
 
 @router.post("/admin/invites")
@@ -1281,9 +1287,9 @@ async def admin_invite_cards(request: Request, ids: str = "", all: str = ""):
         except ValueError:
             raise HTTPException(422, "ids — номера приглашений через запятую")
         rows = [staff.get(i) for i in want]
-    rows = [r for r in rows if r and r["user"]]
+    rows = [r for r in rows if r and r["user"] and r["token"]]   # F-15: печатаются только выданные за последний час
     if not rows:
-        raise HTTPException(404, "Нет приглашений для печати")
+        raise HTTPException(404, "Нет приглашений для печати. " + INVITE_GONE)
     import asyncio
     pdf = await asyncio.to_thread(staff.cards_pdf, rows, base_url(request))
     return Response(pdf, media_type="application/pdf", headers={"Content-Disposition": "inline; filename=\"modus_golos_invites.pdf\""})
@@ -1310,6 +1316,8 @@ async def admin_invite_qr(invite_id: int, request: Request):
     inv = staff.get(invite_id)
     if not inv:
         raise HTTPException(404, "Приглашение не найдено")
+    if not inv["token"]:
+        raise HTTPException(404, INVITE_GONE)
     img = qrcode.make(staff.url_for(inv["token"], base_url(request)), image_factory=qrcode.image.svg.SvgPathImage, box_size=12, border=2)
     buf = io.BytesIO(); img.save(buf)
     return Response(buf.getvalue(), media_type="image/svg+xml", headers={"Cache-Control": "no-store"})

@@ -54,7 +54,7 @@ function staffSection(d, reload) {
     let inviteBlock;
     if (st.code === 'bitrix') inviteBlock = h('div', { class: 'card card-info' }, h('b', {}, 'Вход через Битрикс24'), h('div', { class: 'small mt8' }, 'Сотрудник сопоставлен с учётной записью портала — личное приглашение не нужно.'));
     else if (!u.active) inviteBlock = h('div', { class: 'card card-warn' }, h('b', {}, 'Сотрудник отключён'), h('div', { class: 'small mt8' }, 'Не входит ни по приглашению, ни по старой сессии; обращения, баллы и история сохранены.'));
-    else if (st.code === 'active' && inv) {
+    else if (st.code === 'active' && inv && inv.url) {
       const link = h('input', { type: 'text', value: inv.url, readonly: true, class: 'inv-link' });
       const wa = waLink(u, inv);
       inviteBlock = h('div', { class: 'card card-ok' },
@@ -68,6 +68,10 @@ function staffSection(d, reload) {
               h('button', { class: 'btn btn-sm', onclick: () => copy(inviteText(u, inv), 'Приглашение скопировано') }, iconText('copy', 'Скопировать приглашение')),
               h('a', { href: inv.card_url, class: 'btn btn-sm', target: '_blank', rel: 'noopener' }, iconText('printer', 'Карточка PDF')),
               h('button', { class: 'btn btn-sm btn-ghost', title: 'Прежняя ссылка сразу перестанет работать, прежний телефон выйдет', onclick: () => issue(u) }, iconText('refresh', 'Выдать заново'))))));
+    } else if (st.code === 'active') {   // F-15: в базе только хэш — ссылку показываем час после выдачи
+      inviteBlock = h('div', { class: 'card card-info' }, h('div', { class: 'row' }, h('b', {}, 'Личное приглашение'), tag(st.cls, st.label)),
+        h('div', { class: 'small mt8' }, 'Приглашение действует. Ссылку, QR и карточку показываем только в течение часа после выдачи — так их нельзя достать из копии базы. Нужна ссылка или карточка — «Выдать заново»: прежняя ссылка перестанет работать.'),
+        h('div', { class: 'row mt8' }, h('button', { class: 'btn btn-sm btn-primary', onclick: () => issue(u) }, iconText('refresh', 'Выдать заново'))));
     } else {
       inviteBlock = h('div', { class: 'card card-info' }, h('div', { class: 'row' }, h('b', {}, 'Личное приглашение'), st.label ? tag(st.cls, st.label) : null),
         h('div', { class: 'small mt8' }, st.code === 'used' ? 'Сотрудник уже вошёл по приглашению; «Выдать заново» — если телефон потерян или сменился: прежнее устройство выйдет.' : st.code === 'none' ? 'Ссылка и QR для входа без пароля: сотрудник открывает один раз, устройство запоминает его.' : 'Прежняя ссылка больше не работает — выдайте новую.'),
@@ -89,7 +93,7 @@ function staffSection(d, reload) {
   const tools = h('div', { class: 'row staff-tools' },
     h('button', { class: 'btn btn-sm' + (STAFF_UI.showAdd ? ' on' : ''), onclick: () => { STAFF_UI.showAdd = !STAFF_UI.showAdd; reload(); } }, iconText('user-plus', 'Добавить')),
     h('button', { class: 'btn btn-sm' + (STAFF_UI.showImport || STAFF_UI.importResult ? ' on' : ''), onclick: () => { STAFF_UI.showImport = !STAFF_UI.showImport; if (!STAFF_UI.showImport) STAFF_UI.importResult = null; reload(); } }, iconText('upload', 'Импорт CSV или Excel')),
-    menuButton([['Шаблон CSV для импорта', () => { location.href = '/api/admin/users/template.csv'; }], ['Карточки PDF: все действующие приглашения', () => window.open('/api/admin/invites/cards.pdf?all=1', '_blank')]], { title: 'Ещё' }));
+    menuButton([['Шаблон CSV для импорта', () => { location.href = '/api/admin/users/template.csv'; }], ['Карточки PDF: приглашения, выданные за последний час', () => window.open('/api/admin/invites/cards.pdf?all=1', '_blank')]], { title: 'Ещё' }));
 
   // ---- добавить вручную
   let addCard = null;
@@ -150,7 +154,7 @@ function staffSection(d, reload) {
     const invCell = st.code === 'none' ? h('button', { class: 'btn btn-sm', onclick: ev => { ev.stopPropagation(); issue(u); } }, iconText('qr', 'Пригласить')) : tag(st.cls, st.label);
     const items = [['Открыть', () => openStaff(u)]];
     if (u.active && st.code !== 'bitrix') items.push([st.code === 'none' ? 'Пригласить' : 'Выдать приглашение заново', () => issue(u)]);
-    if (st.code === 'active') items.push(['Скопировать приглашение', async () => { const inv = await latestInvite(u); if (inv) copy(inviteText(u, inv), 'Приглашение скопировано'); }],
+    if (st.code === 'active' && st.inv.fresh) items.push(['Скопировать приглашение', async () => { const inv = await latestInvite(u); if (inv) copy(inviteText(u, inv), 'Приглашение скопировано'); }],
       ['Отправить в WhatsApp', async () => { const inv = await latestInvite(u); const wa = inv && waLink(u, inv); if (wa) window.open(wa, '_blank'); else toast('Укажите телефон сотрудника', 'bad'); }],
       ['Карточка PDF', () => window.open('/api/admin/invites/cards.pdf?ids=' + st.inv.id, '_blank')]);
     items.push(u.active ? ['Отключить', () => setActive(u, false)] : ['Включить', () => setActive(u, true)]);
