@@ -107,18 +107,8 @@ function openDrawer(content, opts) {
   document.documentElement.classList.add('has-drawer');
   return box;
 }
-function closeMenus() { document.querySelectorAll('.menu-wrap.open').forEach(m => m.classList.remove('open')); }
-document.addEventListener('click', ev => { if (!ev.target.closest('.menu-wrap')) closeMenus(); });
-document.addEventListener('keydown', ev => { if (ev.key === 'Escape') { closeMenus(); if (OVERLAY) { const cb = OVERLAY.onClose; closeOverlay(); if (cb) cb(); } } });
-// меню «…»: остальные действия экрана (правило 3 — одна главная кнопка на экран)
-function menuButton(items, opts) {
-  opts = opts || {};
-  const wrap = h('div', { class: 'menu-wrap' });
-  const btn = h('button', { type: 'button', class: 'btn btn-sm' + (opts.ghost === false ? '' : ' btn-ghost'), title: opts.title || 'Ещё действия', 'aria-label': opts.title || 'Ещё действия',
-    onclick: ev => { ev.stopPropagation(); const open = wrap.classList.contains('open'); closeMenus(); if (!open) wrap.classList.add('open'); } }, icon('more'));
-  wrap.append(btn, h('div', { class: 'menu' }, items.filter(Boolean).map(([label, fn]) => h('button', { type: 'button', onclick: ev => { ev.stopPropagation(); closeMenus(); fn(); } }, label))));
-  return wrap;
-}
+// меню «…» (menuButton) и closeMenus — в ui.js; Esc закрывает выезжающую панель
+document.addEventListener('keydown', ev => { if (ev.key === 'Escape' && OVERLAY) { const cb = OVERLAY.onClose; closeOverlay(); if (cb) cb(); } });
 function shortName(name) { const p = String(name || '').split(' '); return name && name.length > 18 && p.length > 1 ? p[0] + ' ' + p[1][0] + '.' : name; }
 
 function tabFromFilters() {
@@ -167,7 +157,7 @@ function filterLabel(k) {
 function filtersDrawer() {
   const staff = (DICTS.users || []).filter(u => u.role !== 'employee' && u.active);
   const draft = { ...S.filters };
-  const sel = (name, options, label, placeholder) => { const s = h('select', {}, h('option', { value: '' }, placeholder || 'Все'), options.map(o => h('option', { value: o.value, selected: String(draft[name] || '') === String(o.value) }, o.label))); s.addEventListener('change', () => { draft[name] = s.value; }); return field(label, s); };
+  const sel = (name, options, label, placeholder) => { const s = pick({ placeholder: placeholder || 'Все', options, value: draft[name] || '' }); s.addEventListener('change', () => { draft[name] = s.value; }); return field(label, s); };
   const chk = (name, label) => { const c = h('input', { type: 'checkbox', checked: !!draft[name] }); c.addEventListener('change', () => { draft[name] = c.checked; }); return h('label', { class: 'check' }, c, label); };
   const urg = h('input', { type: 'checkbox', checked: draft.urgency === 'now' }); urg.addEventListener('change', () => { draft.urgency = urg.checked ? 'now' : ''; });
   const apply = h('button', { class: 'btn btn-primary', onclick: () => { for (const k of FILTER_KEYS) { if (draft[k]) S.filters[k] = draft[k]; else delete S.filters[k]; } closeOverlay(); queue(); } }, 'Применить');
@@ -267,13 +257,13 @@ function cardContent(a, id) {
   const post = (path, body) => API.post('/api/panel/appeals/' + id + path, body);
   const staff = (DICTS.users || []).filter(u => u.role !== 'employee' && u.active);
   const formBox = h('div', { class: 'act-form' });
-  const show = el => { formBox.replaceChildren(el); const f = el.querySelector('textarea, select'); if (f) f.focus(); };
+  const show = el => { formBox.replaceChildren(el); const f = el.querySelector('textarea, .pick'); if (f) f.focus(); };
   const form = (title, fieldEl, onSubmit, btnLabel) => h('div', { class: 'card card-info act' },
     h('div', { class: 'row' }, h('b', {}, title), h('div', { class: 'spacer' }), h('button', { class: 'btn btn-sm btn-ghost', title: 'Закрыть', onclick: () => formBox.replaceChildren() }, icon('x'))),
     h('div', { class: 'mt8' }, fieldEl), h('div', { class: 'row mt8' }, h('button', { class: 'btn btn-sm btn-primary', onclick: onSubmit }, btnLabel)));
   const textForm = (title, placeholder, path, ok, btnLabel, extra) => { const ta = h('textarea', { placeholder }); return form(title, ta, () => act(() => post(path, { ...(extra || {}), text: ta.value }), ok), btnLabel); };
-  const assignForm = () => { const sel = h('select', {}, h('option', { value: '' }, '— выбрать ответственного —'), staff.map(u => h('option', { value: u.id, selected: u.id === a.responsible_id }, u.name + ' · ' + (u.position || u.role)))); return form('Ответственный', sel, () => sel.value ? act(() => post('/assign', { responsible_id: Number(sel.value) }), 'Назначено') : toast('Выберите ответственного', 'bad'), 'Назначить'); };
-  const priorityForm = () => { const sel = h('select', {}, Object.entries(PRIO).map(([v, l]) => h('option', { value: v, selected: v === a.priority }, l))); return form('Приоритет', sel, () => act(() => post('/priority', { priority: sel.value }), 'Приоритет изменён'), 'Сохранить'); };
+  const assignForm = () => { const sel = pick({ placeholder: 'Выбрать ответственного', value: a.responsible_id || '', options: staff.map(u => ({ value: u.id, label: u.name, hint: u.position || u.role })) }); return form('Ответственный', sel, () => sel.value ? act(() => post('/assign', { responsible_id: Number(sel.value) }), 'Назначено') : toast('Выберите ответственного', 'bad'), 'Назначить'); };
+  const priorityForm = () => { const sel = pick({ value: a.priority, options: Object.entries(PRIO).map(([v, l]) => ({ value: v, label: l })) }); return form('Приоритет', sel, () => act(() => post('/priority', { priority: sel.value }), 'Приоритет изменён'), 'Сохранить'); };
   const progressForm = () => textForm('Сообщить о ходе', 'Что сделано и что дальше — автор увидит в истории и получит уведомление', '/progress', 'Новость отправлена автору', 'Отправить автору');
   const clarifyForm = () => textForm('Вопрос автору', 'Что уточнить', '/clarify', 'Уточнение запрошено', 'Запросить уточнение');
   const directorForm = () => textForm('Нужно решение директора', 'Что требуется: ресурсы, бюджет, люди — коротко', '/director', 'Вынесено на решение директора', 'Вынести на решение');
@@ -285,7 +275,7 @@ function cardContent(a, id) {
   const decisionForm = () => h('div', { class: 'card card-info act' },
     h('div', { class: 'row' }, h('b', {}, 'Решение по обращению'), h('div', { class: 'spacer' }), h('button', { class: 'btn btn-sm btn-ghost', title: 'Закрыть', onclick: () => formBox.replaceChildren() }, icon('x'))),
     h('div', { class: 'row mt8' }, h('button', { class: 'btn btn-sm btn-primary', onclick: () => statusChange('in_progress', 'В работе') }, 'В работу'),
-      h('button', { class: 'btn btn-sm btn-danger', onclick: () => statusChange('rejected', 'Отклонено') }, 'Отклонить'),
+      h('button', { class: 'btn btn-sm', onclick: () => statusChange('rejected', 'Отклонено') }, 'Отклонить'),
       a.can_request_director ? h('button', { class: 'btn btn-sm', onclick: () => show(directorForm()) }, 'К директору') : null,
       h('button', { class: 'btn btn-sm', onclick: () => show(clarifyForm()) }, 'Уточнить у автора')));
   const btnP = (label, fn) => h('button', { class: 'btn btn-primary', onclick: fn }, label);
@@ -348,11 +338,11 @@ async function meetingsList() {
   const tbl = h('table', { class: 'tbl' },
     h('thead', {}, h('tr', {}, ['Дата', 'Совещание', 'Филиал', 'Ведущий', 'Итог', 'Статус', 'Поручения', 'Идеи'].map(t => h('th', {}, t, t === 'Поручения' ? helpBtn('task') : t === 'Идеи' ? helpBtn('idea') : null)))),
     h('tbody', {}, list.map(m => h('tr', { onclick: () => { location.hash = '#/meetings/' + m.id; } },
-      h('td', { class: 'small' }, fmtDate(m.created_at)), h('td', {}, h('b', {}, m.title), m.fallback ? h('div', {}, tag('tag-demo', m.demo ? 'демо-разбор без ИИ' : 'без ИИ')) : null),
+      h('td', { class: 'small' }, fmtDate(m.created_at)), h('td', {}, h('b', {}, m.title), ' ', aiBadge(m)),
       h('td', {}, m.branch || '—'), h('td', {}, m.creator || '—'), h('td', { class: 'small' }, m.summary_line || (m.error ? h('span', { class: 'muted' }, m.error) : '—')),
       h('td', {}, tag(st(m.status), m.status_label)),
-      h('td', {}, 'выполнено ' + m.counts.tasks_done + ' / ' + m.counts.tasks + ' ', m.counts.tasks_overdue ? tag('tag-overdue', 'просрочено ' + m.counts.tasks_overdue) : null, ' ', m.counts.flags ? tag('tag-flag', 'флагов ' + m.counts.flags) : null),
-      h('td', {}, 'принято ' + m.counts.ideas_accepted + ' · на решении ' + m.counts.ideas_pending + (m.counts.ideas_rejected ? ' · отклонено ' + m.counts.ideas_rejected : ''))))));
+      h('td', {}, m.counts.tasks ? 'выполнено ' + m.counts.tasks_done + ' / ' + m.counts.tasks : '', m.counts.tasks_overdue ? h('span', { class: 'mini' }, h('span', { class: 'dot-overdue' }), 'просрочено ' + m.counts.tasks_overdue) : null, m.counts.flags ? h('span', { class: 'mini' }, 'флагов ' + m.counts.flags) : null),
+      h('td', {}, [m.counts.ideas_accepted ? 'принято ' + m.counts.ideas_accepted : null, m.counts.ideas_pending ? 'на решении ' + m.counts.ideas_pending : null, m.counts.ideas_rejected ? 'отклонено ' + m.counts.ideas_rejected : null].filter(Boolean).join(' · '))))));
   const chk = h('input', { type: 'checkbox', checked: overdueOnly });
   chk.addEventListener('change', () => { location.hash = '#/meetings' + (chk.checked ? '?overdue=1' : ''); });
   root.replaceChildren(h('div', { class: 'wrap wrap-wide' }, h('div', { class: 'row' }, h('div', { class: 'h1' }, 'Совещания'), h('label', { class: 'check small' }, chk, 'только с просроченными поручениями'), h('div', { class: 'spacer' }),
@@ -427,7 +417,7 @@ async function leaguePanel() {
     h('div', { class: 'hint' }, 'Качество работы с обращениями, не их число: реализовано ' + Math.round(d.weights.done * 100) + ' % · рассмотрено ' + Math.round(d.weights.considered * 100) + ' % · скорость первого ответа ' + Math.round(d.weights.speed * 100) + ' % (веса — в настройках).'),
     h('div', { class: 'split mt16' },
       h('div', { class: 'card' }, h('table', { class: 'tbl league' }, h('thead', {}, h('tr', {}, ['#', 'Филиал', 'Балл', 'Реализовано', 'Рассмотрено', 'Скорость', 'Открыто', 'Просрочено'].map(t => h('th', {}, t, t === 'Балл' ? helpBtn('league_score') : t === 'Скорость' ? helpBtn('league_speed') : null)))),
-        h('tbody', {}, d.items.map(b => h('tr', { onclick: () => { S.filters = { branch_id: b.id }; location.hash = '#/queue'; } }, h('td', {}, String(b.rank)), h('td', {}, h('b', {}, b.name), h('div', { class: 'small muted' }, b.total + ' обращений' + (b.enough ? '' : ' — мало данных'))), h('td', { class: 'score' }, h('b', {}, String(b.score))), h('td', {}, Math.round(b.done_share * 100) + ' %'), h('td', {}, Math.round(b.considered_share * 100) + ' %'), h('td', {}, Math.round(b.speed * 100) + ' %'), h('td', {}, String(b.open)), h('td', {}, b.overdue ? tag('tag-overdue', String(b.overdue)) : '0')))))),
+        h('tbody', {}, d.items.map(b => h('tr', { onclick: () => { S.filters = { branch_id: b.id }; location.hash = '#/queue'; } }, h('td', {}, String(b.rank)), h('td', {}, h('b', {}, b.name), h('div', { class: 'small muted' }, b.total + ' обращений' + (b.enough ? '' : ' — мало данных'))), h('td', { class: 'score' }, h('b', {}, String(b.score))), h('td', {}, Math.round(b.done_share * 100) + ' %'), h('td', {}, Math.round(b.considered_share * 100) + ' %'), h('td', {}, Math.round(b.speed * 100) + ' %'), h('td', {}, b.open ? String(b.open) : ''), h('td', {}, b.overdue ? h('span', {}, h('span', { class: 'dot-overdue' }), String(b.overdue)) : '')))))),
       h('div', { class: 'card' }, h('b', {}, 'Топ сотрудников'), h('div', { class: 'list mt8' }, d.top.map((u, i) => h('div', { class: 'item', onclick: () => { location.href = '/app#/u/' + u.id; } }, h('div', { class: 'row' }, h('b', {}, (i + 1) + '.'), avatarEl(u), h('div', {}, h('b', {}, u.name), h('div', { class: 'small muted' }, [u.position, u.branch].filter(Boolean).join(' · '))), h('div', { class: 'spacer' }), h('span', { class: 'small row' }, iconText('star', String(u.points)), 'внедрено ' + u.implemented, iconText('heart', String(u.thanks)))))))))));
 }
 
@@ -449,12 +439,14 @@ async function adminScreen() {
     try { await API.post('/api/admin/settings', { settings: out }); toast('Настройки сохранены'); adminScreen(); } catch (e) { toast(e.message, 'bad'); }
   } }, 'Сохранить настройки');
   const staff = d.users.filter(u => u.role !== 'employee' && u.active);
-  const userSel = (val) => h('select', {}, h('option', { value: '' }, '— вакансия —'), staff.map(u => h('option', { value: u.id, selected: u.id === val }, u.name + ' · ' + (u.position || u.role))));
+  const userSel = (val) => pick({ placeholder: 'вакансия', value: val || '', options: staff.map(u => ({ value: u.id, label: u.name, hint: u.position || u.role })) });
   const catRows = d.categories.map(c => { const rs = userSel(c.responsible_user_id); const ss = userSel(c.suggestion_responsible_user_id); const sla = h('input', { type: 'number', value: c.sla, class: 'w70' });
     const save = h('button', { class: 'btn btn-sm', onclick: async () => { try { await API.post('/api/admin/categories/' + c.id, { responsible_user_id: rs.value ? Number(rs.value) : null, suggestion_responsible_user_id: ss.value ? Number(ss.value) : null, sla: Number(sla.value) }); toast('Сохранено: ' + c.name); } catch (e) { toast(e.message, 'bad'); } }, title: 'Сохранить' }, icon('check'));
     return h('tr', { class: 'noclick' }, h('td', {}, h('b', {}, c.name), h('div', { class: 'small muted' }, c.appeals ? plural(c.appeals, 'обращение', 'обращения', 'обращений') : 'обращений пока нет')), h('td', {}, rs), h('td', {}, ss), h('td', {}, h('div', { class: 'field-unit' }, sla, h('span', { class: 'unit' }, 'часов'))), h('td', {}, save)); });
-  const claimRows = claims.map(c => { const dec = (decision) => async () => { const comment = decision === 'rejected' ? prompt('Причина отказа') : ''; if (decision === 'rejected' && !comment) return; try { await API.post('/api/admin/reward-claims/' + c.id + '/decide', { decision, comment }); toast('Решено'); adminScreen(); } catch (e) { toast(e.message, 'bad'); } };
-    return h('tr', {}, h('td', {}, c.user_name), h('td', {}, c.title + ' · ' + c.cost_points), h('td', {}, tag(c.status === 'approved' ? 'st-done' : c.status === 'rejected' ? 'st-rejected' : 'st-review', c.status)), h('td', { class: 'small' }, fmtDate(c.created_at)), h('td', {}, c.status === 'requested' ? h('div', { class: 'row' }, h('button', { class: 'btn btn-sm btn-ok', onclick: dec('approved') }, 'Одобрить'), h('button', { class: 'btn btn-sm btn-danger', onclick: dec('rejected') }, 'Отклонить')) : (c.comment || ''))); });
+  const claimRows = claims.map(c => { const reason = h('textarea', { class: 'hidden', rows: 2, placeholder: 'Причина отказа — её увидит сотрудник (обязательно)' });
+    const dec = async (decision) => { if (decision === 'rejected') { if (reason.classList.contains('hidden')) { reason.classList.remove('hidden'); reason.focus(); rej.replaceChildren('Подтвердить отказ'); return; } if (!reason.value.trim()) { toast('Нужна причина', 'bad'); return; } } try { await API.post('/api/admin/reward-claims/' + c.id + '/decide', { decision, comment: reason.value }); toast('Решено'); adminScreen(); } catch (e) { toast(e.message, 'bad'); } };
+    const rej = h('button', { class: 'btn btn-sm', onclick: () => dec('rejected') }, 'Отклонить');
+    return h('tr', { class: 'noclick' }, h('td', {}, c.user_name), h('td', {}, c.title + ' · ' + c.cost_points), h('td', {}, tag(c.status === 'approved' ? 'st-done' : c.status === 'rejected' ? 'st-rejected' : 'st-review', c.status === 'approved' ? 'одобрено' : c.status === 'rejected' ? 'отклонено' : 'ждёт')), h('td', { class: 'small' }, fmtDate(c.created_at)), h('td', {}, c.status === 'requested' ? h('div', {}, h('div', { class: 'row' }, h('button', { class: 'btn btn-sm btn-primary', onclick: () => dec('approved') }, 'Одобрить'), rej), reason) : (c.comment || ''))); });
   const avatars = d.users.filter(u => u.avatar);
   // награды: добавить / изменить / отключить
   const rewardRow = (r) => { const title = h('input', { type: 'text', value: r.title || '', placeholder: 'Название' }); const descr = h('input', { type: 'text', value: r.description || '', placeholder: 'Описание' }); const cost = h('input', { type: 'number', value: r.cost_points || 100, class: 'w70' }); const act = h('input', { type: 'checkbox', checked: r.active !== 0 && r.active !== false });
@@ -485,9 +477,9 @@ async function adminScreen() {
         h('div', { class: 'card' }, h('div', { class: 'row' }, h('b', {}, 'Филиалы и QR'), h('div', { class: 'spacer' }), h('a', { href: '/api/admin/branches/posters.pdf', class: 'btn btn-sm btn-primary', target: '_blank', rel: 'noopener' }, iconText('printer', 'Все плакаты PDF'))),
           h('div', { class: 'list mt8' }, d.branches.map(b => h('div', { class: 'item branch-item noclick' }, h('div', { class: 'row' }, h('img', { src: b.qr_svg, alt: 'QR ' + b.name, class: 'qr-thumb' }), h('div', { class: 'spacer' }, h('b', {}, b.name), h('div', { class: 'small muted' }, b.kind_label)),
             h('div', { class: 'row' }, h('a', { href: b.poster_url, class: 'btn btn-sm', target: '_blank', rel: 'noopener', title: 'Плакат A4 с QR для печати' }, iconText('printer', 'Плакат PDF')),
-              h('button', { class: 'btn btn-sm', title: 'Скопировать ссылку на форму', onclick: async () => { try { await navigator.clipboard.writeText(b.form_url); toast('Ссылка скопирована: ' + b.form_url); } catch (e) { prompt('Скопируйте:', b.form_url); } } }, iconText('link', 'Скопировать ссылку')),
+              h('button', { class: 'btn btn-sm', title: 'Скопировать ссылку на форму', onclick: async () => { try { await navigator.clipboard.writeText(b.form_url); toast('Ссылка скопирована: ' + b.form_url); } catch (e) { toast('Скопируйте вручную: ' + b.form_url); } } }, iconText('link', 'Скопировать ссылку')),
               h('a', { href: '/q/' + b.code, class: 'btn btn-sm btn-ghost', target: '_blank', rel: 'noopener', title: 'Открыть форму обращения' }, iconText('external-link', 'Открыть форму')))))))),
-        h('div', { class: 'card' }, h('b', {}, 'Аватарки'), avatars.length ? h('div', { class: 'list mt8' }, avatars.map(u => h('div', { class: 'item' }, h('div', { class: 'row' }, avatarEl({ name: u.name, avatar: '/api/avatars/' + u.avatar }), h('span', {}, u.name), h('div', { class: 'spacer' }), h('button', { class: 'btn btn-sm btn-danger', onclick: async () => { await API.post('/api/admin/users/' + u.id + '/avatar/remove'); toast('Убрана'); adminScreen(); } }, 'Убрать'))))) : h('div', { class: 'muted small mt8' }, 'Пользовательских аватарок нет'))))));
+        h('div', { class: 'card' }, h('b', {}, 'Аватарки'), avatars.length ? h('div', { class: 'list mt8' }, avatars.map(u => h('div', { class: 'item' }, h('div', { class: 'row' }, avatarEl({ name: u.name, avatar: '/api/avatars/' + u.avatar }), h('span', {}, u.name), h('div', { class: 'spacer' }), h('button', { class: 'btn btn-sm', onclick: async () => { await API.post('/api/admin/users/' + u.id + '/avatar/remove'); toast('Убрана'); adminScreen(); } }, 'Убрать'))))) : h('div', { class: 'muted small mt8' }, 'Пользовательских аватарок нет'))))));
 }
 
 // ---------- «Справка» (пункт 1 очереди 12.11): термины по разделам из единого словаря, поиск, переход по ссылке из подсказки «?» ----------

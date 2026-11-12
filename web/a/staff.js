@@ -23,13 +23,12 @@ function staffSection(d, reload) {
   };
   const issue = async u => { await post(() => API.post('/api/admin/invites', { user_id: u.id }), 'Приглашение выдано: ' + u.name); STAFF_UI.openId = u.id; reload(); };
   const setActive = async (u, active) => {
-    if (!active && !confirm('Отключить ' + u.name + '? Вход закроется, обращения, баллы и история останутся.')) return;
     await post(() => API.post('/api/admin/users/' + u.id + '/active', { active }), (active ? 'Включён: ' : 'Отключён: ') + u.name);
     STAFF_UI.openId = active ? u.id : null; reload();
   };
   const inviteText = (u, inv) => 'Здравствуйте, ' + u.name.split(' ')[0] + '! Это ваше личное приглашение в «Модус Голос» (ГК «Модус Трейд»): ' + inv.url + ' — откройте ссылку и нажмите «Войти». Паролей нет, ссылка одноразовая, действует до ' + fmtDay(inv.expires_at, true) + '.';
   const waLink = (u, inv) => { const digits = String(u.phone || '').replace(/\D/g, ''); return digits ? 'https://wa.me/' + digits + '?text=' + encodeURIComponent(inviteText(u, inv)) : null; };
-  const copy = async (text, ok) => { try { await navigator.clipboard.writeText(text); toast(ok); } catch (e) { prompt('Скопируйте:', text); } };
+  const copy = async (text, ok) => { try { await navigator.clipboard.writeText(text); toast(ok); } catch (e) { toast('Буфер недоступен — скопируйте из ссылки выше'); } };
   const latestInvite = async u => { const inv = invites[u.id]; if (!inv) return null; try { return await API.get('/api/admin/invites/' + inv.id); } catch (e) { return null; } };
 
   // ---- боковая панель «Сотрудник»
@@ -82,7 +81,7 @@ function staffSection(d, reload) {
       h('div', { class: 'card' }, h('b', {}, 'Данные сотрудника'),
         h('div', { class: 'grid2 mt8' }, field('Имя и фамилия', name), field('Должность', pos), field('Роль', role), field('Город / филиал', br), field('Отдел', dep), field('Руководитель', mgr), field('Телефон (WhatsApp)', phone), field('Почта', email)),
         h('details', { class: 'sect mt8' }, h('summary', {}, 'Битрикс24'), h('div', { class: 'mt8' }, field('ID пользователя портала', bx, u.bitrix_id ? 'Сопоставлен с порталом: синхронизация обновляет отдел и должность' : 'Заполняется синхронизацией — по почте, телефону или имени; вручную — если склейка не удалась'))),
-        h('div', { class: 'row mt16' }, save, h('div', { class: 'spacer' }), u.active ? h('button', { class: 'btn btn-danger', onclick: () => setActive(u, false) }, iconText('user-x', 'Отключить')) : h('button', { class: 'btn btn-ok', onclick: () => setActive(u, true) }, iconText('user-plus', 'Включить')))));
+        h('div', { class: 'row mt16' }, save, h('div', { class: 'spacer' }), u.active ? (() => { const off = h('button', { class: 'btn', title: 'Вход закроется, обращения, баллы и история останутся', onclick: () => { if (!off.dataset.armed) { off.dataset.armed = '1'; off.replaceChildren(iconText('user-x', 'Подтвердить отключение')); return; } setActive(u, false); } }, iconText('user-x', 'Отключить')); return off; })() : h('button', { class: 'btn btn-outline', onclick: () => setActive(u, true) }, iconText('user-plus', 'Включить')))));
     openDrawer(content, { label: u.name, onClose: () => { STAFF_UI.openId = null; } });
   }
 

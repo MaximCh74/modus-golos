@@ -530,6 +530,22 @@ select { appearance: none; -webkit-appearance: none; padding-right: 34px; backgr
 .ds-variant .ds-states small { width: 100%; color: var(--muted); font-size: 11px; }
 @media (max-width: 900px) { .ds-variants { grid-template-columns: 1fr; } }
 
+/* этап 9, пункт 4 очереди 12.11: совещание (поля пунктов — компоненты pick и datePick), лига списком, профиль без нулей */
+.mi-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%; }
+.mi-fields .field { margin-bottom: 0; }
+.mi-fields > * { min-width: 0; }
+.mi .row.small .mi-fields { font-size: var(--fs-small); }
+.mi-rm { color: var(--muted); }
+.datepick { display: flex; flex-direction: column; gap: 6px; }
+.datepick .date-other { width: 120px; padding: 8px 10px; font-size: 14px; }
+.lg-rank { width: 28px; height: 28px; border-radius: 50%; background: var(--bg-soft); color: var(--navy); font-weight: var(--w-bold); display: inline-flex; align-items: center; justify-content: center; font-size: 13px; flex: none; }
+.lg-score { display: inline-flex; align-items: center; gap: 2px; }
+.lg-score b { font-size: 22px; color: var(--navy); }
+.lg-bits { margin-top: 4px; padding-left: 38px; }
+.lg-top { gap: 10px; }
+.stats.n1 { grid-template-columns: 1fr; } .stats.n2 { grid-template-columns: repeat(2, 1fr); } .stats.n3 { grid-template-columns: repeat(3, 1fr); }
+@media (max-width: 480px) { .mi-fields { grid-template-columns: 1fr; } .stats.n3 { grid-template-columns: repeat(3, 1fr); } }
+
 /* подсказки «?» и «Справка» (пункт 1 очереди 12.11): кнопка со знаком вопроса, поповер с одной-двумя фразами; «Мои поручения» со счётчиком */
 .help-wrap { position: relative; display: inline-flex; vertical-align: middle; margin-left: 4px; }
 .help-btn { border: 0; background: none; padding: 0 2px; color: var(--muted-2); cursor: pointer; display: inline-flex; line-height: 0; border-radius: 50%; }

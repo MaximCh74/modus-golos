@@ -399,3 +399,51 @@ function closeHelp() { document.querySelectorAll('.help-wrap.open').forEach(w =>
 document.addEventListener('click', ev => { if (!ev.target.closest('.help-wrap')) closeHelp(); });
 document.addEventListener('keydown', ev => { if (ev.key === 'Escape') closeHelp(); });
 window.addEventListener('scroll', () => { if (Date.now() - _helpOpenedAt > 400) closeHelp(); }, true);   // прокрутка закрывает поповер (он fixed); сразу после открытия — не считается
+
+// ---------- меню «…» (этап 9, правило 3: одна главная кнопка, остальное в меню) — общее для панели, приложения и совещаний ----------
+function closeMenus() { document.querySelectorAll('.menu-wrap.open').forEach(m => m.classList.remove('open')); }
+document.addEventListener('click', ev => { if (!ev.target.closest('.menu-wrap')) closeMenus(); });
+document.addEventListener('keydown', ev => { if (ev.key === 'Escape') closeMenus(); });
+function menuButton(items, opts) {
+  opts = opts || {};
+  const wrap = h('div', { class: 'menu-wrap' });
+  const btn = h('button', { type: 'button', class: 'btn btn-sm' + (opts.ghost === false ? '' : ' btn-ghost'), title: opts.title || 'Ещё действия', 'aria-label': opts.title || 'Ещё действия',
+    onclick: ev => { ev.stopPropagation(); const open = wrap.classList.contains('open'); closeMenus(); if (!open) wrap.classList.add('open'); } }, icon('more'));
+  wrap.append(btn, h('div', { class: 'menu' }, items.filter(Boolean).map(([label, fn]) => h('button', { type: 'button', onclick: ev => { ev.stopPropagation(); closeMenus(); fn(); } }, label))));
+  return wrap;
+}
+
+// ---------- выбор даты без нативного календаря (пункт 4 очереди 12.11): список готовых сроков + «другая дата» дд.мм; el.value — ISO или '' ----------
+function isoLocal(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+function fmtDay(iso) { if (!iso) return ''; const [, m, d] = iso.split('-'); return d + '.' + m; }
+function datePick(opts) {
+  opts = opts || {};
+  const today = new Date(); today.setHours(12, 0, 0, 0);
+  const plus = n => { const d = new Date(today); d.setDate(d.getDate() + n); return d; };
+  const friday = plus(((5 - today.getDay()) % 7) || 7);
+  const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0, 12);
+  const base = [[isoLocal(today), 'сегодня'], [isoLocal(plus(1)), 'завтра'], [isoLocal(friday), 'до пятницы · ' + fmtDay(isoLocal(friday))], [isoLocal(plus(7)), 'через неделю · ' + fmtDay(isoLocal(plus(7)))], [isoLocal(monthEnd), 'до конца месяца · ' + fmtDay(isoLocal(monthEnd))]];
+  let value = opts.value || '';
+  const options = base.map(([v, l]) => ({ value: v, label: l }));
+  if (value && !options.some(o => o.value === value)) options.unshift({ value, label: fmtDay(value) + (value < isoLocal(today) ? ' · прошёл' : '') });
+  options.push({ value: '__other', label: 'Другая дата…' });
+  const p = pick({ placeholder: opts.placeholder || 'срок не назван', options, value });
+  const other = h('input', { type: 'text', inputmode: 'numeric', placeholder: 'дд.мм', class: 'hidden date-other', 'aria-label': 'Дата в формате дд.мм' });
+  const box = h('div', { class: 'datepick' }, p, other);
+  const emit = () => box.dispatchEvent(new Event('change'));
+  p.addEventListener('change', () => {
+    if (p.value === '__other') { other.classList.remove('hidden'); other.focus(); return; }
+    other.classList.add('hidden'); value = p.value; emit();
+  });
+  other.addEventListener('change', () => {
+    const m = other.value.trim().match(/^(\d{1,2})[.\/-](\d{1,2})(?:[.\/-](\d{2,4}))?$/);
+    if (!m) { toast('Дата — в формате дд.мм', 'bad'); return; }
+    let y = m[3] ? Number(m[3]) : today.getFullYear(); if (y < 100) y += 2000;
+    const d = new Date(y, Number(m[2]) - 1, Number(m[1]), 12);
+    if (isNaN(d) || d.getMonth() !== Number(m[2]) - 1) { toast('Такой даты нет', 'bad'); return; }
+    if (!m[3] && d < today) d.setFullYear(d.getFullYear() + 1);   // «05.01» зимой — следующий год
+    value = isoLocal(d); other.classList.add('hidden'); emit();
+  });
+  Object.defineProperty(box, 'value', { get: () => value, set: v => { value = v || ''; p.value = value; } });
+  return box;
+}
