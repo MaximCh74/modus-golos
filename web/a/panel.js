@@ -54,7 +54,7 @@ function renderTop() {
     onclick: ev => { ev.stopPropagation(); toggleNav(!panel.classList.contains('open')); } }, icon('menu'));
   function toggleNav(open) { panel.classList.toggle('open', open); toggle.setAttribute('aria-expanded', open ? 'true' : 'false'); }
   top.replaceChildren(
-    h('a', { href: '#/queue', class: 'brand' }, h('img', { src: '/a/img/logo.svg', alt: 'Модус Трейд' }), h('span', {}, 'Модус Голос', h('small', {}, 'Панель'))),
+    brandLock('#/queue', 'Модус Голос — панель', 'brand'),
     h('div', { class: 'nav' }, nav.map(([href, label]) => h('a', { href, class: isActive(href) ? 'active' : '' }, label))),
     h('div', { class: 'spacer' }),
     h('a', { href: '#/help', class: 'btn btn-sm' + (hash.startsWith('#/help') ? ' on' : ''), title: 'Справка: термины простым языком', 'aria-label': 'Справка' }, icon('help-circle')),

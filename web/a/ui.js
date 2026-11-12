@@ -261,17 +261,23 @@ async function speakSummary(btn, sentences) {
 }
 
 
-// Шапка публичных страниц (стартовая, «Что изменили», /design): логотип «МОДУС ТРЕЙД» | черта | «МОДУС ГОЛОС» в две строки той же высоты
-// и тем же весом, зеркально логотипу (замечание владельца 12.11); справа — одна кнопка «Войти» (вход через Битрикс24 — на странице входа).
+// Фирменный блок «логотип МОДУС ТРЕЙД | черта | МОДУС ГОЛОС» — шапка сайта, приложения и панели. «МОДУС ГОЛОС» — не шрифт, а контуры
+// букв логотипа (web/a/modus-golos-wordmark.svg, tools/make_wordmark.py; решение владельца 13.11): та же высота картинки — буквы один в один.
+function brandLock(href, title, cls) {
+  return h('a', { href, class: 'brand-lock' + (cls ? ' ' + cls : ''), title: title || 'Модус Голос' },
+    h('img', { src: '/a/img/logo.svg', alt: 'Модус Трейд' }), h('span', { class: 'div', 'aria-hidden': 'true' }),
+    h('img', { src: '/a/modus-golos-wordmark.svg', alt: 'Модус Голос', class: 'wordmark' }));
+}
+
+// Шапка публичных страниц (стартовая, «Что изменили», /design): фирменный блок слева; справа — одна кнопка «Войти»
+// (вход через Битрикс24 — на странице входа; замечание владельца 12.11).
 function siteHeader(me, cfg, opts) {
   opts = opts || {};
   const right = me
     ? h('div', { class: 'row' }, h('span', { class: 'small muted' }, me.name.split(' ')[0]), h('a', { href: me.role === 'employee' ? '/app' : '/panel', class: 'btn btn-sm' }, me.role === 'employee' ? 'Приложение' : 'Панель'))
     : h('a', { href: '/login' + (opts.next ? '?next=' + encodeURIComponent(opts.next) : ''), class: 'btn btn-outline' }, iconText('user', 'Войти'));
   return h('header', { class: 'site-head' },
-    h('a', { href: '/', class: 'brand-lock', title: 'Модус Голос — на главную' }, h('img', { src: '/a/img/logo.svg', alt: 'Модус Трейд' }), h('span', { class: 'div' }),
-      h('span', { class: 'wordmark', 'aria-label': 'Модус Голос' }, h('span', {}, 'Модус'), h('span', {}, 'Голос'))),
-    h('div', { class: 'spacer' }), right);
+    brandLock('/', 'Модус Голос — на главную'), h('div', { class: 'spacer' }), right);
 }
 
 

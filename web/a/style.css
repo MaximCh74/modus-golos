@@ -31,7 +31,7 @@
   --t-fast: 150ms; --t: 220ms; --ease: cubic-bezier(.2, .7, .2, 1);
   /* типографика: две насыщенности — 500 и 700 */
   --fs-display: 44px; --fs-h1: 30px; --fs-h2: 20px; --fs-body: 16px; --fs-small: 14px; --fs-micro: 12px;
-  --w-body: 500; --w-bold: 700; --w-logo: 900;   /* 900 — только для «МОДУС ГОЛОС» в шапке, под начертание логотипа */
+  --w-body: 500; --w-bold: 700;
   --brand: var(--red); --brand-dark: var(--red-dark); --card: var(--white);
   /* главная кнопка нового стиля (пункт 3 очереди 12.11, вариант 2 «Акцентный»): тёмно-синяя основа, красный бренда мягко в правом нижнем
      углу — угол и доля красного задаются двумя токенами (три варианта на /design), все цвета градиента — через токены */
@@ -336,12 +336,13 @@ tr.muted td { opacity: .6; }
 
 /* главная (этап 7, шаг 1) */
 .site-head { display: flex; align-items: center; gap: var(--s2); padding: 14px var(--s4); background: var(--white); border-bottom: 1px solid var(--line-soft); }
-/* логотип | черта | «МОДУС ГОЛОС» в две строки: высота и вес как у текста логотипа (в знаке текст — 0,74 высоты, две строки заглавных),
-   шрифт Montserrat 800 с плотным трекингом — максимально похоже на начертание логотипа; всё масштабируется от --logo-h */
-.brand-lock { --logo-h: 36px; display: inline-flex; align-items: center; gap: 10px; text-decoration: none; color: var(--navy); }
+/* логотип | черта | «МОДУС ГОЛОС» (контуры букв логотипа, общая система координат высотой 42: та же высота картинки — буквы один в один).
+   Черта — посередине между «ТРЕЙД» и «ГОЛОС» (зеркально): в logo.svg справа от текста пустое поле 11,15 из 42 — его съедает отрицательный
+   отступ; черта высотой с текстовый блок логотипа (0,74). Всё масштабируется от --logo-h. */
+.brand-lock { --logo-h: 36px; display: inline-flex; align-items: center; gap: calc(var(--logo-h) * .3); text-decoration: none; color: var(--navy); flex: none; }
 .brand-lock img { height: var(--logo-h); width: auto; display: block; }
-.brand-lock .div { width: 1px; height: calc(var(--logo-h) * .74); background: var(--line); }
-.brand-lock .wordmark { display: flex; flex-direction: column; font-weight: var(--w-logo); font-size: calc(var(--logo-h) * .35); line-height: 1.29; letter-spacing: -.01em; text-transform: uppercase; color: var(--navy); white-space: nowrap; }
+.brand-lock .div { flex: none; width: 1px; height: calc(var(--logo-h) * .74); background: var(--line); margin-left: calc(var(--logo-h) * -.26); }
+.topbar .brand-lock { --logo-h: 30px; }
 .home { position: relative; max-width: 1280px; margin: 0 auto; padding: var(--s4) var(--s4) var(--s6); }
 @media (min-width: 1200px) { :root { --fs-display: 52px; } }
 .home-arc { position: absolute; right: 0; top: 0; width: 300px; height: 190px; overflow: hidden; pointer-events: none; }
@@ -661,7 +662,7 @@ select { appearance: none; -webkit-appearance: none; padding-right: 34px; backgr
 @media (max-width: 900px) { .feats { grid-template-columns: 1fr; } .grid3 { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 768px) {
   .site-head { padding: 10px var(--s2); }
-  .brand-lock { --logo-h: 28px; gap: 8px; }
+  .brand-lock { --logo-h: 28px; }
   .site-head .btn { padding: 8px 12px; min-height: 40px; }
   .city-pills { display: flex; }
   /* телефон: у каждой метки короткая подпись города под булавкой (замечание владельца 12.11) — как у чипов ниже; остриё булавки — в точке */
@@ -699,7 +700,7 @@ select { appearance: none; -webkit-appearance: none; padding-right: 34px; backgr
 .qcard .row { gap: 8px; flex-wrap: nowrap; min-width: 0; }
 @media (max-width: 480px) {
   .topbar { gap: 6px; padding: 8px 12px; position: sticky; flex-wrap: nowrap; }
-  .topbar .brand span { display: none; }
+  .topbar .brand .div, .topbar .brand .wordmark { display: none; }   /* на телефоне в полосе приложения — только логотип */
   .topbar .btn-sm { padding: 6px 8px; }
   .topbar .nav, .topbar .top-app, .topbar .top-user { display: none; }
   .nav-toggle { display: inline-flex; }

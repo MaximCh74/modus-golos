@@ -28,7 +28,7 @@ function renderTop() {
   let top = document.getElementById('top');
   if (!top) { top = h('div', { class: 'topbar', id: 'top' }); document.body.prepend(top); }
   top.replaceChildren(
-    h('a', { href: '#/', class: 'brand' }, h('img', { src: '/a/img/logo.svg', alt: 'Модус Трейд' }), h('span', {}, 'Модус Голос', h('small', {}, 'Каждый голос услышан'))),
+    brandLock('#/', 'Модус Голос — на главную приложения', 'brand'),
     h('div', { class: 'spacer' }),
     h('span', { class: 'small muted', title: 'Мои баллы' }, iconText('star', String(ME.points || 0))),
     h('a', { href: '#/notifications', class: 'btn btn-sm bell', title: 'Уведомления' }, icon('bell'), ME.unread ? h('span', { class: 'n' }, String(ME.unread)) : null),

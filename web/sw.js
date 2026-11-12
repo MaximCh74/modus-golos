@@ -1,7 +1,7 @@
 // Service worker (PWA, этап 5): оболочка кэшируется, данные всегда из сети; при потере связи — понятный экран «Нет связи с сервером».
-const CACHE = 'mf-shell-v6';   // пункты 1–2 очереди 12.11: ui.js (подсказки), boss.js — обновить оболочку у установленных PWA
+const CACHE = 'mf-shell-v7';   // 13.11: главная (карта, шапка), знак «МОДУС ГОЛОС» из контуров логотипа — обновить оболочку у установленных PWA и APK
 const SHELL = ['/offline', '/a/style.css', '/a/api.js', '/a/ui.js', '/a/app.js', '/a/panel.js', '/a/meeting.js', '/a/mapview.js', '/a/qr.js', '/a/track.js', '/a/login.js', '/a/index.js', '/a/staff.js', '/a/invite.js', '/a/icons.js', '/a/command.js', '/a/boss.js',
-  '/a/img/logo.svg', '/a/fonts/Montserrat.ttf', '/a/img/icons/icon-192.png'];
+  '/a/img/logo.svg', '/a/modus-golos-wordmark.svg', '/a/fonts/Montserrat.ttf', '/a/img/icons/icon-192.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
 self.addEventListener('fetch', e => {
