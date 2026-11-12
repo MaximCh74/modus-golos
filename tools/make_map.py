@@ -17,9 +17,11 @@ W = 900
 KX = W / (LON1 - LON0)                      # px на градус долготы
 KY = KX / math.cos(math.radians(54.0))      # px на градус широты (средняя широта полосы — 54°)
 H = round((LAT1 - LAT0) * KY)
-LAND, WATER, LINE = "#f6f8fb", "#e9eff6", "#c3cbd6"
-FILLS = {"Russia": "#f7f9fc", "Kazakhstan": "#f1f5fa"}   # две очень лёгкие подложки (этап 7 §2.4)
-REGION_LINE = "#dbe2ea"                                   # линии регионов — едва заметно
+# Замечание владельца 12.11: заливка стран заметно темнее воды и фона страницы, границы чёткие — на телефоне карта должна читаться.
+# Казахстан — самый тёмный (фокус карты), Россия чуть светлее, остальные страны по краям — ещё светлее; вода светлая.
+LAND, WATER, LINE = "#dfe5ed", "#eaf0f6", "#8593a6"
+FILLS = {"Russia": "#d9e1ea", "Kazakhstan": "#cdd7e3"}
+REGION_LINE = "#b9c3d0"                                   # линии регионов — видны, но тише границ стран
 
 
 def proj(lon: float, lat: float) -> tuple[float, float]:
@@ -77,7 +79,7 @@ def regions(path: str) -> str:
             for piece in clip_line([(float(x), float(y)) for x, y in line]):
                 pts = [proj(x, y) for x, y in piece]
                 d.append("M" + " L".join(f"{x:.1f},{y:.1f}" for x, y in pts))
-    return f'<path d="{" ".join(d)}" fill="none" stroke="{REGION_LINE}" stroke-width="0.5" stroke-linejoin="round" stroke-linecap="round"/>' if d else ""
+    return f'<path d="{" ".join(d)}" fill="none" stroke="{REGION_LINE}" stroke-width="0.6" stroke-linejoin="round" stroke-linecap="round"/>' if d else ""
 
 
 def main() -> None:
@@ -98,7 +100,7 @@ def main() -> None:
             pts = [proj(x, y) for x, y in c]
             d.append("M" + " L".join(f"{x:.1f},{y:.1f}" for x, y in pts) + " Z")
         if d:
-            paths.append(f'<path d="{" ".join(d)}" fill="{FILLS.get(name, LAND)}" stroke="{LINE}" stroke-width="0.7" stroke-linejoin="round"><title>{name}</title></path>')
+            paths.append(f'<path d="{" ".join(d)}" fill="{FILLS.get(name, LAND)}" stroke="{LINE}" stroke-width="1.1" stroke-linejoin="round"><title>{name}</title></path>')
     print(f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" width="{W}" height="{H}">')
     print(f'<rect width="{W}" height="{H}" fill="{WATER}"/>')
     print("\n".join(paths))

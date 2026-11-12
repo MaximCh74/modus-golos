@@ -6,7 +6,8 @@
 // crop: {aspect, top} — на стартовой карта показывается более широкой полосой (object-fit: cover, верх обрезки top — доля высоты);
 // onBranch(b, el), onSite(s, el). Методы: flash(id), select(id|null), pos(id) → {x, y} в процентах контейнера.
 const MAP = { lon0: 45, lon1: 82, lat0: 46.5, lat1: 60.5, aspect: 900 / 579 };
-const MAP_COUNTRIES = [{ name: 'Россия', lat: 57.3, lng: 52.5 }, { name: 'Казахстан', lat: 49.6, lng: 62 }];
+// Подписи стран не прячутся за обрезкой: прижимаются к краю полосы (clamp), чтобы «Казахстан» был виден и на широкой ленте ноутбука.
+const MAP_COUNTRIES = [{ name: 'Россия', lat: 57.3, lng: 52.5 }, { name: 'Казахстан', lat: 48.3, lng: 66.5 }];   // «Казахстан» — в центре страны, ниже меток
 function mapXY(lat, lng) { return [(lng - MAP.lon0) / (MAP.lon1 - MAP.lon0) * 100, (MAP.lat1 - lat) / (MAP.lat1 - MAP.lat0) * 100]; }
 function mapInside(lat, lng) { return lat !== null && lat !== undefined && lat >= MAP.lat0 && lat <= MAP.lat1 && lng >= MAP.lon0 && lng <= MAP.lon1; }
 
@@ -26,11 +27,12 @@ function mapView(data, opts) {
     } else { visible = 1; top = 0; }
   }
   layout();
-  const place = (el, lat, lng) => {   // → [x, y] в процентах контейнера; за пределами полосы — класс off
+  const place = (el, lat, lng, clamp) => {   // → [x, y] в процентах контейнера; за пределами полосы — класс off (подписи стран — к краю)
     const [x, yi] = mapXY(lat, lng);
-    const y = (yi - top * 100) / visible;
+    let y = (yi - top * 100) / visible;
+    if (clamp) y = Math.max(6, Math.min(92, y));
     el.style.left = x + '%'; el.style.top = y + '%';
-    el.classList.toggle('off', y < 3 || y > 99);
+    el.classList.toggle('off', !clamp && (y < 3 || y > 99));
     el.dataset.x = x.toFixed(2); el.dataset.y = y.toFixed(2);
     return [x, y];
   };
@@ -39,10 +41,10 @@ function mapView(data, opts) {
   const layerBranches = h('div', { class: 'map-layer' });
   const placed = [];
   if (opts.countries !== false) {
-    for (const c of MAP_COUNTRIES) { const el = h('span', { class: 'map-country' }, c.name); placed.push([el, c.lat, c.lng]); layerCountries.append(el); }
+    for (const c of MAP_COUNTRIES) { const el = h('span', { class: 'map-country' }, c.name); placed.push([el, c.lat, c.lng, true]); layerCountries.append(el); }
   }
   const outside = [];
-  for (const s of data.sites || []) {
+  for (const s of staff ? data.sites || [] : []) {   // объекты командированных — только в панели директора
     if (!mapInside(s.lat, s.lng)) { outside.push(s); continue; }
     const sm = h('button', { type: 'button', class: 'marker site', title: 'Объект: ' + s.city + ' · открытых ' + s.open, onclick: () => { if (opts.onSite) opts.onSite(s, sm); } },
       h('span', { class: 'sdot' }), staff ? h('span', { class: 'mlabel' }, s.city + ' · ' + s.open) : null);
@@ -59,7 +61,7 @@ function mapView(data, opts) {
     placed.push([m, b.lat, b.lng]);
     layerBranches.append(m);
   }
-  const relayout = () => { layout(); for (const [el, lat, lng] of placed) place(el, lat, lng); };
+  const relayout = () => { layout(); for (const [el, lat, lng, clamp] of placed) place(el, lat, lng, clamp); };
   relayout();
   box.append(layerCountries, layerSites, layerBranches);
   const wrap = h('div', { class: 'mapwrap' }, box);
