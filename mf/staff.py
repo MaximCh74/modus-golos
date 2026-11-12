@@ -413,30 +413,23 @@ def _fonts() -> dict[str, str]:
     global _FONTS
     if _FONTS:
         return _FONTS
-    from fontTools.ttLib import TTFont as _TT
-    from fontTools.varLib import instancer
     from reportlab.pdfbase import pdfmetrics
     from reportlab.pdfbase.ttfonts import TTFont
+    from . import brand
     d = Path(tempfile.mkdtemp(prefix="mf-invite-fonts-"))
     out = {}
     for key, name, w in (("regular", "MG-Regular", 400), ("semibold", "MG-SemiBold", 600), ("extrabold", "MG-ExtraBold", 800)):
-        f = _TT(str(FONT))
-        instancer.instantiateVariableFont(f, {"wght": w}, inplace=True)
-        f.save(str(d / f"{name}.ttf"))
-        pdfmetrics.registerFont(TTFont(name, str(d / f"{name}.ttf")))
+        pdfmetrics.registerFont(TTFont(name, str(brand.static_font(w, name, d / f"{name}.ttf"))))   # у каждого начертания своё имя
         out[key] = name
     _FONTS = out
     return out
 
 
 def _logo():
-    """Логотип заказчика из SVG → PNG (cairosvg); если библиотеки нет — карточка без логотипа, текстовая марка."""
+    """Фирменный блок «логотип | черта | МОДУС ГОЛОС» (mf/brand.py, как шапка сайта) → PNG; без cairosvg — текстовая марка."""
     try:
-        import cairosvg
-        from PIL import Image
-        buf = io.BytesIO()
-        cairosvg.svg2png(bytestring=(ROOT / "web" / "a" / "img" / "logo.svg").read_bytes(), write_to=buf, output_height=160)
-        return Image.open(io.BytesIO(buf.getvalue())).convert("RGBA")
+        from . import brand
+        return brand.lockup_png(160)
     except Exception:   # noqa: BLE001
         return None
 
@@ -483,7 +476,7 @@ def cards_pdf(invites: list[dict], base: str) -> bytes:
         sub = " · ".join(x for x in (city, u.get("department"), u.get("position")) if x)
         url = url_for(inv["token"], base)
         pad = 12 * mm
-        # шапка: логотип (или текстовая марка) и сетка красных точек — как на плакатах
+        # шапка: фирменный блок «логотип | черта | МОДУС ГОЛОС» (или текстовая марка) и сетка красных точек — как на плакатах
         if logo is not None:
             c.drawImage(ImageReader(logo), x0 + pad, y0 + ch - pad - 7 * mm, width=logo.width / logo.height * 7 * mm, height=7 * mm, mask="auto")
         else:
@@ -493,6 +486,7 @@ def cards_pdf(invites: list[dict], base: str) -> bytes:
             for j in range(3):
                 c.circle(x0 + cw - pad - 14 * mm + i * 4 * mm, y0 + ch - pad - 1 * mm - j * 4 * mm, 0.7 * mm, fill=1, stroke=0)
         c.setLineWidth(0.9); c.line(x0 + pad, y0 + ch - 26 * mm, x0 + pad + 7 * mm, y0 + ch - 26 * mm)
+        rgb(NAVY)   # подпись тёмно-синяя, красная только черта
         c.setFont(fonts["semibold"], 7.5); c.drawString(x0 + pad + 9 * mm, y0 + ch - 27 * mm, "МОДУС ГОЛОС · ЛИЧНОЕ ПРИГЛАШЕНИЕ")
         rgb(NAVY)
         size = _fit(c, name, fonts["extrabold"], 17, cw - 2 * pad)

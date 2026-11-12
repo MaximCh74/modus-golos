@@ -29,13 +29,10 @@ STATIC = Path("/tmp/claude-1000/-home-mark07-Desktop------------------/dd8555dc-
 def static_fonts() -> dict[str, Path]:
     """reportlab не понимает оси вариативного шрифта — делаем статические начертания через fontTools (во временную папку)."""
     import tempfile
-    from fontTools.ttLib import TTFont as _TT
-    from fontTools.varLib import instancer
+    from mf import brand
     d = Path(tempfile.mkdtemp(prefix="mf-fonts-"))
-    out = {}
-    for name, w in (("Montserrat", 400), ("Montserrat-SemiBold", 600), ("Montserrat-ExtraBold", 800)):
-        f = _TT(str(FONT)); instancer.instantiateVariableFont(f, {"wght": w}, inplace=True); f.save(str(d / f"{name}.ttf")); out[name] = d / f"{name}.ttf"
-    return out
+    return {name: brand.static_font(w, f"MG-{name}", d / f"{name}.ttf")
+            for name, w in (("Montserrat", 400), ("Montserrat-SemiBold", 600), ("Montserrat-ExtraBold", 800))}
 
 
 def qr_png(url: str, px: int = 1200) -> Image.Image:
@@ -45,9 +42,9 @@ def qr_png(url: str, px: int = 1200) -> Image.Image:
 
 
 def logo_png(height_px: int = 160) -> Image.Image:
-    buf = io.BytesIO()
-    cairosvg.svg2png(bytestring=(ROOT / "web" / "a" / "img" / "logo.svg").read_bytes(), write_to=buf, output_height=height_px)
-    return Image.open(io.BytesIO(buf.getvalue())).convert("RGBA")
+    """Фирменный блок «логотип | черта | МОДУС ГОЛОС» (контуры букв логотипа, mf/brand.py) — как шапка сайта."""
+    from mf import brand
+    return brand.lockup_png(height_px)
 
 
 def rgb(c, col): c.setFillColorRGB(*col); c.setStrokeColorRGB(*col)
@@ -56,7 +53,7 @@ def rgb(c, col): c.setFillColorRGB(*col); c.setStrokeColorRGB(*col)
 def poster(c: canvas.Canvas, base: str, branch: dict, big: bool = False) -> None:
     W, H = A4
     url = f"{base}/q/{branch['code']}"
-    # фирменные элементы: логотип, красная метка с чертой, сетка красных точек
+    # фирменные элементы: блок «логотип | черта | МОДУС ГОЛОС», красная метка с чертой, сетка красных точек
     logo = logo_png(220)
     from reportlab.lib.utils import ImageReader
     c.drawImage(ImageReader(logo), 20 * mm, H - 30 * mm, width=logo.width / logo.height * 16 * mm, height=16 * mm, mask="auto")
@@ -65,6 +62,7 @@ def poster(c: canvas.Canvas, base: str, branch: dict, big: bool = False) -> None
         for j in range(4):
             c.circle(W - 45 * mm + i * 6 * mm, H - 14 * mm - j * 6 * mm, 1.1 * mm, fill=1, stroke=0)
     c.setLineWidth(1.2); c.line(20 * mm, H - 48 * mm, 30 * mm, H - 48 * mm)
+    rgb(c, NAVY)   # подпись тёмно-синяя, красная только черта (правило владельца: красного текста нет)
     c.setFont("Montserrat-SemiBold", 11); c.drawString(33 * mm, H - 49.5 * mm, "МОДУС ГОЛОС · " + ("ОБЪЕКТ" if branch["kind"] == "field" else "ФИЛИАЛ").upper())
     rgb(c, NAVY); c.setFont("Montserrat-ExtraBold", 30 if not big else 26)
     title = "Есть идея или проблема?" ; c.drawString(20 * mm, H - 64 * mm, title)
@@ -87,15 +85,17 @@ def poster(c: canvas.Canvas, base: str, branch: dict, big: bool = False) -> None
 
 def slide_qr(base: str, code: str, out: Path, label: str) -> None:
     img = qr_png(f"{base}/q/{code}", 1600)
-    canvas_img = Image.new("RGB", (2000, 2200), "white")
-    canvas_img.paste(img, (200, 120))
+    canvas_img = Image.new("RGB", (2000, 2420), "white")
+    lock = logo_png(150)   # фирменный блок сверху по центру — как шапка сайта
+    canvas_img.paste(lock, ((2000 - lock.width) // 2, 80), lock)
+    canvas_img.paste(img, (200, 320))
     from PIL import ImageDraw, ImageFont
     d = ImageDraw.Draw(canvas_img)
     fonts = static_fonts()
     f = ImageFont.truetype(str(fonts["Montserrat-ExtraBold"]), 96); f2 = ImageFont.truetype(str(fonts["Montserrat"]), 56)
-    d.text((1000, 1830), label, fill=(8, 39, 66), font=f, anchor="mm")
-    d.text((1000, 1950), f"{base}/q/{code}", fill=(100, 116, 141), font=f2, anchor="mm")
-    d.text((1000, 2070), "Модус Голос · наведите камеру — без установки и регистрации", fill=(228, 0, 0), font=f2, anchor="mm")
+    d.text((1000, 2030), label, fill=(8, 39, 66), font=f, anchor="mm")
+    d.text((1000, 2150), f"{base}/q/{code}", fill=(100, 116, 141), font=f2, anchor="mm")
+    d.text((1000, 2270), "Наведите камеру — без установки и регистрации", fill=(8, 39, 66), font=f2, anchor="mm")   # без красного текста
     canvas_img.save(out, "PNG")
 
 
