@@ -168,6 +168,13 @@ async def manifest():
     return FileResponse(WEB / "manifest.json", media_type="application/manifest+json")
 
 
+@app.get("/.well-known/assetlinks.json")
+async def assetlinks():
+    """Digital Asset Links для Android-приложений (TWA, пункт 5 очереди 12.11): подтверждает, что APK «Модус Голос» и «Директор»
+    принадлежат этому домену — тогда приложение открывается без адресной строки. Отпечаток — ключ подписи demo/android."""
+    return FileResponse(WEB / ".well-known" / "assetlinks.json", media_type="application/json", headers={"Cache-Control": "no-cache"})
+
+
 @app.get("/manifest-boss.json")
 async def manifest_boss():
     """Отдельная PWA «Модус Голос · Директор» (пункт 2 очереди 12.11): start_url и scope — /boss, своя иконка."""

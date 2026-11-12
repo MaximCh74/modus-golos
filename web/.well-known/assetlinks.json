@@ -1,0 +1,26 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "kz.cqsystems.modusgolos",
+      "sha256_cert_fingerprints": [
+        "1E:2B:CD:59:1D:7A:00:E0:95:E4:FB:0A:9F:C5:99:A4:14:D5:8A:0E:0C:37:16:CB:4F:CE:19:92:E9:A2:61:50"
+      ]
+    }
+  },
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "kz.cqsystems.modusgolos.boss",
+      "sha256_cert_fingerprints": [
+        "1E:2B:CD:59:1D:7A:00:E0:95:E4:FB:0A:9F:C5:99:A4:14:D5:8A:0E:0C:37:16:CB:4F:CE:19:92:E9:A2:61:50"
+      ]
+    }
+  }
+]
