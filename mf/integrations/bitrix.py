@@ -70,7 +70,8 @@ def status() -> dict:
     t = load_tokens()
     return {"configured": configured(), "portal": portal() or None, "webhook": bool(webhook_url()), "tokens": bool(t),
             "installed_at": (t or {}).get("installed_at"), "tasks": tasks_enabled(), "frame": configured(),
-            "mapped_users": db.one("SELECT COUNT(*) AS n FROM users WHERE bitrix_id IS NOT NULL")["n"] if db.conn() else 0}
+            "mapped_users": db.one("SELECT COUNT(*) AS n FROM users WHERE bitrix_id IS NOT NULL")["n"] if db.conn() else 0,
+            "sync": db.setting("bitrix_sync")}
 
 
 # ---------- токены портала (файл в папке данных, не в базе: база уходит в демо-снапшот) ----------
@@ -135,6 +136,107 @@ def exchange_code(code: str) -> dict:
 
 def refresh(refresh_token: str) -> dict:
     return _oauth({"grant_type": "refresh_token", "client_id": client_id(), "client_secret": client_secret(), "refresh_token": refresh_token})
+
+
+def call_full(method: str, params: dict | None = None) -> dict:
+    """Как call(), но возвращает весь ответ ({result, next, total}) — для постраничных user.get / department.get."""
+    params = params or {}
+    if webhook_url():
+        j = request_fn(f"{webhook_url()}/{method}", data=params)
+    else:
+        t = load_tokens()
+        if not t:
+            raise BitrixError("нет токенов портала — приложение не установлено")
+        endpoint = (t.get("client_endpoint") or f"https://{portal()}/rest/").rstrip("/") + "/"
+        j = request_fn(f"{endpoint}{method}", params={"auth": t["access_token"]}, data=params)
+        if isinstance(j, dict) and j.get("error") == "expired_token":
+            save_tokens(refresh(t["refresh_token"]))
+            t = load_tokens()
+            j = request_fn(f"{endpoint}{method}", params={"auth": t["access_token"]}, data=params)
+    if not isinstance(j, dict):
+        raise BitrixError("неожиданный ответ")
+    if j.get("error"):
+        raise BitrixError(f"{j.get('error')}: {j.get('error_description', '')}".strip())
+    return j
+
+
+def _pages(method: str, params: dict | None = None) -> list:
+    """Все страницы ответа (Битрикс отдаёт по 50, дальше — next)."""
+    out, start = [], 0
+    for _ in range(200):
+        j = call_full(method, {**(params or {}), "start": start})
+        res = j.get("result") or []
+        out.extend(res if isinstance(res, list) else [res])
+        if j.get("next") is None:
+            break
+        start = j["next"]
+    return out
+
+
+def _digits(s) -> str:
+    return "".join(ch for ch in str(s or "") if ch.isdigit())[-10:]
+
+
+def sync_users() -> dict:
+    """Этап 8 §3: сотрудники и отделы из портала → наши пользователи. Сопоставление по ID Битрикса (match_user: ID → почта → телефон →
+    имя), новые заводятся как «Сотрудник», отдел — по названию, уволенные (ACTIVE=false или пропавшие из списка) деактивируются,
+    их обращения и история остаются. Спорные склейки (почта или телефон совпали у разных наших людей) — в отчёт администратору."""
+    deps = {}
+    try:
+        for d in _pages("department.get"):
+            deps[str(d.get("ID"))] = d.get("NAME")
+    except BitrixError as e:
+        log.warning("Битрикс24: department.get: %s", e)
+    ours_deps = {(r["name"] or "").strip().lower(): r["id"] for r in db.q("SELECT id, name FROM departments")}
+    rows = _pages("user.get", {"filter": {"USER_TYPE": "employee"}})
+    seen, created, updated, deactivated, conflicts = set(), 0, 0, 0, []
+    for bx in rows:
+        try:
+            bid = int(bx.get("ID") or 0)
+        except (TypeError, ValueError):
+            continue
+        if not bid:
+            continue
+        seen.add(bid)
+        active = bx.get("ACTIVE") not in (False, "false", "N", 0, "0")
+        if not active:
+            u = db.one("SELECT id, active FROM users WHERE bitrix_id=?", (bid,))
+            if u and u["active"]:
+                db.ex("UPDATE users SET active=0 WHERE id=?", (u["id"],)); deactivated += 1
+            continue
+        before = db.one("SELECT COUNT(*) AS n FROM users")["n"]
+        email = (bx.get("EMAIL") or "").strip().lower()
+        phone = _digits(bx.get("PERSONAL_MOBILE") or bx.get("WORK_PHONE"))
+        cands = {r["id"] for r in db.q("SELECT id FROM users WHERE bitrix_id IS NULL AND ((?!='' AND lower(email)=?) OR (?!='' AND phone IS NOT NULL AND phone!=''))", (email, email, phone))
+                 if not phone or _digits(r.get("phone")) == phone or True}
+        u = match_user({**bx, "PHONE": phone}, create=True)
+        if not u:
+            continue
+        if db.one("SELECT COUNT(*) AS n FROM users")["n"] > before:
+            created += 1
+        else:
+            updated += 1
+        dep_ids = bx.get("UF_DEPARTMENT") or []
+        dep_name = deps.get(str(dep_ids[0])) if dep_ids else None
+        our_dep = ours_deps.get((dep_name or "").strip().lower())
+        sets = {"active": 1}
+        if our_dep and not u.get("department_id"):
+            sets["department_id"] = our_dep
+        if bx.get("WORK_POSITION") and not u.get("position"):
+            sets["position"] = bx["WORK_POSITION"].strip()
+        if phone and not u.get("phone"):
+            sets["phone"] = phone
+        db.ex("UPDATE users SET " + ", ".join(f"{k}=?" for k in sets) + " WHERE id=?", (*sets.values(), u["id"]))
+        if len(cands) > 1:
+            conflicts.append({"bitrix_id": bid, "name": u["name"], "candidates": sorted(cands)})
+    if rows:   # полный список получен — пропавшие из портала (с нашим bitrix_id) считаем уволенными
+        for r in db.q("SELECT id, bitrix_id FROM users WHERE bitrix_id IS NOT NULL AND active=1"):
+            if r["bitrix_id"] not in seen:
+                db.ex("UPDATE users SET active=0 WHERE id=?", (r["id"],)); deactivated += 1
+    report = {"at": db.now_iso(), "portal_users": len(rows), "departments": len(deps), "created": created, "updated": updated, "deactivated": deactivated, "conflicts": conflicts}
+    db.set_setting("bitrix_sync", report)
+    log.info("Битрикс24: синхронизация — %s", report)
+    return report
 
 
 def call(method: str, params: dict | None = None, *, token: str | None = None, endpoint: str | None = None, _retry: bool = True):
@@ -217,6 +319,9 @@ def match_user(bx: dict, create: bool = True) -> dict | None:
     email = (bx.get("EMAIL") or "").strip().lower()
     if email:
         u = db.one("SELECT * FROM users WHERE lower(email)=? AND active=1", (email,))
+    phone = _digits(bx.get("PHONE") or bx.get("PERSONAL_MOBILE") or bx.get("WORK_PHONE"))
+    if not u and phone:
+        u = next((r for r in db.q("SELECT * FROM users WHERE active=1 AND phone IS NOT NULL AND phone != ''") if _digits(r["phone"]) == phone), None)
     if not u:
         first, last = _norm_name(bx.get("NAME") or ""), _norm_name(bx.get("LAST_NAME") or "")
         if first:

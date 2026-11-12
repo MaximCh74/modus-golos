@@ -94,6 +94,7 @@ MIGRATIONS = [
     # этап 6: Битрикс24 (сопоставление сотрудников по ID или почте, поручение → задача), команды директора
     ("users", "bitrix_id", "INTEGER"), ("users", "email", "TEXT"), ("meeting_items", "bitrix_task_id", "INTEGER"),
     ("users", "login", "TEXT"),   # этап 8: внутренний логин демо-директора (sergey)
+    ("users", "phone", "TEXT"),   # этап 8: телефон (ручное добавление, склейка с Битриксом по телефону)
 ]
 
 _conn: sqlite3.Connection | None = None

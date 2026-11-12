@@ -79,9 +79,26 @@ class Headers:
         await self.app(scope, receive, send_wrapped)
 
 
+def _daily_bitrix_sync() -> None:
+    """Раз в сутки — синхронизация сотрудников из портала, если интеграция установлена (этап 8 §3)."""
+    try:
+        if not bitrix.notify_available():
+            return
+        last = (db.setting("bitrix_sync") or {}).get("at")
+        if last and (db.now() - db.parse(last)).total_seconds() < 86400:
+            return
+        bitrix.sync_users()
+    except Exception:   # noqa: BLE001
+        log.exception("bitrix sync")
+
+
 async def overdue_loop():
+    tick = 0
     while True:
         try:
+            tick += 1
+            if tick % 10 == 1:   # раз в 10 минут проверяем, не пора ли суточная синхронизация
+                threading.Thread(target=_daily_bitrix_sync, name="bitrix-sync", daemon=True).start()
             escalated = appeals.check_overdue()
             if escalated:
                 log.info("просрочка: эскалировано %s", ", ".join(escalated))

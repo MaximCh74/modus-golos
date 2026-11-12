@@ -1067,6 +1067,19 @@ async def admin_user(body: UserBody, request: Request):
 
 # ---------- этап 5: демо-состояние и проверка перед выходом ----------
 
+@router.post("/admin/bitrix/sync")
+async def admin_bitrix_sync(request: Request):
+    """Этап 8 §3: сотрудники и отделы из Битрикс24 → наши пользователи (кнопка у администратора; автоматически — раз в сутки)."""
+    auth.require(request, "admin", "director")
+    if not bitrix.notify_available():
+        raise HTTPException(503, "Битрикс24 не подключён или приложение ещё не установлено (нет токенов портала)")
+    import asyncio
+    try:
+        return await asyncio.to_thread(bitrix.sync_users)
+    except bitrix.BitrixError as e:
+        raise HTTPException(502, f"Битрикс24: {e}")
+
+
 @router.post("/admin/demo-snapshot")
 async def admin_demo_snapshot(request: Request):
     auth.require(request, "admin", "director")

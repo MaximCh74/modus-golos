@@ -297,3 +297,32 @@ def test_director_name_login_and_solved_data(c):
     st = demo.is_demo_state()
     names = {x["name"]: x["ok"] for x in st["checks"]}
     assert names["решено за 7 дней > 0"] and names["у каждого города решено за месяц > 0"]
+
+
+def test_bitrix_sync_users(c, monkeypatch):
+    monkeypatch.setenv("BITRIX_PORTAL", "modus-test.bitrix24.kz"); monkeypatch.setenv("BITRIX_CLIENT_ID", "local.abc"); monkeypatch.setenv("BITRIX_CLIENT_SECRET", "s3cret")
+    bitrix.save_tokens({"access_token": "at1", "refresh_token": "rt1", "client_endpoint": "https://modus-test.bitrix24.kz/rest/", "member_id": "m1"})
+    db.ex("UPDATE users SET bitrix_id=17 WHERE id=4")   # Айгерим уже сопоставлена
+    db.ex("UPDATE users SET bitrix_id=99, active=1 WHERE id=24")   # Динара числится по старому ID, которого в портале больше нет → уволена
+
+    def fake(url, params=None, data=None):
+        if url.endswith("/rest/department.get"):
+            return {"result": [{"ID": "1", "NAME": "Модус Трейд"}, {"ID": "5", "NAME": "Продажи"}, {"ID": "7", "NAME": "IT"}]}
+        if url.endswith("/rest/user.get"):
+            if (data or {}).get("start", 0) == 0:
+                return {"result": [{"ID": "17", "NAME": "Айгерим", "LAST_NAME": "Нурланова", "ACTIVE": True, "UF_DEPARTMENT": [5]},
+                                   {"ID": "21", "NAME": "Арман", "LAST_NAME": "Сейтказы", "EMAIL": "arman@modus-test.kz", "WORK_POSITION": "Инженер", "ACTIVE": True, "UF_DEPARTMENT": [7], "PERSONAL_MOBILE": "+7 701 000 11 22"}], "next": 50, "total": 3}
+            return {"result": [{"ID": "30", "NAME": "Бывший", "LAST_NAME": "Сотрудник", "ACTIVE": False}]}
+        raise AssertionError(url)
+    monkeypatch.setattr(bitrix, "request_fn", fake)
+    login(c, 15)
+    r = c.post("/api/admin/bitrix/sync").json()
+    assert r["portal_users"] == 3 and r["created"] == 1 and r["updated"] == 1 and r["deactivated"] == 1 and r["conflicts"] == []
+    arman = db.one("SELECT * FROM users WHERE bitrix_id=21")
+    assert arman["name"] == "Арман Сейтказы" and arman["role"] == "employee" and arman["department_id"] == 5 and arman["phone"] == "7010001122"
+    assert db.one("SELECT active FROM users WHERE id=24")["active"] == 0 and db.one("SELECT active FROM users WHERE id=4")["active"] == 1
+    assert c.get("/api/admin/settings").json()["bitrix"]["sync"]["created"] == 1
+    r2 = c.post("/api/admin/bitrix/sync").json()   # повтор ничего не плодит
+    assert r2["created"] == 0 and db.one("SELECT COUNT(*) AS n FROM users WHERE bitrix_id=21")["n"] == 1
+    db.ex("DELETE FROM users WHERE bitrix_id=21"); db.ex("UPDATE users SET bitrix_id=NULL WHERE id IN (4, 24)"); db.ex("UPDATE users SET active=1 WHERE id=24")
+    bitrix.tokens_path().unlink(missing_ok=True)

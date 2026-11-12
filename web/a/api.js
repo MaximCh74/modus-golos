@@ -2,6 +2,7 @@
 // Обёртка над fetch: JSON и multipart, ошибки — текстом из detail. SSE — один канал на страницу.
 // Внутри iframe Битрикс24 сессия приходит в адресе (?s=…) и уходит заголовком Authorization — cookie третьей стороны может не дойти.
 const SID = new URLSearchParams(location.search).get('s');
+if (SID && window.history && history.replaceState) { try { history.replaceState(null, '', location.pathname + location.hash); } catch (e) { /* адрес без токена */ } }
 const API = {
   async call(method, url, body, isForm) {
     const opt = { method, headers: {}, credentials: 'same-origin' };
