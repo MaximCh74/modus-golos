@@ -200,9 +200,11 @@ def _norm_name(s: str) -> str:
     return " ".join((s or "").replace("ё", "е").lower().split())
 
 
-def match_user(bx: dict) -> dict | None:
+def match_user(bx: dict, create: bool = True) -> dict | None:
     """Сопоставление с нашим сотрудником: по сохранённому ID Битрикса → по почте → по имени и фамилии (демо-имена на тестовом портале).
-    Найденное соответствие запоминается (users.bitrix_id), чтобы дальше работал только ID."""
+    Найденное соответствие запоминается (users.bitrix_id), чтобы дальше работал только ID. Незнакомый сотрудник портала (create=True)
+    заводится у нас как «Сотрудник» с именем, должностью и почтой из Битрикса — любой человек из портала может пользоваться системой;
+    город, отдел и роль администратор уточняет в «Сотрудниках» (полная синхронизация — sync_users)."""
     try:
         bid = int(bx.get("ID") or 0)
     except (TypeError, ValueError):
@@ -228,7 +230,14 @@ def match_user(bx: dict) -> dict | None:
         if email and not u.get("email"):
             db.ex("UPDATE users SET email=? WHERE id=?", (email, u["id"]))
         log.info("Битрикс24: пользователь %s сопоставлен с %s (#%s)", bid, u["name"], u["id"])
-    return u
+        return u
+    if not create or bx.get("ACTIVE") is False:
+        return None
+    name = " ".join(x.strip() for x in (bx.get("NAME") or "", bx.get("LAST_NAME") or "") if x and x.strip()) or f"Сотрудник Битрикс24 {bid}"
+    uid = db.ex("INSERT INTO users(name, role, position, branch_id, department_id, manager_id, active, email, bitrix_id) VALUES(?,?,?,?,?,?,1,?,?)",
+                (name, "employee", (bx.get("WORK_POSITION") or "").strip() or None, None, None, None, email or None, bid))
+    log.info("Битрикс24: заведён сотрудник %s (#%s) из портала, ID %s", name, uid, bid)
+    return db.one("SELECT * FROM users WHERE id=?", (uid,))
 
 
 def login_with_code(code: str) -> dict | None:

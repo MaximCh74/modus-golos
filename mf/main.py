@@ -288,4 +288,4 @@ def _not_mapped_page() -> str:
     return ("<!doctype html><meta charset='utf-8'><link rel='stylesheet' href='/a/style.css'><div class='wrap'><div class='card card-warn'>"
             "<div class='h1'>Учётная запись Битрикс24 не сопоставлена</div><p>В системе обратной связи нет сотрудника с таким ID, почтой или именем. "
             "Попросите администратора указать почту или ID Битрикса в карточке сотрудника (Панель → Администрирование → Сотрудники).</p>"
-            "<a href='/login' class='btn'>Демо-вход</a></div></div>")
+            "<a href='/login' class='btn' target='_blank' rel='noopener'>Демо-вход в новом окне</a></div></div>")

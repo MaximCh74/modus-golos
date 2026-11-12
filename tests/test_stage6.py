@@ -102,6 +102,13 @@ def test_bitrix_oauth_login_notify_iframe_install(c, monkeypatch):
     assert r.status_code == 200 and "panel.js" in r.text and "https://modus-test.bitrix24.kz" in r.headers["content-security-policy"]
     assert c.get("/api/me", headers={"Authorization": "Bearer " + sid}).json()["name"] == "Айгерим Нурланова"
     assert c.get("/api/me", params={"s": sid}).status_code == 200 and c.get("/api/me").status_code == 401
+    # незнакомый сотрудник портала заводится как «Сотрудник» (JIT), второй вход — по ID
+    bx_new = {"ID": "44", "NAME": "Максим", "LAST_NAME": "Тестовый", "EMAIL": "maxim@modus-test.kz", "WORK_POSITION": "ИТ-отдел"}
+    u = bitrix.match_user(bx_new)
+    assert u and u["role"] == "employee" and u["name"] == "Максим Тестовый" and u["bitrix_id"] == 44 and u["position"] == "ИТ-отдел"
+    assert bitrix.match_user(bx_new)["id"] == u["id"] and db.one("SELECT COUNT(*) AS n FROM users WHERE bitrix_id=44")["n"] == 1
+    assert bitrix.match_user({"ID": "45", "NAME": "Уволенный", "ACTIVE": False}) is None
+    db.ex("DELETE FROM users WHERE bitrix_id=44")
     # redirect OAuth на «Путь обработчика» — тот же адрес с code и state
     state2 = c.get("/bitrix/login", follow_redirects=False).headers["location"].split("state=")[1]
     assert c.get("/bitrix/app", params={"code": "c0de", "state": state2}, follow_redirects=False).status_code == 302
