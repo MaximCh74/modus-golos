@@ -397,3 +397,31 @@ def test_F07_summary_refresh_throttled(c, monkeypatch):
     c.get("/api/panel/director-summary?refresh=1")
     c.get("/api/panel/director-summary?refresh=1")
     assert len(calls) == n   # повторные «обновить» в течение минуты берут готовую сводку
+
+
+# ---------- F-05: «У меня так же» не открывает полную карточку ----------
+
+def _jpeg():
+    from PIL import Image
+    buf = io.BytesIO()
+    Image.new("RGB", (40, 40), (10, 20, 200)).save(buf, "JPEG")
+    return buf.getvalue()
+
+
+def test_F05_supporter_sees_only_short_card(c):
+    login(c, 22)   # анонимное обращение с фото и длинным текстом
+    long_text = "Анонимно: руководитель требует переработки без оплаты. " + "Подробности и имена: " + "x" * 400
+    a = c.post("/api/appeals", data={"type": "problem", "text": long_text, "is_anonymous": "1"}, files={"file": ("doc.jpg", _jpeg(), "image/jpeg")}).json()
+    att = db.one("SELECT id FROM attachments WHERE appeal_id=?", (a["id"],))["id"]
+    login(c, 1)
+    c.post(f"/api/panel/appeals/{a['id']}/comment", json={"text": "Внутренний комментарий ответственного"})
+    login(c, 6)
+    assert c.get(f"/api/appeals/{a['id']}").status_code == 403
+    assert c.post(f"/api/appeals/{a['id']}/support").status_code == 200
+    card = c.get(f"/api/appeals/{a['id']}").json()
+    assert card["limited"] is True and len(card["text"]) <= 200 and card["attachments"] == [] and card["author"] is None and card["brief"] is None
+    assert not [e for e in card["events"] if e["kind"] in ("comment", "clarification_requested", "progress")]
+    assert c.get(f"/api/attachments/{att}").status_code == 403
+    # свои и реализованные — полностью, как раньше
+    login(c, 22)
+    assert "limited" not in c.get(f"/api/appeals/{a['id']}").json()

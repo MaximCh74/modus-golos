@@ -223,7 +223,8 @@ async function appealCard(id) {
       a.is_anonymous ? tag('tag-anon', 'анонимно') : null, tag('tag-type', a.type_label)),
     stageTracker(a.stage),
     h('div', { class: 'small muted' }, [a.category, a.branch, a.site_city ? 'объект: ' + a.site_city : null, a.department].filter(Boolean).join(' · ')),
-    a.is_mine ? null : h('div', { class: 'row small mt8' }, userLink(a.author, 'sm')),
+    a.limited ? h('div', { class: 'hint mt8' }, 'Вы отметили «У меня так же»: видны номер, статус и суть. Подробности — у автора и ответственного.')
+      : a.is_mine ? null : h('div', { class: 'row small mt8' }, userLink(a.author, 'sm')),
     a.brief && !a.is_mine ? briefBlock(a) : null,
     a.brief && !a.is_mine ? fullText(a) : h('p', { class: 'pre' }, a.text),
     a.brief && !a.is_mine ? null : (a.proposed_solution ? h('div', { class: 'small' }, h('b', {}, 'Предлагаемое решение: '), a.proposed_solution) : null),

@@ -407,13 +407,32 @@ def can_manage(a: dict, user: dict) -> bool:
 
 
 def can_view(a: dict, user: dict) -> bool:
+    """Полная карточка: ведущий, автор; реализованные — всем (лента «Что изменили»). Поддержавший («У меня так же») видит только
+    краткую карточку — view_limited (аудит 12.11, F-05: раньше поддержка открывала любое обращение вместе с вложениями)."""
     if can_manage(a, user):
         return True
     if author_id(a["id"]) == user["id"]:
         return True
-    if db.one("SELECT 1 FROM supports WHERE appeal_id=? AND user_id=?", (a["id"], user["id"])):
-        return True
     return a["status"] == "done"   # лента «Что изменили» — открыта всем сотрудникам
+
+
+def supported_by(a: dict, user: dict) -> bool:
+    return bool(db.one("SELECT 1 FROM supports WHERE appeal_id=? AND user_id=?", (a["id"], user["id"])))
+
+
+LIMITED_EVENT_KINDS = ("created", "status_changed", "supported", "discussed_at_meeting", "priority_changed")
+
+
+def view_limited(a: dict, user: dict) -> dict:
+    """Карточка для поддержавшего: номер, статус и стадия, суть (до 200 знаков), категория, филиал, ответственный, итог.
+    Без автора, полного текста, предложения, «Коротко», вложений, комментариев и уточнений."""
+    out = view(a, user)
+    out.update(text=short(a["text"], 200), proposed_solution=None, brief=None, attachments=[], author=None, pending_question=None,
+               author_urgency_label=None, author_scope_label=None, director_request_text=None, director_comment=None, points=None,
+               can_manage=False, can_request_director=False, limited=True)
+    out.pop("allowed_next", None)
+    out["events"] = [{**e, "actor": None, "actor_id": None} if e["kind"] == "created" else e for e in out["events"] if e["kind"] in LIMITED_EVENT_KINDS]
+    return out
 
 
 def _first_response(a: dict, actor: dict | None) -> None:

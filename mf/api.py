@@ -349,9 +349,11 @@ async def my_appeals(request: Request):
 async def get_appeal(appeal_id: int, request: Request):
     user = auth.require(request)
     a = appeals.get(appeal_id)
-    if not appeals.can_view(a, user):
-        raise HTTPException(403, "Это обращение вам недоступно")
-    return appeals.view(a, user)
+    if appeals.can_view(a, user):
+        return appeals.view(a, user)
+    if appeals.supported_by(a, user):
+        return appeals.view_limited(a, user)   # F-05: поддержавшему — краткая карточка
+    raise HTTPException(403, "Это обращение вам недоступно")
 
 
 @router.post("/appeals/{appeal_id}/support")
