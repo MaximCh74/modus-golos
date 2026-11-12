@@ -80,6 +80,7 @@ function eventText(e) {
     case 'progress': return 'Как идут дела: ' + p.text;
     case 'director_requested_news': return 'Директор запросил новости: ' + p.text;
     case 'thanked': return '«Спасибо» от коллеги — уже ' + p.count;
+    case 'praise_addressed': return 'Спасибо адресовано: ' + (p.user || ('отделу «' + p.department + '»'));
     case 'priority_changed': return 'Приоритет изменён с «' + (PRIO[p.from] || p.from) + '» на «' + (PRIO[p.to] || p.to) + '»' + (p.reason === 'supports' ? ' (по числу «У меня так же»)' : ' (ответственный)');
     case 'rebriefed': return 'Пересказ «Коротко» обновлён' + (p.clarifications ? ' с учётом уточнений' : '');
     case 'ai_classified': return p.category ? 'Категория определена ' + (p.engine === 'openai' ? 'ИИ' : 'по ключевым словам (без ИИ)') + ': ' + p.category + (p.confidence ? ' (' + Math.round(p.confidence * 100) + ' %)' : '')
@@ -115,7 +116,9 @@ function toast(msg, kind) {
 }
 function plural(n, one, few, many) { const m10 = n % 10, m100 = n % 100; return n + ' ' + (m10 === 1 && m100 !== 11 ? one : m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20) ? few : many); }
 function qs(name) { return new URLSearchParams(location.search).get(name); }
-function field(label, input, hint) { return h('label', { class: 'field' }, h('span', {}, label), input, hint ? h('div', { class: 'hint' }, hint) : null); }
+// подпись + поле; для стилизованных компонентов (pick, personPicker, filePicker) — div, а не label: иначе клик по пункту списка
+// срабатывал бы ещё раз как клик по кнопке списка
+function field(label, input, hint) { const native = !!(input && /^(INPUT|TEXTAREA|SELECT)$/.test(input.tagName)); return h(native ? 'label' : 'div', { class: 'field' }, h('span', {}, label), input, hint ? h('div', { class: 'hint' }, hint) : null); }
 
 // Голосовой ввод (этап 3): кнопка-микрофон → MediaRecorder → /api/stt (или /api/public/stt без входа) → текст в поле.
 const Voice = {
@@ -269,3 +272,89 @@ function siteHeader(me, cfg, opts) {
     h('a', { href: '/', class: 'brand-lock', title: 'Модус Голос — на главную' }, h('img', { src: '/a/img/logo.svg', alt: 'Модус Трейд' }), h('span', { class: 'div' }), h('span', {}, h('b', {}, 'Модус Голос'), h('small', {}, 'Каждый голос услышан'))),
     h('div', { class: 'spacer' }), right);
 }
+
+
+// ---------- стилизованные элементы вместо нативных (правило: выбор файла, списки, галочки — только компоненты из /design) ----------
+
+// Прикрепить фото или файл: кнопка со скрепкой, выбранный файл — чипом с крестиком, превью для фото. На телефоне система сама
+// предложит «Камера / Галерея / Файл» (accept image/*,application/pdf). picker.file() — выбранный File или null.
+function filePicker(opts) {
+  opts = opts || {};
+  const input = h('input', { type: 'file', class: 'visually-hidden', accept: opts.accept || 'image/*,application/pdf', tabindex: '-1' });
+  const btn = h('button', { type: 'button', class: 'btn btn-sm', onclick: () => input.click() }, iconText('paperclip', opts.label || 'Прикрепить фото или файл'));
+  const chip = h('div', { class: 'file-chip hidden' });
+  const box = h('div', { class: 'filepick' }, btn, input, chip);
+  let url = null;
+  const render = () => {
+    const f = input.files && input.files[0];
+    if (url) { URL.revokeObjectURL(url); url = null; }
+    if (!f) { chip.classList.add('hidden'); chip.replaceChildren(); btn.classList.remove('hidden'); return; }
+    const isImg = (f.type || '').startsWith('image/');
+    if (isImg) url = URL.createObjectURL(f);
+    chip.replaceChildren(isImg ? h('img', { src: url, alt: '', class: 'file-preview' }) : icon('file-text', { size: 16 }),
+      h('span', { class: 'file-name' }, f.name), h('span', { class: 'small muted' }, Math.max(1, Math.round(f.size / 1024)) + ' КБ'),
+      h('button', { type: 'button', class: 'btn btn-sm btn-ghost', title: 'Убрать файл', onclick: () => { input.value = ''; render(); } }, icon('x', { size: 14 })));
+    chip.classList.remove('hidden'); btn.classList.add('hidden');
+  };
+  input.addEventListener('change', render);
+  box.file = () => (input.files && input.files[0]) || null;
+  box.reset = () => { input.value = ''; render(); };
+  return box;
+}
+
+// Выпадающий список в стиле системы: кнопка с текущим значением и стрелкой, список — карточкой под ней. el.value — как у select.
+function pick(opts) {
+  opts = opts || {};
+  const options = opts.options || [];
+  let value = opts.value === undefined || opts.value === null ? '' : String(opts.value);
+  const labelOf = v => { const o = options.find(x => String(x.value) === String(v)); return o ? o.label : (opts.placeholder || '—'); };
+  const text = h('span', { class: 'pick-text' + (value ? '' : ' muted') }, labelOf(value));
+  const btn = h('button', { type: 'button', class: 'pick', 'aria-haspopup': 'listbox', 'aria-expanded': 'false' }, text, icon('chevron-down', { size: 16, cls: 'pick-chev' }));
+  const list = h('div', { class: 'menu pick-menu', role: 'listbox' });
+  const wrap = h('div', { class: 'menu-wrap pickwrap' }, btn, list);
+  const close = () => { wrap.classList.remove('open'); btn.setAttribute('aria-expanded', 'false'); };
+  const render = () => {
+    list.replaceChildren(...[opts.placeholder ? h('button', { type: 'button', class: value ? '' : 'cur', onclick: () => set('') }, opts.placeholder) : null]
+      .concat(options.map(o => h('button', { type: 'button', class: String(o.value) === value ? 'cur' : '', onclick: () => set(o.value) }, o.label, o.hint ? h('span', { class: 'small muted' }, ' ' + o.hint) : null))).filter(Boolean));
+  };
+  const set = v => { value = v === undefined || v === null ? '' : String(v); text.textContent = labelOf(value); text.classList.toggle('muted', !value); close(); render(); wrap.dispatchEvent(new Event('change')); };
+  btn.addEventListener('click', ev => { ev.stopPropagation(); const open = wrap.classList.contains('open'); document.querySelectorAll('.menu-wrap.open').forEach(m => m.classList.remove('open')); if (!open) { wrap.classList.add('open'); btn.setAttribute('aria-expanded', 'true'); } else close(); });
+  btn.addEventListener('keydown', ev => { if (ev.key === 'Escape') close(); });
+  document.addEventListener('click', ev => { if (!wrap.contains(ev.target)) close(); });
+  render();
+  Object.defineProperty(wrap, 'value', { get: () => value, set: v => set(v) });
+  return wrap;
+}
+
+// Поиск адресата «спасибо»: коллега по имени или отдел; выбранный — чипом с крестиком. el.value → {user_id, department_id} или null.
+function personPicker(opts) {
+  opts = opts || {};
+  const input = h('input', { type: 'search', placeholder: opts.placeholder || 'Имя коллеги или отдел (необязательно)', autocomplete: 'off' });
+  const list = h('div', { class: 'menu pick-menu' });
+  const wrap = h('div', { class: 'menu-wrap pickwrap person' }, h('span', { class: 'pp-ic' }, icon('search', { size: 16 })), input, list);
+  const chip = h('div', { class: 'file-chip hidden' });
+  const box = h('div', { class: 'personpick' }, wrap, chip);
+  let chosen = null, timer = null;
+  const close = () => wrap.classList.remove('open');
+  const choose = (c) => { chosen = c; input.value = ''; close(); chip.replaceChildren(icon(c.department_id ? 'building' : 'user', { size: 16 }), h('span', { class: 'file-name' }, c.label), c.hint ? h('span', { class: 'small muted' }, c.hint) : null,
+    h('button', { type: 'button', class: 'btn btn-sm btn-ghost', title: 'Убрать', onclick: () => { chosen = null; chip.classList.add('hidden'); wrap.classList.remove('hidden'); input.focus(); } }, icon('x', { size: 14 })));
+    chip.classList.remove('hidden'); wrap.classList.add('hidden'); box.dispatchEvent(new Event('change')); };
+  input.addEventListener('input', () => {
+    clearTimeout(timer);
+    const q = input.value.trim();
+    if (q.length < 2) { close(); return; }
+    timer = setTimeout(async () => {
+      let r;
+      try { r = await opts.search(q); } catch (e) { r = { users: [], departments: [] }; }
+      const items = (r.users || []).map(u => h('button', { type: 'button', onclick: () => choose({ user_id: u.id, label: u.name, hint: [u.position, u.department, u.city].filter(Boolean).join(' · ') }) }, h('b', {}, u.name), h('span', { class: 'small muted' }, ' ' + [u.position, u.department].filter(Boolean).join(' · '))))
+        .concat((r.departments || []).map(d => h('button', { type: 'button', onclick: () => choose({ department_id: d.id, label: 'Отдел «' + d.name + '»' }) }, iconText('building', 'Отдел «' + d.name + '»'))));
+      list.replaceChildren(...(items.length ? items : [h('div', { class: 'small muted pick-empty' }, 'Никого не нашли — проверьте имя')]));
+      wrap.classList.add('open');
+    }, 250);
+  });
+  input.addEventListener('keydown', ev => { if (ev.key === 'Escape') close(); });
+  document.addEventListener('click', ev => { if (!wrap.contains(ev.target)) close(); });
+  Object.defineProperty(box, 'value', { get: () => chosen });
+  return box;
+}
+

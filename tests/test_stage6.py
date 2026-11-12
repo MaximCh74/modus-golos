@@ -63,12 +63,13 @@ def test_bitrix_oauth_login_notify_iframe_install(c, monkeypatch):
     monkeypatch.setattr(bitrix, "request_fn", fake)
     bitrix.tokens_path().unlink(missing_ok=True)
     assert bitrix.configured() and c.get("/api/public/config").json()["bitrix"] is True
-    r = c.get("/")   # остальной сайт — по-прежнему запрет встраивания
-    assert "frame-ancestors 'none'" in r.headers["content-security-policy"] and r.headers["x-frame-options"] == "DENY"
-    r = c.get("/bitrix/login", follow_redirects=False)   # /bitrix/* — только портал из .env
+    r = c.get("/")   # с настроенным порталом встраивание разрешено только ему — на всех путях (переходы внутри фрейма)
     assert "frame-ancestors 'self' https://modus-test.bitrix24.kz;" in r.headers["content-security-policy"] and "x-frame-options" not in r.headers
-    r = c.get("/", headers={"cookie": "mf_frame=1"})   # сессия из iframe — встраивание разрешено на любом пути
-    assert "https://modus-test.bitrix24.kz" in r.headers["content-security-policy"] and "x-frame-options" not in r.headers
+    r = c.get("/bitrix/login", follow_redirects=False)
+    assert "frame-ancestors 'self' https://modus-test.bitrix24.kz;" in r.headers["content-security-policy"] and "x-frame-options" not in r.headers
+    c.cookies.clear()
+    r = c.get("/bitrix/app")   # без сессии — страница, которая подхватит токен из sessionStorage фрейма или попросит открыть из меню
+    assert r.status_code == 200 and "bitrix_app.js" in r.text
     # снаружи: кнопка → авторизация на портале → code → токены → user.current → наш сотрудник
     r = c.get("/bitrix/login", params={"next": "/app"}, follow_redirects=False)
     assert r.status_code == 302 and r.headers["location"].startswith("https://modus-test.bitrix24.kz/oauth/authorize/?client_id=local.abc&state=")

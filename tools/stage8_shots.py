@@ -41,15 +41,17 @@ def main() -> None:
         page.goto(f"{base}/panel#/admin"); page.wait_for_selector(".staff")
         page.click("button:has-text('Добавить сотрудника')"); page.wait_for_selector("text=Новый сотрудник")
         page.fill("input[placeholder='Имя Фамилия']", "Ержан Касымов")
-        page.select_option(".grid3 select >> nth=0", label="Павлодар"); page.select_option(".grid3 select >> nth=1", label="Производство")
+        page.click(".grid3 .pick >> nth=0"); page.click(".grid3 .pick-menu button:has-text('Павлодар')")
+        page.click(".grid3 .pick >> nth=1"); page.click(".grid3 .pick-menu button:has-text('Производство')")
         page.fill("input[placeholder='например, Оператор участка']", "Сварщик"); page.fill("input[placeholder='+7 701 000 00 00']", "+7 701 444 55 66")
         shot(page, "админ_добавление_рабочего_Павлодар_производство")
-        page.click(".card-info button.btn-primary:has-text('Добавить')"); page.wait_for_selector(".invite-card img.inv-qr"); page.wait_for_timeout(600)
-        shot(page, "админ_приглашение_QR_ссылка_PDF")
-        url = page.input_value(".invite-card input.inv-link")
-        inv_id = page.eval_on_selector(".invite-card a[href*='cards.pdf']", "e => e.getAttribute('href').split('ids=')[1]")
+        page.click(".card-info button.btn-primary:has-text('Добавить')"); page.wait_for_selector(".staff-drawer img.inv-qr"); page.wait_for_timeout(600)
+        shot(page, "админ_карточка_сотрудника_приглашение_QR_WhatsApp_PDF")
+        url = page.input_value(".staff-drawer input.inv-link")
+        inv_id = page.eval_on_selector(".staff-drawer a[href*='cards.pdf']", "e => e.getAttribute('href').split('ids=')[1]")
+        page.keyboard.press("Escape"); page.wait_for_timeout(300)
         # импорт CSV с ошибочной строкой
-        page.click("button:has-text('Импорт из CSV или Excel')"); page.wait_for_selector("text=Импорт списком")
+        page.click("button:has-text('Импорт CSV или Excel')"); page.wait_for_selector("text=Импорт списком")
         with tempfile.NamedTemporaryFile("w", suffix=".csv", delete=False, encoding="utf-8-sig") as f:
             f.write(CSV); csv_path = f.name
         page.set_input_files("input[type=file]", csv_path)

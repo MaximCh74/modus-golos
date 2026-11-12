@@ -33,7 +33,7 @@ STAFF = ("responsible", "director", "admin")
 DEFAULT_POINTS = {"accepted": 10, "done": 50, "support": 2, "support_cap": 20}
 POINT_REASONS = {"accepted": "принято к рассмотрению", "done": "реализовано", "support": "«У меня так же» от коллеги"}
 DEFAULT_SLA = 48
-PUBLIC_EVENT_KINDS = ("created", "assigned", "status_changed", "comment", "clarification_requested",
+PUBLIC_EVENT_KINDS = ("praise_addressed",) + ("created", "assigned", "status_changed", "comment", "clarification_requested",
                       "clarification_answered", "discussed_at_meeting", "supported", "director_requested", "director_decided", "progress", "thanked", "priority_changed",
                       "director_requested_news")
 DIRECTOR_DECISIONS = {"pending": "На решении", "accepted": "Принято", "rejected": "Отклонено"}
@@ -300,8 +300,10 @@ def create(*, type: str, text: str, proposed_solution: str | None = None, catego
            priority: str = "medium", branch_id: int | None = None, department_id: int | None = None,
            author: dict | None = None, is_anonymous: bool = False, source: str = "app", meeting_id: int | None = None,
            ai: dict | None = None, site_city: str | None = None, route_by_category: bool = False,
-           author_urgency: str | None = None, author_scope: str | None = None, input_mode: str | None = None) -> dict:
-    """ai — результат mf.ai.classify_appeal (категория подставлена ИИ или словарём): пишется событием ai_classified до маршрутизации."""
+           author_urgency: str | None = None, author_scope: str | None = None, input_mode: str | None = None,
+           praise_to_user_id: int | None = None, praise_to_department_id: int | None = None) -> dict:
+    """ai — результат mf.ai.classify_appeal (категория подставлена ИИ или словарём): пишется событием ai_classified до маршрутизации.
+    praise_to_* — «Кому спасибо» (только для type=praise): адресату и его руководителю уходит уведомление, запись видна в профиле адресата."""
     if type not in TYPES:
         raise HTTPException(422, "Неверный тип обращения")
     author_urgency = author_urgency if author_urgency in URGENCY else None
@@ -338,10 +340,55 @@ def create(*, type: str, text: str, proposed_solution: str | None = None, catego
         add_event(aid, None, "ai_classified", {"engine": ai.get("engine"), "category_id": ai.get("category_id"), "category": ai.get("category"),
                                                "confidence": ai.get("confidence"), "priority": ai.get("priority"), "summary": ai.get("summary")})
     a = get(aid)
+    if type == "praise" and (praise_to_user_id or praise_to_department_id):
+        praise_address(aid, author, praise_to_user_id, praise_to_department_id)
+        a = get(aid)
     route(a, by_category=route_by_category)
     realtime.publish_roles(("director", "admin"), {"type": "appeal_created", "id": aid, "number": number,
                                                    "branch_id": branch_id, "branch_code": a.get("branch_code")})
     return get(aid)
+
+
+def praise_address(appeal_id: int, author: dict | None, user_id: int | None, department_id: int | None) -> None:
+    """«Кому спасибо»: адресат-коллега (и его руководитель) или отдел (все его сотрудники) получают уведомление; запись видна в профиле адресата."""
+    a = get(appeal_id)
+    who = (author["name"] if author else None) or "Коллега"
+    target = db.one("SELECT id, name, manager_id FROM users WHERE id=? AND active=1", (user_id,)) if user_id else None
+    dept = db.one("SELECT id, name FROM departments WHERE id=?", (department_id,)) if department_id else None
+    if not target and not dept:
+        return
+    db.ex("UPDATE appeals SET praise_to_user_id=?, praise_to_department_id=? WHERE id=?", (target["id"] if target else None, dept["id"] if dept else None, appeal_id))
+    add_event(appeal_id, None, "praise_addressed", {"user_id": target["id"] if target else None, "user": target["name"] if target else None,
+                                                   "department_id": dept["id"] if dept else None, "department": dept["name"] if dept else None})
+    link = f"/app#/appeal/{appeal_id}"
+    if target:
+        notify(target["id"], f"{who} говорит вам спасибо: «{short(a['text'], 90)}»", link)
+        if target["manager_id"] and target["manager_id"] != (author or {}).get("id"):
+            notify(target["manager_id"], f"{target['name']}: спасибо от коллеги — «{short(a['text'], 90)}»", link)
+    elif dept:
+        for u in db.q("SELECT id FROM users WHERE department_id=? AND active=1", (dept["id"],)):
+            if not author or u["id"] != author["id"]:
+                notify(u["id"], f"Отделу «{dept['name']}» говорят спасибо: «{short(a['text'], 90)}»", link)
+
+
+def praises_for(user_id: int, limit: int = 20) -> list[dict]:
+    """Благодарности, адресованные сотруднику (профиль): номер, текст, от кого (если не анонимно), когда."""
+    rows = db.q("""SELECT a.id, a.number, a.text, a.created_at, a.is_anonymous, aa.user_id AS from_id, u.name AS from_name
+                   FROM appeals a LEFT JOIN appeal_authors aa ON aa.appeal_id=a.id LEFT JOIN users u ON u.id=aa.user_id
+                   WHERE a.type='praise' AND a.praise_to_user_id=? ORDER BY a.created_at DESC LIMIT ?""", (user_id, limit))
+    return [{"id": r["id"], "number": r["number"], "text": short(r["text"], 160), "created_at": r["created_at"],
+             "from": None if r["is_anonymous"] else r["from_name"]} for r in rows]
+
+
+def staff_search(q: str, limit: int = 8) -> dict:
+    """Поиск адресата «спасибо» по имени (коллега) или названию отдела; минимум два символа."""
+    q = " ".join((q or "").split()).lower().replace("ё", "е")
+    if len(q) < 2:
+        return {"users": [], "departments": []}
+    users = [u for u in db.q("""SELECT u.id, u.name, u.position, d.name AS department, b.city FROM users u LEFT JOIN departments d ON d.id=u.department_id
+                                LEFT JOIN branches b ON b.id=u.branch_id WHERE u.active=1 ORDER BY u.name""") if q in u["name"].lower().replace("ё", "е")][:limit]
+    deps = [d for d in db.q("SELECT id, name FROM departments ORDER BY name") if q in d["name"].lower().replace("ё", "е")][:limit]
+    return {"users": users, "departments": deps}
 
 
 # ---------- права ----------

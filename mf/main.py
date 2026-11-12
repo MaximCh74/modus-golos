@@ -40,13 +40,10 @@ SECURITY_HEADERS = {
 
 
 def security_headers(scope) -> dict:
-    """Встраивание разрешено только порталу из .env (frame-ancestors https://<портал>) и только для /bitrix/* и запросов с сессией
-    из iframe (cookie mf_frame, выставляется при входе через портал): X-Frame-Options на них снимается. Остальной сайт — запрет."""
+    """Встраивание разрешено только порталу из .env (frame-ancestors 'self' https://<портал>): без настроек — запрет везде.
+    С настроенным порталом разрешено на всех путях — внутри фрейма сотрудник переходит между /bitrix/app, /app, /panel и /login,
+    а партиционированную cookie (mf_frame) часть браузеров не отдаёт (Safari, мобильное приложение Битрикс24)."""
     if not bitrix.configured():
-        return SECURITY_HEADERS
-    path = scope.get("path", "")
-    cookie = b"".join(v for k, v in scope.get("headers", []) if k == b"cookie").decode("latin-1")
-    if not (path.startswith("/bitrix/") or f"{auth.FRAME_COOKIE}=1" in cookie):
         return SECURITY_HEADERS
     h = {k: v for k, v in SECURITY_HEADERS.items() if k != "X-Frame-Options"}
     h["Content-Security-Policy"] = CSP_BASE.format(frame=f"'self' https://{bitrix.portal()}")
@@ -262,8 +259,7 @@ async def bitrix_app(request: Request):
         user = auth.current(request)
         if user:
             return page("panel.html" if user["role"] != "employee" else "app.html")
-        return HTMLResponse("<!doctype html><meta charset='utf-8'><link rel='stylesheet' href='/a/style.css'><div class='wrap'><div class='card card-info'>"
-                            "Откройте «Модус Голос» из левого меню Битрикс24 — вход произойдёт автоматически.</div></div>")
+        return page("bitrix_app.html")   # сессии в cookie нет: страница сама подхватит токен из sessionStorage фрейма или попросит открыть из меню
     try:
         user = await _run(bitrix.login_from_app, form)
     except bitrix.BitrixError as e:

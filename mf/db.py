@@ -100,6 +100,7 @@ MIGRATIONS = [
     ("users", "bitrix_id", "INTEGER"), ("users", "email", "TEXT"), ("meeting_items", "bitrix_task_id", "INTEGER"),
     ("users", "login", "TEXT"),   # этап 8: внутренний логин демо-директора (sergey)
     ("users", "phone", "TEXT"),   # этап 8: телефон (ручное добавление, склейка с Битриксом по телефону)
+    ("appeals", "praise_to_user_id", "INTEGER"), ("appeals", "praise_to_department_id", "INTEGER"),   # «Кому спасибо» (коллега или отдел)
 ]
 
 _conn: sqlite3.Connection | None = None

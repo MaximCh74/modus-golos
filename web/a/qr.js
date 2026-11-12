@@ -1,5 +1,6 @@
 'use strict';
 // QR-форма: один экран, одна кнопка. Филиал — из QR (/q/<код>). Без входа — анонимно, с трекинг-ссылкой.
+// «Спасибо» — короткая форма: текст или голос, кому (необязательно), файл, «Отправить». Служебных пояснений про ИИ нет.
 (async function () {
   const root = document.getElementById('root');
   const code = decodeURIComponent(location.pathname.split('/')[2] || '');
@@ -11,39 +12,56 @@
 
   const btnProblem = h('button', { type: 'button', class: 'btn on' }, 'Проблема');
   const btnIdea = h('button', { type: 'button', class: 'btn' }, 'Идея');
+  const btnPraise = h('button', { type: 'button', class: 'btn' }, 'Спасибо');
   const text = h('textarea', { name: 'text', required: true, placeholder: 'Что происходит? Если есть идея, как исправить — напишите.' });
   const mic = h('button', { type: 'button', class: 'btn mic', title: 'Голосовой ввод' });
   let inputMode = 'text';
   const understood = h('div', {});
   Voice.attach(mic, text, { public: !me, onText: async () => {
     inputMode = 'voice';
+    if (type === 'praise') return;
     understood.replaceChildren(h('div', { class: 'hint' }, h('span', { class: 'spin' }), ' Разбираем, что вы сказали…'));
-    try { const r = await API.post('/api/public/brief', { text: text.value, type }); understood.replaceChildren(r.brief ? h('div', { class: 'card card-info small' }, h('b', {}, 'Мы поняли так: '), r.brief.gist, r.category ? h('span', { class: 'muted' }, ' · категория: ' + r.category) : null, h('div', { class: 'hint' }, 'Если не так — поправьте текст выше и отправляйте.')) : null); }
-    catch (e) { understood.replaceChildren(); }
+    try {
+      const r = await API.post('/api/public/brief', { text: text.value, type });
+      understood.replaceChildren(r.brief ? h('div', { class: 'card card-info small' }, h('b', {}, 'Мы поняли так: '), r.brief.gist, r.category ? h('span', { class: 'muted' }, ' · категория: ' + r.category) : null,
+        h('div', { class: 'hint mt8' }, 'Если что-то не так — поправьте текст выше.')) : null);
+    } catch (e) { understood.replaceChildren(); }
   } });
   const chipRow = h('div', { class: 'row small' });
   const urg = chips(URGENCY); const sc = chips(SCOPE);
   const chipLabel = h('span', { class: 'muted' });
   const renderChips = () => { chipRow.replaceChildren(chipLabel, type === 'problem' ? urg : sc); chipLabel.textContent = type === 'problem' ? 'Насколько мешает работать?' : 'Кого затронет?'; };
-  renderChips();
   let similarShown = false, anyway = false;
   const simBox = h('div', {});
-  const file = h('input', { type: 'file', name: 'file', accept: 'image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt' });
+  const file = filePicker();
+  const to = personPicker({ search: q => API.get('/api/public/staff?q=' + encodeURIComponent(q)) });
+  const toField = field('Кому спасибо', to, 'Коллега или отдел — адресат и его руководитель получат уведомление');
   const site = h('input', { type: 'text', name: 'site_city', placeholder: 'Например: Атырау, объект ТЭЦ-2', maxlength: 80 });
   const submit = h('button', { type: 'submit', class: 'btn btn-primary btn-big' }, 'Отправить');
+  const foot = me ? h('div', { class: 'hint mt8' }, 'Вы вошли как ' + me.name + ' — обращение будет привязано к вам и даст баллы.')
+    : h('div', { class: 'hint mt8' }, 'Без входа обращение анонимное. Категорию и ответственного система определит сама.');
   const form = h('form', { class: 'card' },
-    h('div', { class: 'type-switch' }, btnProblem, btnIdea),
+    h('div', { class: 'type-switch three' }, btnProblem, btnIdea, btnPraise),
     h('div', { class: 'row' }, h('div', { class: 'spacer' }, text), mic),
     understood,
     chipRow,
+    toField,
     branch.kind === 'field' ? field('Город / объект (необязательно)', site, 'Без геолокации — чтобы не запрашивать разрешений') : null,
     h('div', { class: 'mt8' }, field('Фото или файл (необязательно)', file)),
     simBox,
     submit,
-    me ? h('div', { class: 'hint mt8' }, 'Вы вошли как ' + me.name + ' — обращение будет привязано к вам и даст баллы.')
-       : h('div', { class: 'hint mt8' }, 'Без входа обращение анонимное. Категорию и ответственного подставит ИИ (без ключа — словарь ключевых слов).'));
-  btnProblem.addEventListener('click', () => { type = 'problem'; btnProblem.classList.add('on'); btnIdea.classList.remove('on'); renderChips(); });
-  btnIdea.addEventListener('click', () => { type = 'suggestion'; btnIdea.classList.add('on'); btnProblem.classList.remove('on'); renderChips(); });
+    foot);
+  const setType = t => {
+    type = t;
+    btnProblem.classList.toggle('on', t === 'problem'); btnIdea.classList.toggle('on', t === 'suggestion'); btnPraise.classList.toggle('on', t === 'praise');
+    chipRow.classList.toggle('hidden', t === 'praise'); understood.classList.toggle('hidden', t === 'praise'); toField.classList.toggle('hidden', t !== 'praise');
+    text.placeholder = t === 'praise' ? 'Кому и за что спасибо — текстом или голосом' : t === 'suggestion' ? 'Что предлагаете и что это даст' : 'Что происходит? Если есть идея, как исправить — напишите.';
+    renderChips();
+  };
+  btnProblem.addEventListener('click', () => setType('problem'));
+  btnIdea.addEventListener('click', () => setType('suggestion'));
+  btnPraise.addEventListener('click', () => setType('praise'));
+  setType('problem');
 
   root.replaceChildren(h('div', { class: 'wrap' },
     h('div', { class: 'hero dots' }, h('div', { class: 'brand' }, h('img', { src: '/a/img/logo.svg', alt: 'Модус Трейд' })), h('div', { class: 'lbl mt16' }, 'Модус Голос · каждый голос услышан'), h('div', { class: 'h1' }, (branch.kind === 'field' ? '' : 'Филиал: ') + branch.name)),
@@ -51,14 +69,14 @@
 
   form.addEventListener('submit', async ev => {
     ev.preventDefault();
-    if (!anyway && !similarShown && text.value.trim().length >= 8) {
+    if (!anyway && !similarShown && type !== 'praise' && text.value.trim().length >= 8) {
       submit.disabled = true;
       try {
         const r = await API.post('/api/public/similar', { text: text.value });
         if (r.items.length) {
           similarShown = true;
           simBox.replaceChildren(similarBlock(r, { canSupport: !!me, onAnyway: () => { anyway = true; simBox.replaceChildren(); form.requestSubmit(); },
-            onSupported: i => { root.replaceChildren(h('div', { class: 'wrap' }, h('div', { class: 'card card-ok' }, h('div', { class: 'h1' }, 'Спасибо — учтено'), h('p', {}, 'Вы поддержали обращение ' + i.number + ': автор получил +2 балла, а ответственный видит, что проблема повторяется.'), h('a', { href: '/app#/appeal/' + i.id, class: 'btn btn-primary' }, 'Открыть ' + i.number)), h('a', { href: location.pathname, class: 'btn btn-outline' }, 'Отправить своё обращение'))); } }));
+            onSupported: i => { root.replaceChildren(h('div', { class: 'wrap' }, h('div', { class: 'card card-ok' }, h('div', { class: 'h1' }, 'Спасибо — учтено'), h('p', {}, 'Вы поддержали обращение ' + i.number + ': автор получил +2 балла, а ответственный видит, что это не единичный случай.'), h('a', { href: location.pathname, class: 'btn btn-outline' }, 'Отправить своё')))); } }));
           submit.disabled = false;
           return;
         }
@@ -66,20 +84,31 @@
       submit.disabled = false;
     }
     const fd = new FormData();
-    fd.set('type', type); fd.set('text', text.value); fd.set('branch_code', branch.code);
+    fd.set('type', type); fd.set('text', text.value); fd.set('branch_code', branch.code); fd.set('input_mode', inputMode);
     if (branch.kind === 'field') fd.set('site_city', site.value);
-    fd.set('author_urgency', urg.value() || ''); fd.set('author_scope', sc.value() || ''); fd.set('input_mode', inputMode);
-    if (file.files && file.files[0]) fd.set('file', file.files[0]);
+    if (type === 'praise') {
+      const t = to.value;
+      if (t && t.user_id) fd.set('praise_to_user_id', String(t.user_id));
+      if (t && t.department_id) fd.set('praise_to_department_id', String(t.department_id));
+    } else { fd.set('author_urgency', urg.value() || ''); fd.set('author_scope', sc.value() || ''); }
+    if (file.file()) fd.set('file', file.file());
     submit.disabled = true;
     try {
       const r = await API.postForm('/api/public/appeals', fd);
+      if (r.type === 'praise') {
+        root.replaceChildren(h('div', { class: 'wrap' },
+          h('div', { class: 'card card-ok' }, h('div', { class: 'h1' }, 'Спасибо передано'),
+            h('p', {}, to.value ? 'Адресат и его руководитель получат уведомление, запись появится в профиле.' : 'Ваше спасибо увидят в компании.'),
+            r.logged_in ? h('p', { class: 'small' }, h('a', { href: '/app#/appeal/' + r.id }, 'Открыть в приложении')) : null),
+          h('a', { href: location.pathname, class: 'btn btn-outline' }, 'Отправить ещё одно')));
+        return;
+      }
       root.replaceChildren(h('div', { class: 'wrap' },
         h('div', { class: 'card card-ok' },
           h('div', { class: 'h1' }, 'Обращение ' + r.number + ' принято'),
           h('p', {}, 'Спасибо! Его увидит ответственный, а вы сможете следить за статусом по ссылке.'),
-          h('p', { class: 'small' }, r.category ? ['Категория: ', h('b', {}, r.category), ' · приоритет: ', h('b', {}, PRIO[r.priority] || r.priority), ' · отвечает: ', h('b', {}, r.responsible || 'администратор (ответственный не назначен)'),
-            h('span', { class: 'muted' }, r.ai_engine === 'openai' ? ' — определил ИИ' : ' — по ключевым словам (без ИИ)')]
-            : ['Категорию определит администратор', h('span', { class: 'muted' }, r.ai_engine === 'openai' ? ' — ИИ не уверен' : ' — словарь без ИИ не уверен')]),
+          h('p', { class: 'small' }, r.category ? ['Категория: ', h('b', {}, r.category), ' · приоритет: ', h('b', {}, PRIO[r.priority] || r.priority), ' · отвечает: ', h('b', {}, r.responsible || 'администратор (ответственный не назначен)')]
+            : ['Категорию уточнит администратор']),
           h('a', { href: r.track_url, class: 'btn btn-primary btn-big' }, 'Следить за статусом'),
           h('p', { class: 'hint' }, 'Сохраните ссылку: ', h('code', {}, location.origin + r.track_url), r.logged_in ? '' : ' — без входа это единственный способ увидеть ответ.'),
           r.logged_in ? h('p', { class: 'small' }, 'Обращение привязано к вам: ', h('a', { href: '/app#/appeal/' + r.id }, 'открыть в приложении'))

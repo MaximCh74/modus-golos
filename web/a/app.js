@@ -103,15 +103,16 @@ async function newAppeal(startType) {
   const switchEl = h('div', { class: 'type-switch three' });
   const btns = {};
   for (const [code, label] of types) {
-    btns[code] = h('button', { type: 'button', class: 'btn' + (code === type ? ' on' : ''), onclick: () => { type = code; for (const k in btns) btns[k].classList.toggle('on', k === code); } }, label);
+    btns[code] = h('button', { type: 'button', class: 'btn' + (code === type ? ' on' : ''), onclick: () => setType(code) }, label);
     switchEl.append(btns[code]);
   }
   const text = h('textarea', { name: 'text', required: true, placeholder: 'Что происходит и что предлагаете' });
   const sol = h('textarea', { name: 'proposed_solution', placeholder: 'Как это можно решить (необязательно)' });
-  const cat = h('select', { name: 'category_id' }, h('option', { value: '' }, '— не знаю, пусть определит ответственный —'), DICTS.categories.map(c => h('option', { value: c.id }, c.name)));
-  const prio = h('select', { name: 'priority' }, h('option', { value: '' }, '— по ответу выше и мнению ИИ —'), Object.entries(PRIO).map(([v, l]) => h('option', { value: v }, l)));
+  const cat = pick({ placeholder: 'Можно не выбирать — система определит сама', options: DICTS.categories.map(c => ({ value: c.id, label: c.name })) });
+  const prio = pick({ placeholder: 'Можно не выбирать — система определит сама', options: Object.entries(PRIO).map(([v, l]) => ({ value: v, label: l })) });
   const anon = h('input', { type: 'checkbox' });
-  const file = h('input', { type: 'file', accept: 'image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt' });
+  const file = filePicker();
+  const to = personPicker({ search: q => API.get('/api/staff/search?q=' + encodeURIComponent(q)), placeholder: 'Имя коллеги или отдел (необязательно)' });
   const submit = h('button', { type: 'submit', class: 'btn btn-primary btn-big' }, 'Отправить');
   const mic = h('button', { type: 'button', class: 'btn mic', title: 'Голосовой ввод' });
   let inputMode = 'text';
@@ -122,41 +123,53 @@ async function newAppeal(startType) {
   const draftBox = h('div', {});
   const simBox = h('div', {});
   let similarShown = false, anyway = false;
-  const setType = code => { type = code; for (const k in btns) btns[k].classList.toggle('on', k === code); renderChips(); };
-  const draftBtn = h('button', { type: 'button', class: 'btn btn-sm', onclick: () => draft() }, iconText('sparkles', 'Черновик ИИ'));
+  const draftBtn = h('button', { type: 'button', class: 'btn btn-sm', onclick: () => draft() }, iconText('sparkles', 'Подставить категорию и решение'));
   async function draft() {
+    if (type === 'praise') return;
     if (text.value.trim().length < 5) { toast('Сначала опишите, что происходит', 'bad'); return; }
     draftBtn.disabled = true;
     try {
       const d = await API.post('/api/ai/draft', { text: text.value, type });
-      if (d.type && ['problem', 'suggestion', 'praise'].includes(d.type)) setType(d.type);
+      if (d.type && ['problem', 'suggestion'].includes(d.type)) setType(d.type);
       if (d.category_id) cat.value = String(d.category_id);
       if (d.priority) prio.value = d.priority;
       if (d.proposed_solution && !sol.value.trim()) sol.value = d.proposed_solution;
-      const ai = d.engine === 'openai';
-      draftBox.replaceChildren(h('div', { class: 'card card-info small' }, h('b', {}, ai ? 'Черновик ИИ' : 'Черновик без ИИ (словарь ключевых слов)'),
-        d.summary ? h('div', { class: 'mt8' }, 'Суть: ' + d.summary) : null,
-        h('div', { class: 'mt8' }, 'Категория: ' + (d.category || 'не определена — выберите сами') + (d.confidence ? ' (' + Math.round(d.confidence * 100) + ' %)' : '') + ' · приоритет: ' + (PRIO[d.priority] || '—') + ' · тип: ' + (TYPES[d.type] || '—')),
+      draftBox.replaceChildren(h('div', { class: 'card card-info small' }, h('div', { class: 'row' }, h('b', {}, 'Мы поняли так'), aiMark(d.engine === 'openai', 'черновик ИИ', 'черновик без ИИ')),
+        d.summary ? h('div', { class: 'mt8' }, d.summary) : null,
+        h('div', { class: 'mt8' }, 'Категория: ' + (d.category || 'не определена — выберите сами') + ' · приоритет: ' + (PRIO[d.priority] || '—')),
         d.clarifying_question ? h('div', { class: 'mt8' }, h('b', {}, 'Уточните сразу: '), d.clarifying_question) : null,
         h('div', { class: 'hint mt8' }, 'Поля подставлены — проверьте и поправьте перед отправкой.')));
     } catch (e) { toast(e.message, 'bad'); }
     draftBtn.disabled = false;
   }
   Voice.attach(mic, text, { onText: () => { inputMode = 'voice'; draft(); } });
-  renderChips();
-  for (const [code] of types) btns[code].addEventListener('click', renderChips);
+  // полная форма (проблема, идея) и короткая (спасибо): лишнее прячем, а не отключаем
+  const fullOnly = [];
+  const praiseOnly = [];
+  const fullBlock = el => { fullOnly.push(el); return el; };
+  const praiseBlock = el => { praiseOnly.push(el); return el; };
+  function setType(code) {
+    type = code;
+    for (const k in btns) btns[k].classList.toggle('on', k === code);
+    text.placeholder = code === 'praise' ? 'Кому и за что спасибо — текстом или голосом' : code === 'suggestion' ? 'Что предлагаете и что это даст' : 'Что происходит и что предлагаете';
+    for (const el of fullOnly) el.classList.toggle('hidden', code === 'praise');
+    for (const el of praiseOnly) el.classList.toggle('hidden', code !== 'praise');
+    renderChips();
+  }
   const form = h('form', { class: 'card' },
     switchEl,
     h('div', { class: 'row' }, h('div', { class: 'spacer' }, text), mic),
-    chipRow,
-    h('div', { class: 'row mb8' }, draftBtn, h('span', { class: 'hint' }, 'голос или текст: ИИ подставит категорию, приоритет и решение')),
-    draftBox,
-    field('Предлагаемое решение', sol),
-    h('div', { class: 'grid2' }, field('Категория', cat, 'Если не выбрать — категорию подставит ИИ (без ключа — словарь ключевых слов)'), field('Приоритет', prio)),
-    field('Вложение (необязательно)', file),
-    h('label', { class: 'check mb8' }, anon, 'Анонимно', h('span', { class: 'hint' }, '— анонимные обращения не дают баллов')),
+    praiseBlock(field('Кому спасибо', to, 'Коллега или отдел — адресат и его руководитель получат уведомление, запись появится в профиле')),
+    fullBlock(chipRow),
+    fullBlock(h('div', { class: 'row mb8' }, draftBtn, h('span', { class: 'hint' }, 'Можно не заполнять — система подставит категорию, приоритет и решение'))),
+    fullBlock(draftBox),
+    fullBlock(field('Предлагаемое решение', sol)),
+    fullBlock(h('div', { class: 'grid2 form-cols' }, field('Категория', cat), field('Приоритет', prio))),
+    field('Фото или файл (необязательно)', file),
+    fullBlock(h('label', { class: 'check mb8' }, anon, 'Анонимно', h('span', { class: 'hint' }, '— анонимные обращения не дают баллов'))),
     simBox,
     submit);
+  setType(type);
   form.addEventListener('submit', async ev => {
     ev.preventDefault();
     if (!anyway && !similarShown && type !== 'praise' && text.value.trim().length >= 8) {
@@ -174,15 +187,21 @@ async function newAppeal(startType) {
       submit.disabled = false;
     }
     const fd = new FormData();
-    fd.set('type', type); fd.set('text', text.value); fd.set('proposed_solution', sol.value);
-    fd.set('category_id', cat.value); fd.set('priority', prio.value); fd.set('is_anonymous', anon.checked ? '1' : '0');
-    fd.set('author_urgency', urg.value() || ''); fd.set('author_scope', sc.value() || ''); fd.set('input_mode', inputMode);
-    if (file.files && file.files[0]) fd.set('file', file.files[0]);
+    fd.set('type', type); fd.set('text', text.value); fd.set('input_mode', inputMode);
+    if (type === 'praise') {
+      const t = to.value;
+      if (t && t.user_id) fd.set('praise_to_user_id', String(t.user_id));
+      if (t && t.department_id) fd.set('praise_to_department_id', String(t.department_id));
+    } else {
+      fd.set('proposed_solution', sol.value); fd.set('category_id', cat.value); fd.set('priority', prio.value); fd.set('is_anonymous', anon.checked ? '1' : '0');
+      fd.set('author_urgency', urg.value() || ''); fd.set('author_scope', sc.value() || '');
+    }
+    if (file.file()) fd.set('file', file.file());
     submit.disabled = true;
-    try { const r = await API.postForm('/api/appeals', fd); toast('Обращение ' + r.number + ' отправлено'); location.hash = '#/appeal/' + r.id; }
+    try { const r = await API.postForm('/api/appeals', fd); toast(type === 'praise' ? 'Спасибо передано' : 'Обращение ' + r.number + ' отправлено'); location.hash = '#/appeal/' + r.id; }
     catch (e) { toast(e.message, 'bad'); submit.disabled = false; }
   });
-  root.replaceChildren(h('div', { class: 'wrap' }, h('a', { href: '#/', class: 'small ict' }, icon('arrow-left', { size: 14 }), 'Назад'), h('div', { class: 'h1' }, 'Новое обращение'), form));
+  root.replaceChildren(h('div', { class: 'wrap' }, h('a', { href: '#/', class: 'small ict' }, icon('arrow-left', { size: 14 }), 'Назад'), h('div', { class: 'h1' }, type === 'praise' ? 'Сказать спасибо' : 'Новое обращение'), form));
 }
 
 async function appealCard(id) {
@@ -282,7 +301,9 @@ async function profileScreen(uid) {
       mine ? h('div', { class: 'row mt8' }, h('button', { class: 'btn btn-sm', onclick: () => file.click() }, u.avatar ? 'Сменить аватарку' : 'Загрузить аватарку'), file, h('span', { class: 'hint' }, 'квадратная обрезка, до 3 МБ')) : removeBtn)),
       h('div', { class: 'stats mt16' }, h('div', { class: 'stat' }, h('b', {}, String(u.points)), h('span', { class: 'small muted' }, 'баллов')), h('div', { class: 'stat' }, h('b', {}, String(u.implemented.length)), h('span', { class: 'small muted' }, 'внедрено')),
         h('div', { class: 'stat' }, h('b', {}, String(u.thanks)), h('span', { class: 'small muted' }, '«спасибо»')), h('div', { class: 'stat' }, h('b', {}, String(u.supported)), h('span', { class: 'small muted' }, 'поддержал коллег'))),
-      h('div', { class: 'hint mt8' }, 'Витрина вклада — не соцсеть: без ленты и сообщений. В пилоте аватарка и данные берутся из Битрикс24.')),
+      h('div', { class: 'hint mt8' }, 'Витрина вклада — не соцсеть: без ленты и сообщений.')),
+    u.praises && u.praises.length ? h('div', { class: 'lbl mt16' }, 'Благодарности коллег') : null,
+    u.praises && u.praises.length ? h('div', { class: 'card list' }, u.praises.map(pr => h('div', { class: 'item', onclick: () => { location.hash = '#/appeal/' + pr.id; } }, h('div', { class: 'row' }, iconText('heart', pr.from || 'Коллега'), h('div', { class: 'spacer' }), h('span', { class: 'small muted' }, fmtDate(pr.created_at))), h('div', { class: 'small' }, pr.text)))) : null,
     h('div', { class: 'lbl mt16' }, 'Внедрённые идеи'),
     h('div', { class: 'card list' }, u.implemented.length ? u.implemented.map(i => h('div', { class: 'item', onclick: () => { location.hash = '#/appeal/' + i.id; } }, h('div', { class: 'row' }, h('b', {}, i.number), h('span', { class: 'small muted' }, fmtDate(i.closed_at))), h('div', { class: 'small' }, i.text), h('div', { class: 'small card-ok ict' }, icon('arrow-right', { size: 14 }), i.resolution_text || ''))) : h('div', { class: 'muted' }, 'Пока нет — внедрённые идеи попадают сюда из «Что изменили»'))));
 }

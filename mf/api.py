@@ -13,7 +13,7 @@ from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, Reque
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
-from . import ai, appeals, auth, commands, db, demo, director, meetings, realtime, staff
+from . import ai, appeals, auth, commands, db, demo, director, meetings, posters, realtime, staff
 from .ai import llm, similar, stt
 from .integrations import bitrix
 from . import config
@@ -147,7 +147,7 @@ async def public_qr(code: str, request: Request):
 @router.post("/public/appeals")
 async def public_create(request: Request, type: str = Form(...), text: str = Form(...), branch_code: str = Form(...),
                         file: UploadFile | None = File(None), site_city: str = Form(""), author_urgency: str = Form(""),
-                        author_scope: str = Form(""), input_mode: str = Form("")):
+                        author_scope: str = Form(""), input_mode: str = Form(""), praise_to_user_id: str = Form(""), praise_to_department_id: str = Form("")):
     """QR-форма: один экран, без входа. Категорию и приоритет ставит ИИ (mf/ai: LLM, без ключа — словарь ключевых слов);
     «Без ответственного» — только при вакансии категории или если ни ИИ, ни словарь не уверены (ТЗ §7).
     Если в браузере уже есть демо-вход — обращение привязывается к пользователю и даёт баллы."""
@@ -155,19 +155,21 @@ async def public_create(request: Request, type: str = Form(...), text: str = For
     branch = db.one("SELECT * FROM branches WHERE code=?", (branch_code.upper(),))
     if not branch:
         raise HTTPException(404, "Филиал не найден")
-    if type not in ("problem", "suggestion"):
-        raise HTTPException(422, "Выберите «Проблема» или «Идея»")
+    if type not in ("problem", "suggestion", "praise"):
+        raise HTTPException(422, "Выберите «Проблема», «Идея» или «Спасибо»")
     user = auth.current(request)
-    cls = await classify(text, type, author_urgency or None, author_scope or None)
-    a = appeals.create(type=type, text=text, category_id=cls["category_id"], priority=cls.get("priority") or "",
+    cls = await classify(text, type, author_urgency or None, author_scope or None) if type != "praise" else None
+    a = appeals.create(type=type, text=text, category_id=cls["category_id"] if cls else None, priority=(cls or {}).get("priority") or "",
                        branch_id=branch["id"], author=user, is_anonymous=user is None, source="qr", ai=cls,
                        site_city=site_city if branch["kind"] == "field" else None, author_urgency=author_urgency or None,
-                       author_scope=author_scope or None, input_mode=input_mode or "text")
+                       author_scope=author_scope or None, input_mode=input_mode or "text",
+                       praise_to_user_id=int(praise_to_user_id) if praise_to_user_id.strip().isdigit() else None,
+                       praise_to_department_id=int(praise_to_department_id) if praise_to_department_id.strip().isdigit() else None)
     await save_attachment(a["id"], file)
     return {"id": a["id"], "number": a["number"], "tracking_token": a["tracking_token"],
             "track_url": f"/t/{a['tracking_token']}", "logged_in": user is not None,
-            "category": a["category"], "responsible": a["responsible"], "priority": a["priority"], "ai_engine": cls.get("engine"),
-            "brief": appeals.brief_of(a)}
+            "category": a["category"], "responsible": a["responsible"], "priority": a["priority"], "ai_engine": (cls or {}).get("engine"),
+            "brief": appeals.brief_of(a), "type": a["type"]}
 
 
 async def classify(text: str, type_hint: str | None, author_urgency: str | None = None, author_scope: str | None = None,
@@ -278,9 +280,12 @@ async def dicts(request: Request):
 @router.post("/appeals")
 async def create_appeal(request: Request, type: str = Form(...), text: str = Form(...), proposed_solution: str = Form(""),
                         category_id: str = Form(""), priority: str = Form(""), is_anonymous: str = Form("0"),
-                        file: UploadFile | None = File(None), author_urgency: str = Form(""), author_scope: str = Form(""), input_mode: str = Form("")):
+                        file: UploadFile | None = File(None), author_urgency: str = Form(""), author_scope: str = Form(""), input_mode: str = Form(""),
+                        praise_to_user_id: str = Form(""), praise_to_department_id: str = Form("")):
     user = auth.require(request)
     cls = None
+    if type == "praise":   # короткая форма «Спасибо»: без категории, приоритета, решения и анонимности
+        category_id, priority, proposed_solution, is_anonymous = "", "", "", "0"
     if type != "praise":   # один вызов ИИ: категория (если не выбрана), приоритет по ответу автора и «Коротко»
         cls = await classify(text + ("\n" + proposed_solution if proposed_solution else ""), type, author_urgency or None, author_scope or None)
         category_id = category_id or (cls["category_id"] or "")
@@ -289,9 +294,25 @@ async def create_appeal(request: Request, type: str = Form(...), text: str = For
     prio = priority if priority in appeals.PRIORITIES else ((cls or {}).get("priority") or "")
     a = appeals.create(type=type, text=text, proposed_solution=proposed_solution, category_id=int(category_id) if category_id else None,
                        priority=prio, author=user, is_anonymous=parse_bool(is_anonymous), source="app", ai=cls,
-                       author_urgency=author_urgency or None, author_scope=author_scope or None, input_mode=input_mode or "text")
+                       author_urgency=author_urgency or None, author_scope=author_scope or None, input_mode=input_mode or "text",
+                       praise_to_user_id=int(praise_to_user_id) if praise_to_user_id.strip().isdigit() else None,
+                       praise_to_department_id=int(praise_to_department_id) if praise_to_department_id.strip().isdigit() else None)
     await save_attachment(a["id"], file)
     return appeals.view(appeals.get(a["id"]), user)
+
+
+@router.get("/staff/search")
+async def staff_search(request: Request, q: str = ""):
+    """«Кому спасибо»: коллега или отдел по началу имени (для вошедших)."""
+    auth.require(request)
+    return appeals.staff_search(q)
+
+
+@router.get("/public/staff")
+async def public_staff_search(request: Request, q: str = ""):
+    """То же для QR-формы без входа: только по запросу от двух символов, не больше восьми совпадений."""
+    qr_limit.check(client_ip(request)) if len(q.strip()) < 2 else None
+    return appeals.staff_search(q)
 
 
 @router.get("/appeals/mine")
@@ -349,7 +370,9 @@ async def profile(user_id: int, request: Request):
         i["text"] = appeals.short(i["text"], 120)
     return {"id": u["id"], "name": u["name"], "position": u["position"], "role": u["role"], "branch": u["branch"], "city": u["city"], "department": u["department"],
             "avatar": appeals.avatar_url(u["id"], u["avatar"]), "points": appeals.balance(user_id), "implemented": implemented,
-            "thanks": db.one("SELECT COUNT(*) AS n FROM thanks t JOIN appeal_authors aa ON aa.appeal_id=t.appeal_id WHERE aa.user_id=?", (user_id,))["n"],
+            "thanks": db.one("SELECT COUNT(*) AS n FROM thanks t JOIN appeal_authors aa ON aa.appeal_id=t.appeal_id WHERE aa.user_id=?", (user_id,))["n"]
+                      + db.one("SELECT COUNT(*) AS n FROM appeals WHERE type='praise' AND praise_to_user_id=?", (user_id,))["n"],
+            "praises": appeals.praises_for(user_id),
             "supported": db.one("SELECT COUNT(*) AS n FROM supports WHERE user_id=?", (user_id,))["n"],
             "appeals": db.one("SELECT COUNT(*) AS n FROM appeal_authors aa JOIN appeals a ON a.id=aa.appeal_id WHERE aa.user_id=? AND a.is_anonymous=0", (user_id,))["n"]}
 
@@ -960,9 +983,30 @@ async def admin_settings(request: Request):
             "invites": staff.latest_by_user(),   # этап 8 §4: последнее приглашение каждого (статус, срок)
             "invite_days": staff.invite_days(),
             "bitrix": bitrix.status(),
-            "branches": db.q("SELECT id, code, name, city, kind FROM branches ORDER BY is_hq DESC, name"),
+            "branches": [{**b, "kind_label": posters.kind_label(b["kind"]), "form_url": f"{base_url(request)}/q/{b['code']}", "qr_svg": f"/api/public/qr/{b['code']}.svg",
+                          "poster_url": f"/api/admin/branches/{b['code']}/poster.pdf"} for b in db.q("SELECT id, code, name, city, kind FROM branches ORDER BY is_hq DESC, kind, name")],
             "departments": db.q("SELECT id, name FROM departments ORDER BY id"),
             "rewards": db.q("SELECT * FROM rewards ORDER BY active DESC, id")}
+
+
+@router.get("/admin/branches/posters.pdf")
+async def admin_posters_all(request: Request):
+    """Все QR-плакаты филиалов одним PDF (A4 на филиал) — из «Администрирование → Филиалы и QR»."""
+    auth.require(request, "admin", "director")
+    import asyncio
+    pdf = await asyncio.to_thread(posters.posters_pdf, posters.branches_for_posters(), base_url(request))
+    return Response(pdf, media_type="application/pdf", headers={"Content-Disposition": "inline; filename=\"modus_golos_qr_posters.pdf\""})
+
+
+@router.get("/admin/branches/{code}/poster.pdf")
+async def admin_poster_one(code: str, request: Request):
+    auth.require(request, "admin", "director")
+    rows = posters.branches_for_posters(code)
+    if not rows:
+        raise HTTPException(404, "Филиал не найден")
+    import asyncio
+    pdf = await asyncio.to_thread(posters.posters_pdf, rows, base_url(request))
+    return Response(pdf, media_type="application/pdf", headers={"Content-Disposition": f"inline; filename=\"modus_golos_qr_{rows[0]['code']}.pdf\""})
 
 
 class SettingsBody(BaseModel):

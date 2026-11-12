@@ -432,13 +432,13 @@ async function adminScreen() {
   const d = await API.get('/api/admin/settings');
   const claims = await API.get('/api/admin/reward-claims');
   const st = d.settings;
-  const num = (key, label, val) => { const i = h('input', { type: 'number', value: val === null || val === undefined ? '' : val }); i.dataset.key = key; return h('div', {}, h('label', { class: 'small muted' }, label), i); };
+  const num = (key, label, val, unit, step) => { const i = h('input', { type: 'number', value: val === null || val === undefined ? '' : val, step: step || '1' }); i.dataset.key = key; return h('div', {}, h('label', { class: 'small muted' }, label), h('div', { class: 'field-unit' }, i, h('span', { class: 'unit' }, unit))); };
   const pts = st.points || {};
-  const inputs = [num('director_wait_days', 'Порог «ждёт решения», дн', st.director_wait_days), num('news_days', 'Порог «без новостей автору», дн', st.news_days),
-    num('points.accepted', 'Баллы: принято', pts.accepted), num('points.done', 'Баллы: реализовано', pts.done), num('points.support', 'Баллы: «у меня так же»', pts.support), num('points.support_cap', 'Потолок за поддержку', pts.support_cap),
-    num('league_weights.done', 'Лига: вес «реализовано»', (st.league_weights || {}).done), num('league_weights.considered', 'Лига: вес «рассмотрено»', (st.league_weights || {}).considered), num('league_weights.speed', 'Лига: вес «скорость»', (st.league_weights || {}).speed),
-    num('similar_threshold.embeddings', 'Порог похожих (ИИ)', (st.similar_threshold || {}).embeddings), num('cluster_threshold.embeddings', 'Порог кластеров (ИИ)', (st.cluster_threshold || {}).embeddings),
-    num('invite_days', 'Срок личного приглашения, дн', st.invite_days)];
+  const inputs = [num('director_wait_days', 'Предложение ждёт решения директора дольше', st.director_wait_days, 'дней — подсветка'), num('news_days', 'Автор без новостей дольше', st.news_days, 'дней — напоминание'),
+    num('points.accepted', 'Обращение принято к рассмотрению', pts.accepted, 'баллов автору'), num('points.done', 'Обращение реализовано', pts.done, 'баллов автору'), num('points.support', 'Коллега отметил «у меня так же»', pts.support, 'баллов автору'), num('points.support_cap', 'Не больше за поддержку одного обращения', pts.support_cap, 'баллов'),
+    num('league_weights.done', 'Лига: вес доли реализованных', (st.league_weights || {}).done, 'от 0 до 1', '0.1'), num('league_weights.considered', 'Лига: вес доли рассмотренных', (st.league_weights || {}).considered, 'от 0 до 1', '0.1'), num('league_weights.speed', 'Лига: вес скорости первого ответа', (st.league_weights || {}).speed, 'от 0 до 1', '0.1'),
+    num('similar_threshold.embeddings', 'Похожие обращения: сходство от', (st.similar_threshold || {}).embeddings, 'от 0 до 1', '0.05'), num('cluster_threshold.embeddings', 'Повторяющиеся темы: сходство от', (st.cluster_threshold || {}).embeddings, 'от 0 до 1', '0.05'),
+    num('invite_days', 'Личное приглашение действует', st.invite_days, 'дней')];
   const saveBtn = h('button', { class: 'btn btn-sm btn-primary', onclick: async () => {
     const out = {};
     for (const box of inputs) { const i = box.querySelector('input'); if (i.value === '') continue; const v = Number(i.value); const [k, sub] = i.dataset.key.split('.'); if (sub) { out[k] = out[k] || { ...(st[k] || {}) }; out[k][sub] = v; } else out[k] = v; }
@@ -448,7 +448,7 @@ async function adminScreen() {
   const userSel = (val) => h('select', {}, h('option', { value: '' }, '— вакансия —'), staff.map(u => h('option', { value: u.id, selected: u.id === val }, u.name + ' · ' + (u.position || u.role))));
   const catRows = d.categories.map(c => { const rs = userSel(c.responsible_user_id); const ss = userSel(c.suggestion_responsible_user_id); const sla = h('input', { type: 'number', value: c.sla, class: 'w70' });
     const save = h('button', { class: 'btn btn-sm', onclick: async () => { try { await API.post('/api/admin/categories/' + c.id, { responsible_user_id: rs.value ? Number(rs.value) : null, suggestion_responsible_user_id: ss.value ? Number(ss.value) : null, sla: Number(sla.value) }); toast('Сохранено: ' + c.name); } catch (e) { toast(e.message, 'bad'); } }, title: 'Сохранить' }, icon('check'));
-    return h('tr', {}, h('td', {}, h('b', {}, c.name), h('div', { class: 'small muted' }, c.appeals + ' обращений')), h('td', {}, rs), h('td', {}, ss), h('td', {}, sla), h('td', {}, save)); });
+    return h('tr', { class: 'noclick' }, h('td', {}, h('b', {}, c.name), h('div', { class: 'small muted' }, c.appeals ? plural(c.appeals, 'обращение', 'обращения', 'обращений') : 'обращений пока нет')), h('td', {}, rs), h('td', {}, ss), h('td', {}, h('div', { class: 'field-unit' }, sla, h('span', { class: 'unit' }, 'часов'))), h('td', {}, save)); });
   const claimRows = claims.map(c => { const dec = (decision) => async () => { const comment = decision === 'rejected' ? prompt('Причина отказа') : ''; if (decision === 'rejected' && !comment) return; try { await API.post('/api/admin/reward-claims/' + c.id + '/decide', { decision, comment }); toast('Решено'); adminScreen(); } catch (e) { toast(e.message, 'bad'); } };
     return h('tr', {}, h('td', {}, c.user_name), h('td', {}, c.title + ' · ' + c.cost_points), h('td', {}, tag(c.status === 'approved' ? 'st-done' : c.status === 'rejected' ? 'st-rejected' : 'st-review', c.status)), h('td', { class: 'small' }, fmtDate(c.created_at)), h('td', {}, c.status === 'requested' ? h('div', { class: 'row' }, h('button', { class: 'btn btn-sm btn-ok', onclick: dec('approved') }, 'Одобрить'), h('button', { class: 'btn btn-sm btn-danger', onclick: dec('rejected') }, 'Отклонить')) : (c.comment || ''))); });
   const avatars = d.users.filter(u => u.avatar);
@@ -472,13 +472,17 @@ async function adminScreen() {
     h('div', { class: 'split' },
       h('div', {},
         h('div', { class: 'card' }, h('b', {}, 'Категории, ответственные, SLA'), h('div', { class: 'hint' }, 'Проблемы идут ответственному; предложения — ответственному за предложения, иначе в отдел развития.'),
-          h('table', { class: 'tbl mt8' }, h('thead', {}, h('tr', {}, ['Категория', 'Ответственный', 'За предложения', 'SLA, ч', ''].map(t => h('th', {}, t)))), h('tbody', {}, catRows))),
+          h('table', { class: 'tbl cats mt8' }, h('colgroup', {}, [null, 200, 200, 150, 52].map(w => { const c = document.createElement('col'); if (w) c.style.width = w + 'px'; return c; })), h('thead', {}, h('tr', {}, ['Категория', 'Отвечает за проблемы', 'Отвечает за предложения', 'Первый ответ, часов', ''].map(t => h('th', {}, t)))), h('tbody', {}, catRows))),
         rewardsCard,
         h('div', { class: 'card' }, h('b', {}, 'Заявки на награды'), claims.length ? h('table', { class: 'tbl mt8' }, h('thead', {}, h('tr', {}, ['Кто', 'Награда', 'Статус', 'Когда', ''].map(t => h('th', {}, t)))), h('tbody', {}, claimRows)) : h('div', { class: 'muted small mt8' }, 'Заявок нет'))),
       h('div', {},
         h('div', { class: 'card' }, h('b', {}, 'Настройки'), h('div', { class: 'grid2 mt8' }, inputs), h('div', { class: 'mt8' }, saveBtn), h('div', { class: 'hint mt8' }, 'Пороги похожести и кластеров — для режима ИИ; без ключа действуют пороги по ключевым словам.')),
         bitrixCard,
-        h('div', { class: 'card' }, h('b', {}, 'Филиалы и QR'), h('div', { class: 'list mt8' }, d.branches.map(b => h('div', { class: 'item', onclick: () => window.open('/q/' + b.code, '_blank') }, h('div', { class: 'row' }, h('b', {}, b.name), tag('tag-type', b.kind), h('div', { class: 'spacer' }), h('span', { class: 'small muted' }, '/q/' + b.code))))), h('div', { class: 'hint mt8' }, 'QR-коды для печати — на стартовой странице; адрес — постоянный (туннель).')),
+        h('div', { class: 'card' }, h('div', { class: 'row' }, h('b', {}, 'Филиалы и QR'), h('div', { class: 'spacer' }), h('a', { href: '/api/admin/branches/posters.pdf', class: 'btn btn-sm btn-primary', target: '_blank', rel: 'noopener' }, iconText('printer', 'Все плакаты PDF'))),
+          h('div', { class: 'list mt8' }, d.branches.map(b => h('div', { class: 'item branch-item noclick' }, h('div', { class: 'row' }, h('img', { src: b.qr_svg, alt: 'QR ' + b.name, class: 'qr-thumb' }), h('div', { class: 'spacer' }, h('b', {}, b.name), h('div', { class: 'small muted' }, b.kind_label)),
+            h('div', { class: 'row' }, h('a', { href: b.poster_url, class: 'btn btn-sm', target: '_blank', rel: 'noopener', title: 'Плакат A4 с QR для печати' }, iconText('printer', 'Плакат PDF')),
+              h('button', { class: 'btn btn-sm', title: 'Скопировать ссылку на форму', onclick: async () => { try { await navigator.clipboard.writeText(b.form_url); toast('Ссылка скопирована: ' + b.form_url); } catch (e) { prompt('Скопируйте:', b.form_url); } } }, iconText('link', 'Скопировать ссылку')),
+              h('a', { href: '/q/' + b.code, class: 'btn btn-sm btn-ghost', target: '_blank', rel: 'noopener', title: 'Открыть форму обращения' }, iconText('external-link', 'Открыть форму')))))))),
         h('div', { class: 'card' }, h('b', {}, 'Аватарки'), avatars.length ? h('div', { class: 'list mt8' }, avatars.map(u => h('div', { class: 'item' }, h('div', { class: 'row' }, avatarEl({ name: u.name, avatar: '/api/avatars/' + u.avatar }), h('span', {}, u.name), h('div', { class: 'spacer' }), h('button', { class: 'btn btn-sm btn-danger', onclick: async () => { await API.post('/api/admin/users/' + u.id + '/avatar/remove'); toast('Убрана'); adminScreen(); } }, 'Убрать'))))) : h('div', { class: 'muted small mt8' }, 'Пользовательских аватарок нет'))))));
 }
 
