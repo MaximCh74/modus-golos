@@ -14,6 +14,7 @@ import urllib.request
 from pathlib import Path
 
 import pytest
+from datetime import date as _date, timedelta as _timedelta
 
 ROOT = Path(__file__).resolve().parent.parent
 TRANSCRIPT = open(ROOT / "tests" / "test_stage2.py", encoding="utf-8").read().split('TRANSCRIPT = """')[1].split('"""')[0]
@@ -110,9 +111,10 @@ def test_meeting_review_pick_and_datepick(server, browser):
         second = page.locator(".mi .datepick").nth(1)
         second.locator(".pick").click(); second.locator(".pick-menu button:has-text('Другая дата')").click()
         inp = second.locator(".date-other")
-        inp.fill("20.11"); inp.press("Enter"); page.wait_for_timeout(800)
+        other = _date.today() + _timedelta(days=10)   # не «через неделю» и не «до пятницы»: раньше было жёстко 20.11 и совпадало с «через неделю» 13.11
+        inp.fill(other.strftime("%d.%m")); inp.press("Enter"); page.wait_for_timeout(800)
         tasks = [i for i in page.request.get(f"{base}/api/meetings/{mid}").json()["items"] if i["kind"] == "task"]
-        assert tasks[1]["due_date"].endswith("-11-20") and "no_due" not in tasks[1]["flags"]
+        assert tasks[1]["due_date"].endswith(other.strftime("-%m-%d")) and "no_due" not in tasks[1]["flags"]
         first = page.locator(".mi .datepick").nth(0)
         first.locator(".pick").click(); first.locator(".pick-menu button:has-text('через неделю')").click(); page.wait_for_timeout(800)
         tasks = [i for i in page.request.get(f"{base}/api/meetings/{mid}").json()["items"] if i["kind"] == "task"]
