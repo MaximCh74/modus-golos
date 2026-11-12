@@ -31,7 +31,7 @@
   --t-fast: 150ms; --t: 220ms; --ease: cubic-bezier(.2, .7, .2, 1);
   /* типографика: две насыщенности — 500 и 700 */
   --fs-display: 44px; --fs-h1: 30px; --fs-h2: 20px; --fs-body: 16px; --fs-small: 14px; --fs-micro: 12px;
-  --w-body: 500; --w-bold: 700;
+  --w-body: 500; --w-bold: 700; --w-logo: 900;   /* 900 — только для «МОДУС ГОЛОС» в шапке, под начертание логотипа */
   --brand: var(--red); --brand-dark: var(--red-dark); --card: var(--white);
   /* главная кнопка нового стиля (пункт 3 очереди 12.11, вариант 2 «Акцентный»): тёмно-синяя основа, красный бренда мягко в правом нижнем
      углу — угол и доля красного задаются двумя токенами (три варианта на /design), все цвета градиента — через токены */
@@ -325,11 +325,12 @@ tr.muted td { opacity: .6; }
 
 /* главная (этап 7, шаг 1) */
 .site-head { display: flex; align-items: center; gap: var(--s2); padding: 14px var(--s4); background: var(--white); border-bottom: 1px solid var(--line-soft); }
-.brand-lock { display: inline-flex; align-items: center; gap: 14px; text-decoration: none; color: var(--navy); }
-.brand-lock img { height: 36px; width: auto; display: block; }
-.brand-lock .div { width: 1px; height: 34px; background: var(--line); }
-.brand-lock b { display: block; font-size: 16px; line-height: 1.15; }
-.brand-lock small { display: block; color: var(--muted); font-size: 12px; }
+/* логотип | черта | «МОДУС ГОЛОС» в две строки: высота и вес как у текста логотипа (в знаке текст — 0,74 высоты, две строки заглавных),
+   шрифт Montserrat 800 с плотным трекингом — максимально похоже на начертание логотипа; всё масштабируется от --logo-h */
+.brand-lock { --logo-h: 36px; display: inline-flex; align-items: center; gap: 10px; text-decoration: none; color: var(--navy); }
+.brand-lock img { height: var(--logo-h); width: auto; display: block; }
+.brand-lock .div { width: 1px; height: calc(var(--logo-h) * .74); background: var(--line); }
+.brand-lock .wordmark { display: flex; flex-direction: column; font-weight: var(--w-logo); font-size: calc(var(--logo-h) * .35); line-height: 1.29; letter-spacing: -.01em; text-transform: uppercase; color: var(--navy); white-space: nowrap; }
 .home { position: relative; max-width: 1280px; margin: 0 auto; padding: var(--s4) var(--s4) var(--s6); }
 @media (min-width: 1200px) { :root { --fs-display: 52px; } }
 .home-arc { position: absolute; right: 0; top: 0; width: 300px; height: 190px; overflow: hidden; pointer-events: none; }
@@ -337,7 +338,7 @@ tr.muted td { opacity: .6; }
 .home-arc i:first-child { width: 420px; height: 420px; border-width: 22px; right: -230px; top: -290px; transform: rotate(-20deg); }
 .home-arc i:last-child { width: 300px; height: 300px; border-width: 18px; right: -170px; top: -230px; border-color: transparent transparent var(--navy) var(--navy); opacity: .35; transform: rotate(-20deg); }
 .hero-text { max-width: 760px; }
-.hero-text .display em { font-style: normal; color: var(--navy); box-shadow: inset 0 -3px 0 var(--red); }   /* акцент — черта, не цвет текста */
+.hero-text .display em { font-style: normal; color: var(--navy); }   /* без подчёркивания (замечание владельца 12.11): красный на главной — только метки карты и черта над заголовком */
 .home-map { margin-top: var(--s3); }
 .city-pills { display: none; gap: 8px; flex-wrap: wrap; margin-top: var(--s2); }
 .city-pills .btn { min-height: 40px; padding: 8px 14px; font-size: 14px; }
@@ -649,10 +650,7 @@ select { appearance: none; -webkit-appearance: none; padding-right: 34px; backgr
 @media (max-width: 900px) { .feats { grid-template-columns: 1fr; } .grid3 { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 768px) {
   .site-head { padding: 10px var(--s2); }
-  .brand-lock img { height: 28px; }
-  .brand-lock small { display: none; }
-  .brand-lock b { font-size: 15px; white-space: nowrap; }
-  .brand-lock .div { height: 26px; }
+  .brand-lock { --logo-h: 28px; gap: 8px; }
   .site-head .btn { padding: 8px 12px; min-height: 40px; }
   .city-pills { display: flex; }
   .marker .mlabel { display: none; }
@@ -697,7 +695,6 @@ select { appearance: none; -webkit-appearance: none; padding-right: 34px; backgr
   .nav-panel a.active { background: var(--tint); color: var(--navy); }
   .nav-panel .nav-sep { height: 1px; background: var(--line-soft); margin: 6px 0; }
   .toolbar .view-btn { display: none; }
-  .site-head .bx-login { display: none; }   /* на телефоне вход через Битрикс24 — на странице «Войти», шапка не обрезается */
   .cmd-row { flex-wrap: wrap; }
   .cmd-row > .spacer { flex: 1 1 100%; }   /* поле команды — на всю ширину, кнопки строкой ниже */
   /* таблицы (сводка, совещания, лига, администрирование) — строки карточками, без горизонтальной прокрутки */

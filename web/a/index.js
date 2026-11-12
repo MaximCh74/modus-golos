@@ -62,7 +62,7 @@
 
   const submit = h('button', { type: 'button', class: 'feat', onclick: () => { if (selected) location.href = selected.form_url; else { toast('Сначала выберите город на карте или в списке'); pills.firstChild.focus(); pills.scrollIntoView({ behavior: 'smooth', block: 'center' }); } } },
     icon('message-circle', { size: 26 }), h('div', {}, h('b', {}, 'Подать обращение'), h('span', {}, 'Идеи, вопросы, проблемы')), icon('chevron-right', { size: 20, cls: 'chev' }));
-  const changes = h('a', { href: '/changes', class: 'feat' }, icon('layers', { size: 26 }), h('div', {}, h('b', {}, 'Что изменили'), h('span', {}, 'Уже сделано по вашим идеям')), icon('chevron-right', { size: 20, cls: 'chev' }));
+  const changes = h('a', { href: '/changes', class: 'feat' }, icon('layers', { size: 26 }), h('div', {}, h('b', {}, 'Результаты обращений'), h('span', {}, 'Что уже сделано по вашим идеям')), icon('chevron-right', { size: 20, cls: 'chev' }));
   const statsHref = me && me.role !== 'employee' ? '/panel#/summary' : '/login?next=' + encodeURIComponent('/panel#/summary');
   const stats = h('a', { href: statsHref, class: 'feat' }, icon('bar-chart', { size: 26 }), h('div', {}, h('b', {}, 'Статистика'), h('span', {}, 'Открытые и решённые')), icon('chevron-right', { size: 20, cls: 'chev' }));
   featsSlot.replaceChildren(submit, changes, stats);

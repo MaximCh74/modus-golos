@@ -261,15 +261,16 @@ async function speakSummary(btn, sentences) {
 }
 
 
-// Шапка публичных страниц (стартовая, «Что изменили», /design): логотип | разделитель | «Модус Голос» / «Каждый голос услышан»; справа — вход.
+// Шапка публичных страниц (стартовая, «Что изменили», /design): логотип «МОДУС ТРЕЙД» | черта | «МОДУС ГОЛОС» в две строки той же высоты
+// и тем же весом, зеркально логотипу (замечание владельца 12.11); справа — одна кнопка «Войти» (вход через Битрикс24 — на странице входа).
 function siteHeader(me, cfg, opts) {
-  opts = opts || {}; cfg = cfg || {};
+  opts = opts || {};
   const right = me
     ? h('div', { class: 'row' }, h('span', { class: 'small muted' }, me.name.split(' ')[0]), h('a', { href: me.role === 'employee' ? '/app' : '/panel', class: 'btn btn-sm' }, me.role === 'employee' ? 'Приложение' : 'Панель'))
-    : h('div', { class: 'row' }, cfg.bitrix && window.self === window.top ? h('a', { href: cfg.bitrix_login, class: 'btn btn-sm btn-outline bx-login' }, iconText('log-in', 'Войти через Битрикс24')) : null,
-        h('a', { href: '/login' + (opts.next ? '?next=' + encodeURIComponent(opts.next) : ''), class: 'btn btn-outline' }, iconText('user', 'Войти')));
+    : h('a', { href: '/login' + (opts.next ? '?next=' + encodeURIComponent(opts.next) : ''), class: 'btn btn-outline' }, iconText('user', 'Войти'));
   return h('header', { class: 'site-head' },
-    h('a', { href: '/', class: 'brand-lock', title: 'Модус Голос — на главную' }, h('img', { src: '/a/img/logo.svg', alt: 'Модус Трейд' }), h('span', { class: 'div' }), h('span', {}, h('b', {}, 'Модус Голос'), h('small', {}, 'Каждый голос услышан'))),
+    h('a', { href: '/', class: 'brand-lock', title: 'Модус Голос — на главную' }, h('img', { src: '/a/img/logo.svg', alt: 'Модус Трейд' }), h('span', { class: 'div' }),
+      h('span', { class: 'wordmark', 'aria-label': 'Модус Голос' }, h('span', {}, 'Модус'), h('span', {}, 'Голос'))),
     h('div', { class: 'spacer' }), right);
 }
 
