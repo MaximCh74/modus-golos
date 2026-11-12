@@ -37,7 +37,8 @@ Google Play не требуется. Для публикации в Play пон�
 
 ```
 ~/MODUS_ANDROID/
-  modus-golos.keystore      # демо-ключ подписи (alias modusgolos); пароли — у владельца (сообщение от 12.11)
+  modus-golos.keystore      # ключ подписи (alias modusgolos), создан 13.11 командой --new-key; пароль задал владелец, хранит сам
+  modus-golos.keystore.old-* # прежний демо-ключ 12.11 (пароль утерян, не используется)
   app/twa-manifest.json     # проект Bubblewrap «Модус Голос»
   boss/twa-manifest.json    # проект Bubblewrap «Директор»
 ```
@@ -56,8 +57,8 @@ cp app-release-signed.apk ~/MODUS_FEEDBACK/demo/android/modus-golos.apk        #
 
 **Версия 1.1 (12.11.2026, вечер): новые иконки** из SVG-знака логотипа (`tools/make_icons.py`: «Модус Голос» — знак на белом, «Директор» —
 знак и тёмно-синяя с красной волна внизу; 180/192/512 и maskable). `appVersionCode` 2, `appVersionName` 1.1, `bubblewrap update` в обоих
-проектах выполнен — иконки уже в `mipmap-*`. Осталось собрать с паролями ключа (`bubblewrap build`, команды выше) и положить APK в `demo/android/`;
-до этого в репозитории — APK 1.0 со старыми иконками. На телефоне: удалить старое приложение или поставить поверх (тот же ключ — встанет поверх).
+проектах выполнен — иконки уже в `mipmap-*`. **13.11 собрано новым ключом** (`tools/build_apk.sh --new-key`: пароль прежнего демо-ключа утерян) — в `demo/android/` APK 1.1, отпечаток
+в `assetlinks.json` заменён. На телефоне: удалить старое приложение (1.0, старый ключ) и поставить новое — поверх не встанет.
 
 При новой версии поднять `appVersionCode`/`appVersionName` в `twa-manifest.json`. Если ключ подписи меняется — обновить отпечаток
 в `web/.well-known/assetlinks.json` (`keytool -list -v -keystore … | grep SHA256`) и переустановить приложения.

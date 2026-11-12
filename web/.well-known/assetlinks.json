@@ -7,7 +7,7 @@
       "namespace": "android_app",
       "package_name": "kz.cqsystems.modusgolos",
       "sha256_cert_fingerprints": [
-        "1E:2B:CD:59:1D:7A:00:E0:95:E4:FB:0A:9F:C5:99:A4:14:D5:8A:0E:0C:37:16:CB:4F:CE:19:92:E9:A2:61:50"
+        "CA:9B:76:48:4E:58:8F:35:18:FD:68:1E:82:B5:06:38:DC:A1:C4:F1:B8:1A:B2:A6:CD:18:12:27:D2:A0:9F:CB"
       ]
     }
   },
@@ -19,7 +19,7 @@
       "namespace": "android_app",
       "package_name": "kz.cqsystems.modusgolos.boss",
       "sha256_cert_fingerprints": [
-        "1E:2B:CD:59:1D:7A:00:E0:95:E4:FB:0A:9F:C5:99:A4:14:D5:8A:0E:0C:37:16:CB:4F:CE:19:92:E9:A2:61:50"
+        "CA:9B:76:48:4E:58:8F:35:18:FD:68:1E:82:B5:06:38:DC:A1:C4:F1:B8:1A:B2:A6:CD:18:12:27:D2:A0:9F:CB"
       ]
     }
   }
