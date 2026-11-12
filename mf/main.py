@@ -168,6 +168,19 @@ async def manifest():
     return FileResponse(WEB / "manifest.json", media_type="application/manifest+json")
 
 
+@app.get("/manifest-boss.json")
+async def manifest_boss():
+    """Отдельная PWA «Модус Голос · Директор» (пункт 2 очереди 12.11): start_url и scope — /boss, своя иконка."""
+    return FileResponse(WEB / "manifest-boss.json", media_type="application/manifest+json")
+
+
+@app.get("/boss")
+@app.get("/boss/{rest:path}")
+async def boss_page(rest: str = ""):
+    """«Директор в кармане»: один экран без прокрутки на телефоне; доступ к данным — только директору (API проверяет роль)."""
+    return page("boss.html")
+
+
 @app.get("/sw.js")
 async def service_worker():
     return FileResponse(WEB / "sw.js", media_type="application/javascript", headers={"Service-Worker-Allowed": "/", "Cache-Control": "no-cache"})

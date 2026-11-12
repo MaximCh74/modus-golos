@@ -187,3 +187,38 @@ def parse_command(text: str, ctx: dict) -> dict:
     return {"intent": intent, "filters": {"city": city, "department": department, "person": person,
                                           "stale_only": bool(re.search(r"без новостей|давно|молч", t)), "overdue_only": bool(re.search(r"просроч", t)) and intent == "remind_no_response"},
             "deadline_text": deadline_text, "note": None, "idea": idea}
+
+
+# ---------- «Директор в кармане» без ключа (пункт 2 очереди 12.11): вопрос → тип из белого списка по ключевым словам ----------
+
+def parse_boss(text: str, ctx: dict) -> dict:
+    """→ {kind, question, city, department, number, period} — та же форма, что у llm.parse_boss."""
+    t = _norm(text)
+    city = next((c["city"] for c in ctx.get("cities", []) if _norm(c["city"])[1:5] in t), None)
+    department = next((d["name"] for d in ctx.get("departments", []) if len(d["name"]) > 2 and _norm(d["name"])[1:5] in t), None)
+    m = re.search(r"(?<![а-яa-z])[aа]-?\s?(\d{1,4})\b", t)   # «A-027», «а 27» — латиница и кириллица, как пишет STT
+    number = f"A-{int(m.group(1)):03d}" if m else None
+    period = "today" if re.search(r"сегодня|за день|с утра", t) else "week" if re.search(r"недел", t) else None
+    # команды — те же слова, что в parse_command: сделать что-то, а не узнать
+    if re.search(r"напомн|поторопи|запроси|попроси|отправ|открой|прими|отклони|прочитай|прочти|озвуч", t):
+        return {"kind": "command", "question": None, "city": city, "department": department, "number": number, "period": period}
+    q = None
+    if number and re.search(r"обращен|номер|[aа]-?\s?\d", t):
+        q = "appeal"
+    elif re.search(r"решени|на решение|ждут меня|ждет меня|предложени", t):
+        q = "my_decisions"
+    elif re.search(r"просроч|не отвеч|тянет|тянут|опозда", t):
+        q = "who_overdue"
+    elif re.search(r"тем[аы]|о чем пишут|что болит|повторя|чаще всего", t):
+        q = "main_topics"
+    elif department and re.search(r"отдел|подразделен|как дела|что у|что по", t):
+        q = "department"
+    elif city and re.search(r"город|филиал|как дела|что по|что в|что у|как там", t):
+        q = "city"
+    elif re.search(r"что нового|нового|как дела|что происходит|сводк|итог|обстановк|в целом|что у нас", t):
+        q = "whats_new"
+    elif city or re.search(r"\bгород|филиал", t):
+        q = "city"   # город не из списка → сервер ответит «не понял, какой город» и перечислит известные
+    elif department or re.search(r"отдел|подразделен", t):
+        q = "department"
+    return {"kind": "question" if q else "unknown", "question": q, "city": city, "department": department, "number": number, "period": period}

@@ -274,6 +274,67 @@ def parse_command(text: str, ctx: dict) -> dict:
             "deadline_text": (dl.get("text") if isinstance(dl, dict) else dl) or None, "note": d.get("note"), "idea": d.get("idea")}
 
 
+# ---------- «Директор в кармане» (пункт 2 очереди 12.11): вопрос → intent из белого списка; ответ — пересказ фактов сервера ----------
+
+BOSS_QUESTIONS = ("whats_new", "my_decisions", "who_overdue", "main_topics", "city", "appeal", "department")
+BOSS_PARSE_SYSTEM = GLOSSARY + """
+Ты разбираешь короткий вопрос или команду директора в мобильном приложении «Директор в кармане». Верни ТОЛЬКО JSON:
+{"kind": "question" | "command" | "unknown",
+ "question": один из ["whats_new","my_decisions","who_overdue","main_topics","city","appeal","department"] или null,
+ "city": город из списка или null, "department": подразделение из списка или null, "number": номер обращения вида A-012 или null,
+ "period": "today" | "week" | null — только если директор сам назвал период («за сегодня», «за неделю»)}
+Вопросы (только чтение): whats_new — что нового, что произошло, как дела в целом, сводка за период; my_decisions — что ждёт моего решения,
+что на решении, какие предложения ждут; who_overdue — кто просрочил, у кого просрочки, кто не отвечает, кто тянет; main_topics — главные
+или повторяющиеся темы, о чём чаще пишут, что болит; city — что по городу или филиалу (как дела в Омске, что в Павлодаре);
+appeal — что по обращению с номером; department — как дела у отдела или подразделения (продажи, бухгалтерия).
+Команда — просьба что-то СДЕЛАТЬ: напомнить, поторопить, запросить новости или ход работ, открыть «На решение», прочитать сводку вслух,
+отправить → kind "command" (разбирает другой модуль, question null). Всё остальное (болтовня, «закажи пиццу», «уволь», вопросы не о
+системе) → "unknown". Город и подразделение бери только из списков."""
+
+
+def parse_boss(text: str, ctx: dict) -> dict:
+    def validate(d: dict) -> None:
+        if not isinstance(d, dict) or d.get("kind") not in ("question", "command", "unknown"):
+            raise ValueError("kind вне списка")
+        if d.get("question") is not None and d["question"] not in BOSS_QUESTIONS:
+            raise ValueError(f"question вне белого списка: {d['question']}")
+    user = ("Города: " + ", ".join(c["city"] for c in ctx["cities"]) + "\nПодразделения: " + ", ".join(d["name"] for d in ctx["departments"]) +
+            f"\n\nВопрос директора:\n{text}")
+    d = chat_json(BOSS_PARSE_SYSTEM, user, validate, max_tokens=200)
+    return {"kind": d["kind"], "question": d.get("question"), "city": d.get("city"), "department": d.get("department"), "number": d.get("number"), "period": d.get("period")}
+
+
+BOSS_ANSWER_SYSTEM = GLOSSARY + """
+Ты голосовой помощник директора компании (инженерные системы безопасности, филиалы в Казахстане и России). Отвечаешь на его вопрос ТОЛЬКО по
+готовым фактам: 1–3 коротких предложения, деловой спокойный тон, на «вы», без воды, без оценок и советов. Правила:
+- используй ТОЛЬКО числа из фактов: ничего не вычисляй, не округляй, часы в дни не переводи; имена, города и номера обращений — как в фактах;
+- если фактов мало или нули — так и скажи («просрочек нет», «вашего решения ничего не ждёт»);
+- перечисления сворачивай (не больше трёх имён или тем); не упоминай ссылки и названия полей.
+Отвечай ТОЛЬКО JSON: {"answer": "..."}"""
+
+
+def boss_answer(question: str, what: str, facts: dict) -> str:
+    def validate(d: dict) -> None:
+        if not isinstance(d, dict) or not isinstance(d.get("answer"), str) or not d["answer"].strip():
+            raise ValueError("нет answer")
+    d = chat_json(BOSS_ANSWER_SYSTEM, f"Вопрос директора: {question}\nТип вопроса: {what}\nФакты (JSON):\n" + json.dumps(facts, ensure_ascii=False), validate, max_tokens=300)
+    return " ".join(d["answer"].split())
+
+
+BOSS_GREETING_SYSTEM = GLOSSARY + """
+Ты пишешь приветствие директору на главном экране его телефона: одна-две короткие фразы. Первая — ровно приветствие из фактов (greeting),
+дословно. Вторая — самое важное за период (period): сколько пришло (new) и решено (done), ждут ли решения (decisions), есть ли просрочки
+(overdue). Только числа из фактов, нули можно не упоминать; деловой тон, на «вы». Отвечай ТОЛЬКО JSON: {"text": "..."}"""
+
+
+def boss_greeting(facts: dict) -> str:
+    def validate(d: dict) -> None:
+        if not isinstance(d, dict) or not isinstance(d.get("text"), str) or not d["text"].strip():
+            raise ValueError("нет text")
+    d = chat_json(BOSS_GREETING_SYSTEM, "Факты (JSON):\n" + json.dumps(facts, ensure_ascii=False), validate, max_tokens=150)
+    return " ".join(d["text"].split())
+
+
 # ---------- озвучка (OpenAI TTS тем же ключом) ----------
 
 TTS_MODEL = os.environ.get("MF_TTS_MODEL", "gpt-4o-mini-tts")

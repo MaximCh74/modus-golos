@@ -13,7 +13,7 @@ from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, Reque
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
-from . import ai, appeals, auth, commands, db, demo, director, glossary, meetings, posters, realtime, staff
+from . import ai, appeals, auth, boss, commands, db, demo, director, glossary, meetings, posters, realtime, staff
 from .ai import llm, similar, stt
 from .integrations import bitrix
 from . import config
@@ -797,6 +797,45 @@ async def command_audio(plan_id: str, request: Request):
     import asyncio
     try:
         audio, src = await asyncio.to_thread(director.tts_cached, p["sent"]["reply"])
+    except Exception as e:   # noqa: BLE001
+        raise HTTPException(503, f"Озвучка недоступна: {e}"[:200])
+    return Response(audio, media_type="audio/mpeg", headers={"Cache-Control": "no-store", "X-TTS-Source": src})
+
+
+# ---------- «Директор в кармане» (пункт 2 очереди 12.11): только директор; вопросы — чтение, команды — через план с подтверждением ----------
+
+class AskBody(BaseModel):
+    text: str
+    period: str | None = None
+
+
+@router.get("/boss/home")
+async def boss_home(request: Request, period: str = "week"):
+    user = auth.require(request, "director")
+    import asyncio
+    return await asyncio.to_thread(boss.home, user, period)
+
+
+@router.post("/boss/ask")
+async def boss_ask(body: AskBody, request: Request):
+    """Вопрос или команда голосом/текстом (голос → /api/stt → текст). Вопрос: факты считает сервер, ИИ пересказывает, числа сверяются.
+    Команда: план в памяти, ничего не отправляется до POST /api/director/command/{plan_id}/send."""
+    user = auth.require(request, "director")
+    import asyncio
+    return await asyncio.to_thread(boss.ask, body.text, user, body.period)
+
+
+@router.get("/boss/answer/{answer_id}/audio")
+async def boss_answer_audio(answer_id: str, request: Request):
+    """Нейтральный голос (OpenAI TTS с кэшем), не клонирование; без ключа — 503, фронт читает голосом браузера или молчит."""
+    user = auth.require(request, "director")
+    if not llm.available():
+        raise HTTPException(503, "Озвучка через OpenAI недоступна без ключа")
+    import asyncio
+    try:
+        audio, src = await asyncio.to_thread(boss.answer_audio, answer_id, user)
+    except HTTPException:
+        raise
     except Exception as e:   # noqa: BLE001
         raise HTTPException(503, f"Озвучка недоступна: {e}"[:200])
     return Response(audio, media_type="audio/mpeg", headers={"Cache-Control": "no-store", "X-TTS-Source": src})
