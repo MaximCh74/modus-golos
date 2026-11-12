@@ -5,6 +5,35 @@ const STATUS = {
   in_progress: ['В работе', 'st-work'], done: ['Реализовано', 'st-done'], closed: ['Закрыто', 'st-closed'], rejected: ['Отклонено', 'st-rejected'],
 };
 const TYPES = { problem: 'Проблема', suggestion: 'Предложение', praise: 'Положительный отзыв' };
+
+// Поля ввода растут по тексту (замечание владельца 13.11): все textarea — по высоте под текст до ~8 строк, дальше прокрутка; ручной
+// уголок не нужен. Срабатывает на ввод, на любое присваивание .value из кода (голосовая расшифровка, примеры-подсказки, очистка),
+// на появление поля на странице и на смену ширины окна. Нижняя граница — rows и min-height из CSS.
+const GROW_LINES = 8;
+function autoGrow(el) {
+  if (!el || el.tagName !== 'TEXTAREA' || !el.isConnected || !el.getClientRects().length) return;   // скрытое поле — при показе/фокусе
+  const cs = getComputedStyle(el);
+  const border = parseFloat(cs.borderTopWidth) + parseFloat(cs.borderBottomWidth);
+  const lh = parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.5;
+  const max = Math.round(lh * GROW_LINES + parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom) + border);
+  el.style.height = 'auto';
+  const need = el.scrollHeight + border;
+  el.style.height = Math.min(need, max) + 'px';
+  el.style.overflowY = need > max ? 'auto' : 'hidden';
+}
+(function () {
+  const desc = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value');
+  Object.defineProperty(HTMLTextAreaElement.prototype, 'value', { configurable: true, enumerable: desc.enumerable,
+    get() { return desc.get.call(this); }, set(v) { desc.set.call(this, v); autoGrow(this); } });
+  const all = () => document.querySelectorAll('textarea').forEach(autoGrow);
+  document.addEventListener('input', e => autoGrow(e.target), true);
+  document.addEventListener('focusin', e => autoGrow(e.target), true);
+  new MutationObserver(muts => { for (const m of muts) for (const n of m.addedNodes) if (n.nodeType === 1) (n.tagName === 'TEXTAREA' ? [n] : n.querySelectorAll('textarea')).forEach(autoGrow); })
+    .observe(document.documentElement, { childList: true, subtree: true });
+  let t = 0;
+  window.addEventListener('resize', () => { clearTimeout(t); t = setTimeout(all, 120); });
+})();
+
 const PRIO = { low: 'Низкий', medium: 'Средний', high: 'Высокий' };
 const REASON = { accepted: 'принято к рассмотрению', done: 'реализовано', support: '«У меня так же»' };
 

@@ -111,7 +111,7 @@ b, strong { font-weight: var(--w-bold); }
 .field > span { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
 input[type=text], input[type=search], input[type=number], input[type=date], textarea, select { width: 100%; font: inherit; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius-btn); background: var(--white); color: var(--ink); transition: border-color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease); }
 input:focus, textarea:focus, select:focus { outline: none; border-color: var(--navy); box-shadow: var(--focus); }
-textarea { min-height: 110px; resize: vertical; }
+textarea { min-height: 110px; resize: none; }   /* высоту ведёт autoGrow (ui.js): по тексту до ~8 строк, дальше прокрутка */
 input[type=file] { font: inherit; font-size: 14px; }
 .check { display: flex; align-items: center; gap: 8px; font-size: 15px; }
 .hint { font-size: 13px; color: var(--muted); }
