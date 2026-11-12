@@ -662,3 +662,57 @@ def test_F18_ai_error_text_not_returned(c, monkeypatch):
     assert r["ai_engine"] == "error" and "sk-" not in json.dumps(r, ensure_ascii=False)
     r = c.post("/api/public/brief", json={"text": "Проверка утечки текста ошибки в пересказе"}).json()
     assert r["engine"] == "error"
+
+
+# ---------- F-16: голос не остаётся на диске ----------
+
+def test_F16_extracted_audio_removed_on_cloud_error(monkeypatch):
+    import openai
+    from mf import config
+    from mf.ai import stt
+    src = config.AUDIO_DIR / "meet-test.mp4"
+    src.write_bytes(b"0" * 4000)
+
+    def fake_extract(path, max_seconds=None):
+        out = path.with_suffix(".extracted.m4a")
+        out.write_bytes(b"1" * 4000)
+        return out
+
+    class Boom:
+        def __init__(self, *a, **k):
+            self.audio = self
+            self.transcriptions = self
+
+        def create(self, **k):
+            raise RuntimeError("сеть недоступна")
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test-not-real")
+    monkeypatch.setattr(stt, "extract_audio", fake_extract)
+    monkeypatch.setattr(openai, "OpenAI", Boom)
+    try:
+        with pytest.raises(RuntimeError):
+            stt._openai(src, "ru")
+        assert not (config.AUDIO_DIR / "meet-test.extracted.m4a").exists()
+    finally:
+        src.unlink(missing_ok=True)
+
+
+def test_F16_orphan_audio_cleaned_on_start(c):
+    from mf import config, meetings
+    stale = config.AUDIO_DIR / "stale-meeting.webm"
+    stale.write_bytes(b"0" * 2000)
+    mid = meetings.create(db.one("SELECT * FROM users WHERE id=3"), "Прерванная", audio_path=stale)
+    with TestClient(app):   # перезапуск сервера
+        pass
+    assert not stale.exists()
+    m = db.one("SELECT status, audio_path, error FROM meetings WHERE id=?", (mid,))
+    assert m["status"] == "failed" and m["audio_path"] is None and "перезапуском" in m["error"]
+
+
+# ---------- F-21: команды директора — только директору ----------
+
+def test_F21_admin_cannot_issue_director_commands(c):
+    login(c, 15)
+    assert c.post("/api/director/command/parse", json={"text": "Напомни про просроченные поручения"}).status_code == 403
+    assert c.get("/api/director/command/help").status_code == 403
+    login(c, 1)
+    assert c.post("/api/director/command/parse", json={"text": "Напомни про просроченные поручения"}).status_code == 200

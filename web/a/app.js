@@ -91,7 +91,7 @@ async function home() {
   const tasksCard = h('a', { href: '#/tasks', class: 'card taskbar', id: 'my-tasks' }, icon('list-checks', { size: 24 }),
     h('div', { class: 'spacer' }, h('b', {}, 'Мои поручения'), h('div', { class: 'small muted' }, ME.tasks_open ? plural(ME.tasks_open, 'невыполненное', 'невыполненных', 'невыполненных') + (ME.tasks_overdue ? ' · просрочено ' + ME.tasks_overdue : '') : 'невыполненных нет')),
     ME.tasks_open ? h('span', { class: 'count' + (ME.tasks_overdue ? ' late' : '') }, String(ME.tasks_open)) : null, icon('chevron-right', { size: 18, cls: 'chev' }));
-  const command = (ME.role === 'director' || ME.role === 'admin') ? commandPanel({ decisionsHref: '#/decisions' }) : null;
+  const command = ME.role === 'director' ? commandPanel({ decisionsHref: '#/decisions' }) : null;   // команды — только директору (F-21)
   root.replaceChildren(h('div', { class: 'wrap' }, summary ? summaryBlock(summary, () => route()) : null, command, decisions,
     h('div', { class: 'grid2' },
       h('a', { href: '#/new?type=problem', class: 'btn btn-primary btn-big' }, 'Сообщить о проблеме'),

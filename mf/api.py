@@ -822,14 +822,14 @@ class CommandSend(BaseModel):
 
 @router.get("/director/command/help")
 async def command_help(request: Request):
-    auth.require(request, "director", "admin")
+    auth.require(request, "director")   # F-21: команды (рассылки от имени руководства) — только директору
     return {"intents": [{"intent": k, "what": v, "example": commands.EXAMPLES[k]} for k, v in commands.INTENTS.items()], "llm": llm.available()}
 
 
 @router.post("/director/command/parse")
 async def command_parse(body: CommandText, request: Request):
     """Разбор + план для экрана подтверждения. НИЧЕГО не отправляет: план лежит в памяти под случайным id до [Отправить]."""
-    user = auth.require(request, "director", "admin")
+    user = auth.require(request, "director")
     ai_user_limit.check(f"u:{user['id']}")
     import asyncio
     cmd = await asyncio.to_thread(commands.parse, body.text, user)
@@ -840,14 +840,14 @@ async def command_parse(body: CommandText, request: Request):
 
 @router.post("/director/command/{plan_id}/send")
 async def command_send(plan_id: str, body: CommandSend, request: Request):
-    user = auth.require(request, "director", "admin")
+    user = auth.require(request, "director")
     return commands.execute(plan_id, user, body.messages)
 
 
 @router.get("/director/command/{plan_id}/audio")
 async def command_audio(plan_id: str, request: Request):
     """Короткий голосовой ответ после отправки («Отправил напоминания четырём сотрудникам…») — OpenAI TTS с кэшем; без ключа 503."""
-    user = auth.require(request, "director", "admin")
+    user = auth.require(request, "director")
     p = commands.get_plan(plan_id, user)
     if not p["sent"]:
         raise HTTPException(409, "Команда ещё не отправлена")

@@ -147,10 +147,27 @@ async def overdue_loop():
         await asyncio.sleep(60)
 
 
+def cleanup_audio() -> int:
+    """Аудит 12.11, F-16: голос не должен оставаться на диске. Обработка совещания идёт в фоне этого процесса и перезапуск не
+    переживает — значит, всё, что лежит в var/audio при старте, осиротело: удалить, а совещания «обрабатывается» пометить ошибкой."""
+    from . import config
+    n = 0
+    for f in config.AUDIO_DIR.glob("*"):
+        if f.is_file():
+            f.unlink(missing_ok=True)
+            n += 1
+    db.ex("UPDATE meetings SET status='failed', stage=NULL, audio_path=NULL, error=? WHERE status='processing'",
+          ("Обработка прервана перезапуском сервера — загрузите запись или текст заново",))
+    if n:
+        log.info("удалено осиротевших аудиофайлов: %s", n)
+    return n
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     db.conn()
     seed.ensure()
+    cleanup_audio()
     task = asyncio.create_task(overdue_loop())
     if os.environ.get("MF_STT_WARMUP", "1") == "1" and not os.environ.get("PYTEST_CURRENT_TEST"):
         threading.Thread(target=stt.warmup, name="stt-warmup", daemon=True).start()   # модель грузится ~10 с, первая запись не ждёт

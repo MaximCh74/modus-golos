@@ -389,7 +389,7 @@ async function summary() {
   const more = ME.role !== 'responsible' ? menuButton([
     ['Проверить просрочки сейчас', async () => { const r = await API.post('/api/panel/check-overdue'); toast(r.escalated.length ? 'Эскалировано: ' + r.escalated.join(', ') : 'Новых просрочек нет'); summary(); }],
     ds && ds.engine === 'openai' ? ['Показать сводку шаблоном без ИИ', async () => { const t = await API.get('/api/panel/director-summary?engine=template'); const box = document.querySelector('.summary-ai'); if (box) box.replaceWith(summaryBlockPanel(t)); }] : null]) : null;
-  const command = (ME.role === 'director' || ME.role === 'admin') ? commandPanel({ decisionsHref: '#/decisions', compact: true }) : null;
+  const command = ME.role === 'director' ? commandPanel({ decisionsHref: '#/decisions', compact: true }) : null;   // команды — только директору (F-21)
   root.replaceChildren(h('div', { class: 'wrap wrap-wide' }, h('div', { class: 'row' }, h('div', { class: 'h1' }, 'Сводка'), h('div', { class: 'spacer' }), more), sumBlock, attention, command, kpis, h('div', { class: 'split mt16' }, h('div', {}, mapCard, branches, clustersBox, cats), byType)));
 }
 
