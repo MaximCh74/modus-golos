@@ -72,8 +72,9 @@ def main() -> None:
         ph.wait_for_selector("button:has-text('Отправить')", timeout=180000); ph.wait_for_timeout(800); shot(ph, "06_meeting_review_phone", full=True)
         ph.click("button:has-text('Отправить')"); ph.wait_for_selector("text=Отправлено", timeout=30000); shot(ph, "07_meeting_sent_phone")
         # Шаг 3: «Сообщить о ходе» → стадия у автора
-        page.goto(f"{base}/panel#/queue"); page.wait_for_selector("table"); page.click("tbody tr >> nth=0"); page.wait_for_selector("text=Сообщить о ходе")
-        page.fill("textarea[placeholder^='Сообщить о ходе']", "Сканер заказан, поставка в среду"); page.click("button:has-text('Сообщить о ходе')"); page.wait_for_timeout(1500)
+        page.goto(f"{base}/panel#/queue"); page.wait_for_selector("table"); page.click("tbody tr >> nth=0"); page.wait_for_selector("button:has-text('Взять в работу')")
+        page.click("button:has-text('Взять в работу')"); page.wait_for_selector("button:has-text('Сообщить о ходе')"); page.click("button:has-text('Сообщить о ходе')")
+        page.fill(".act-form textarea", "Сканер заказан, поставка в среду"); page.click("button:has-text('Отправить автору')"); page.wait_for_timeout(1500)
         shot(page, "08_card_progress", full=True)
         ph.goto(track_url); ph.wait_for_selector("text=Проработка"); shot(ph, "09_author_stage_phone")
         # Шаг 4: «На решение»

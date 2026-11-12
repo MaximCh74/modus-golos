@@ -716,8 +716,10 @@ def list_for(user: dict, f: dict) -> list[dict]:
             where.append(f"{col}=?"); params.append(f[key])
     if f.get("unassigned"):
         where.append("a.responsible_id IS NULL AND a.status IN ('new','review','clarify','in_progress')")
-    if f.get("open"):
+    if f.get("open") or f.get("attention"):
         where.append("a.status IN ('new','review','clarify','in_progress')")
+    if f.get("closed"):
+        where.append("a.status IN ('done','closed','rejected')")
     if f.get("days"):
         where.append("a.created_at >= ?"); params.append(db.iso(db.now() - timedelta(days=int(f["days"]))))
     if f.get("q"):
@@ -733,6 +735,8 @@ def list_for(user: dict, f: dict) -> list[dict]:
     rows = [decorate(r) for r in db.q(sql, params)]
     if f.get("overdue"):
         rows = [r for r in rows if r["overdue"]]
+    if f.get("attention"):   # этап 9: вкладка «Требуют внимания» — просроченные, без ответственного, «мешают сейчас», ждут уточнения
+        rows = [r for r in rows if r["overdue"] or r["unassigned"] or r.get("author_urgency") == "now" or r["status"] == "clarify"]
     keep = ("id", "number", "type", "type_label", "category", "category_id", "branch", "branch_code", "branch_id", "department",
             "status", "status_label", "responsible", "responsible_id", "priority", "priority_label", "created_at", "age_hours",
             "overdue", "unassigned", "supports", "is_anonymous", "source", "first_response_hours", "text", "site_city", "director_decision")

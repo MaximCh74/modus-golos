@@ -5,7 +5,7 @@
 function commandPanel(opts) {
   opts = opts || {};
   const box = h('div', { class: 'card command' });
-  const ta = h('textarea', { class: 'cmd-text', rows: 1, placeholder: 'Например: «запроси новости по обращениям в работе в Омске до 18:00»' });
+  const ta = h('textarea', { class: 'cmd-text', rows: 1, placeholder: opts.compact ? 'Команда голосом или текстом: «запроси новости по обращениям в работе в Омске до 18:00»' : 'Например: «запроси новости по обращениям в работе в Омске до 18:00»' });
   const mic = h('button', { type: 'button', class: 'btn mic', title: 'Команда голосом' });
   const run = h('button', { type: 'button', class: 'btn btn-primary' }, iconText('send', 'Выполнить'));
   const result = h('div', { class: 'mt8' });
@@ -13,7 +13,8 @@ function commandPanel(opts) {
   Voice.attach(mic, ta, { onText: () => parse() });
   run.addEventListener('click', parse);
   ta.addEventListener('keydown', ev => { if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); parse(); } });
-  box.append(h('div', { class: 'row' }, h('div', { class: 'lbl' }, 'Команда'), h('span', { class: 'hint' }, 'голосом или текстом: напоминания, новости по обращениям, «На решение», сводка')),
+  if (opts.compact) box.append(h('div', { class: 'row' }, h('div', { class: 'spacer' }, ta), mic, run), result);
+  else box.append(h('div', { class: 'row' }, h('div', { class: 'lbl' }, 'Команда'), h('span', { class: 'hint' }, 'голосом или текстом: напоминания, новости по обращениям, «На решение», сводка')),
     h('div', { class: 'row mt8' }, h('div', { class: 'spacer' }, ta), mic, run), result);
 
   async function parse() {
@@ -31,7 +32,7 @@ function commandPanel(opts) {
 
   function render(r) {
     const p = r.plan, cmd = r.command;
-    const engine = tag(cmd.engine === 'openai' ? 'tag-ai' : 'tag-demo', cmd.engine === 'openai' ? 'разбор ИИ' : 'по ключевым словам (без ИИ)');
+    const engine = aiMark(cmd.engine === 'openai', 'разбор ИИ', 'по ключевым словам (без ИИ)');
     if (p.kind === 'unknown') {
       result.replaceChildren(h('div', { class: 'card card-warn' }, h('div', { class: 'row' }, h('b', {}, p.title), engine),
         h('ul', { class: 'small mt8' }, p.help.map(x => h('li', {}, x))),
@@ -50,7 +51,7 @@ function commandPanel(opts) {
     if (p.kind === 'briefing') {
       const speak = h('button', { class: 'btn btn-sm btn-primary' }, iconText('volume', 'Прочитать'));
       speak.addEventListener('click', async () => { try { await API.post('/api/director/command/' + r.plan_id + '/send', {}); } catch (e) { /* уже отправлено */ } speakSummary(speak, p.sentences); });
-      result.replaceChildren(h('div', { class: 'card card-info' }, h('div', { class: 'row' }, h('b', {}, p.title), tag(p.engine === 'openai' ? 'tag-ai' : 'tag-demo', p.engine === 'openai' ? 'пересказ ИИ по фактам' : 'шаблон без ИИ')),
+      result.replaceChildren(h('div', { class: 'card card-info' }, h('div', { class: 'row' }, h('b', {}, p.title), aiMark(p.engine === 'openai', 'пересказ ИИ по фактам', 'шаблон без ИИ')),
         p.sentences.map(s => h('p', { class: 'small' }, s.text)),
         h('div', { class: 'row mt8' }, speak, h('button', { class: 'btn btn-sm', onclick: cancel }, 'Отмена'))));
       return;

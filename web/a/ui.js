@@ -45,14 +45,16 @@ function fmtHours(x) {
 }
 
 function badge(status) { const s = STATUS[status] || [status, '']; return h('span', { class: 'badge ' + s[1] }, s[0]); }
+// Пометка «ИИ / без ИИ» (этап 9, правило 5): маленькая иконка с подсказкой при наведении, не цветной бейдж
+function aiMark(isAi, aiLabel, plainLabel) { return h('span', { class: 'ai-ic', title: isAi ? (aiLabel || 'ИИ') : (plainLabel || 'без ИИ'), 'aria-label': isAi ? (aiLabel || 'ИИ') : (plainLabel || 'без ИИ') }, icon(isAi ? 'sparkles' : 'file-text', { size: 14 })); }
 function tag(cls, text) { return h('span', { class: 'badge ' + cls }, text); }
 
-function tracker(status) {
+function tracker(status, narrow) {
   const steps = [['new', 'Новое'], ['review', 'Рассмотрение'], ['in_progress', 'В работе'], ['done', 'Реализовано'], ['closed', 'Закрыто']];
   let cur = status === 'clarify' ? 'review' : status;
   let idx = steps.findIndex(s => s[0] === cur);
   if (status === 'rejected') idx = 4;
-  const el = h('div', { class: 'tracker ' + (status === 'rejected' ? 'rejected' : status === 'clarify' ? 'clarify' : '') });
+  const el = h('div', { class: 'tracker ' + (status === 'rejected' ? 'rejected' : status === 'clarify' ? 'clarify' : '') + (narrow ? ' narrow' : '') });
   steps.forEach((s, i) => {
     let label = s[1];
     if (status === 'rejected' && i === 4) label = 'Отклонено';
@@ -91,6 +93,15 @@ function history(events) {
   if (!events || !events.length) return h('div', { class: 'muted small' }, 'Пока пусто');
   return h('div', { class: 'hist' }, events.slice().reverse().map(e =>
     h('div', { class: 'ev' }, h('div', { class: 'muted small' }, fmtDate(e.created_at), e.actor ? h('div', {}, e.actor) : null), h('div', {}, eventText(e)))));
+}
+
+// «Требуют внимания» одной строкой (этап 9): [[число, ссылка, подпись], …] — нули не показываем
+function attentionLine(items) {
+  const parts = items.filter(x => x[0]);
+  const el = h('div', { class: 'attention' }, h('b', {}, 'Требуют внимания: '));
+  if (!parts.length) { el.append(h('span', { class: 'muted' }, 'ничего — всё в порядке')); return el; }
+  parts.forEach((x, i) => { if (i) el.append(h('span', { class: 'muted' }, ' · ')); el.append(h('a', { href: x[1] }, x[2] + ' ' + x[0])); });
+  return el;
 }
 
 let _toastTimer = null;
@@ -196,7 +207,7 @@ function briefBlock(a, opts) {
   const ai = a.brief_engine === 'openai';
   const head = [a.author ? a.author.name : 'Анонимно', a.branch, a.input_mode === 'voice' ? 'голосом' : 'текстом'].filter(Boolean).join(' · ');
   return h('div', { class: 'card ' + (b.unclear ? 'card-warn' : 'card-info') + ' brief' },
-    h('div', { class: 'row' }, h('b', {}, 'Коротко'), h('span', { class: 'small muted' }, head), h('div', { class: 'spacer' }), tag(ai ? 'tag-ai' : 'tag-demo', ai ? 'пересказ ИИ' : (b.note || 'без ИИ'))),
+    h('div', { class: 'row' }, h('b', {}, 'Коротко'), h('span', { class: 'small muted' }, head), h('div', { class: 'spacer' }), aiMark(ai, 'пересказ ИИ', b.note || 'без ИИ')),
     h('div', { class: 'mt8' }, h('b', {}, 'Суть: '), b.gist || '—'),
     b.proposes ? h('div', {}, h('b', {}, 'Что предлагает: '), b.proposes) : null,
     b.expects ? h('div', {}, h('b', {}, 'Чего ждёт: '), b.expects) : null,

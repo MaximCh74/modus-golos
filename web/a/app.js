@@ -8,6 +8,7 @@ async function boot() {
   if (!ME) { location.href = '/login?next=' + encodeURIComponent('/app' + location.hash); return; }
   DICTS = await API.get('/api/dicts');
   renderTop();
+  if (!document.getElementById('foot')) document.body.append(h('div', { id: 'foot', class: 'foot' }, 'демо · данные синтетические, имена вымышленные · разработано Cyber QALQAN Systems'));
   window.addEventListener('hashchange', route);
   await route();
   API.sse(ev => {
@@ -26,7 +27,7 @@ function renderTop() {
   let top = document.getElementById('top');
   if (!top) { top = h('div', { class: 'topbar', id: 'top' }); document.body.prepend(top); }
   top.replaceChildren(
-    h('a', { href: '#/', class: 'brand' }, h('img', { src: '/a/img/logo.svg', alt: 'Модус Трейд' }), h('span', {}, 'Модус Голос', h('small', {}, 'Каждый голос услышан · демо'))),
+    h('a', { href: '#/', class: 'brand' }, h('img', { src: '/a/img/logo.svg', alt: 'Модус Трейд' }), h('span', {}, 'Модус Голос', h('small', {}, 'Каждый голос услышан'))),
     h('div', { class: 'spacer' }),
     h('span', { class: 'small muted', title: 'Мои баллы' }, iconText('star', String(ME.points || 0))),
     h('a', { href: '#/notifications', class: 'btn btn-sm bell', title: 'Уведомления' }, icon('bell'), ME.unread ? h('span', { class: 'n' }, String(ME.unread)) : null),
@@ -264,13 +265,10 @@ function summaryBlock(d, refresh) {
   const refreshBtn = h('button', { class: 'btn btn-sm', onclick: async () => { refreshBtn.disabled = true; try { await API.get('/api/panel/director-summary?refresh=1'); refresh(); } catch (e) { toast(e.message, 'bad'); refreshBtn.disabled = false; } } }, iconText('refresh', 'Обновить'));
   const l = d.lines || {};
   return h('div', { class: 'card summary-ai' },
-    h('div', { class: 'row' }, h('div', { class: 'lbl' }, 'Сводка'), tag(d.engine === 'openai' ? 'tag-ai' : 'tag-demo', d.engine === 'openai' ? 'пересказ ИИ по фактам' : 'шаблон без ИИ'), h('div', { class: 'spacer' }), h('span', { class: 'small muted' }, fmtDate(d.at)), speakBtn, refreshBtn),
+    h('div', { class: 'row' }, h('div', { class: 'lbl' }, 'Сводка'), aiMark(d.engine === 'openai', 'пересказ ИИ по фактам', 'шаблон без ИИ'), h('div', { class: 'spacer' }), h('span', { class: 'small muted' }, fmtDate(d.at)), speakBtn, refreshBtn),
     d.sentences.map(s => h('p', {}, s.href ? h('a', { href: s.href }, s.text) : s.text)),
-    h('div', { class: 'lines mt8' },
-      l.urgent_open ? h('a', { href: '/panel#/queue?open=1&urgency=now' }, tag('tag-flag', 'Мешают работать сейчас: ' + l.urgent_open)) : null,
-      l.decisions_over_threshold ? h('a', { href: '#/decisions' }, tag('tag-flag', 'Ждут решения дольше ' + l.threshold_days + ' дн: ' + l.decisions_over_threshold)) : null,
-      l.tasks_overdue ? h('a', { href: '/panel#/meetings?overdue=1' }, tag('tag-overdue', 'Поручения просрочены: ' + l.tasks_overdue)) : null,
-      l.no_news ? h('a', { href: '/panel#/queue?status=in_progress' }, tag('tag-flag', 'Без новостей авторам дольше ' + l.news_days + ' дн: ' + l.no_news)) : null));
+    attentionLine([[l.urgent_open, '/panel#/queue?open=1&urgency=now', 'мешают работать'], [l.decisions_over_threshold, '#/decisions', 'ждут решения'],
+      [l.tasks_overdue, '/panel#/meetings?overdue=1', 'поручения просрочены'], [l.no_news, '/panel#/queue?status=in_progress', 'без новостей']]));
 }
 
 async function profileScreen(uid) {
