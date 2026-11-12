@@ -585,3 +585,80 @@ def test_F15_old_plaintext_invites_are_hashed_on_open(tmp_path):
     db.ex("INSERT INTO invites(user_id, token, created_at, expires_at) VALUES(23, ?, ?, ?)", (tok, db.now_iso(), db.iso(db.now() + timedelta(days=3))))
     db.use(config.DATA_DIR)   # переоткрыть базу — как перезапуск сервера
     assert db.one("SELECT token FROM invites WHERE user_id=23 ORDER BY id DESC LIMIT 1")["token"] == db.token_hash(tok)
+
+
+# ---------- F-08: анонимное не несёт отдела и филиала автора; «Анонимно» в QR-форме и для вошедших ----------
+
+def test_F08_anonymous_app_appeal_has_no_author_department(c):
+    login(c, 24)   # единственный сотрудник «Администрации»
+    a = c.post("/api/appeals", data={"type": "problem", "text": "Анонимно: в отделе постоянно задерживают выплаты премий", "is_anonymous": "1"}).json()
+    login(c, 1)
+    card = c.get(f"/api/appeals/{a['id']}").json()
+    assert card["author"] is None and card["department"] is None and card["department_id"] is None and card["branch_id"] is None
+    login(c, 24)
+    assert any(x["id"] == a["id"] for x in c.get("/api/appeals/mine").json())   # автор видит своё
+
+
+def test_F08_logged_in_user_can_send_anonymously_by_qr(c):
+    login(c, 24)
+    r = c.post("/api/public/appeals", data={"type": "problem", "text": "Анонимно по QR: на складе нет касок", "branch_code": "PVL", "is_anonymous": "1"}).json()
+    assert r["logged_in"] is False and db.one("SELECT 1 FROM appeal_authors WHERE appeal_id=?", (r["id"],)) is None
+    assert db.one("SELECT is_anonymous FROM appeals WHERE id=?", (r["id"],))["is_anonymous"] == 1
+    r = c.post("/api/public/appeals", data={"type": "problem", "text": "От себя по QR: на складе нет перчаток", "branch_code": "PVL"}).json()
+    assert r["logged_in"] is True and db.one("SELECT user_id FROM appeal_authors WHERE appeal_id=?", (r["id"],))["user_id"] == 24
+
+
+# ---------- F-17: вложения — без метаданных, тип по содержимому ----------
+
+def _gps_jpeg():
+    from PIL import Image
+    buf = io.BytesIO()
+    exif = Image.Exif()
+    exif[0x8825] = {1: "N", 2: (52.0, 17.0, 14.0), 3: "E", 4: (76.0, 58.0, 3.0)}
+    Image.new("RGB", (40, 40), (10, 20, 200)).save(buf, "JPEG", exif=exif, comment=b"iPhone of Ivan")
+    return buf.getvalue()
+
+
+def test_F17_photo_exif_stripped(c):
+    from PIL import Image
+    anon(c)
+    r = c.post("/api/public/appeals", data={"type": "problem", "text": "Анонимно: протекает крыша над станком", "branch_code": "PVL"},
+               files={"file": ("photo.jpg", _gps_jpeg(), "image/jpeg")}).json()
+    att = db.one("SELECT * FROM attachments WHERE appeal_id=?", (r["id"],))
+    data = c.get(f"/api/attachments/{att['id']}?t={r['tracking_token']}").content
+    im = Image.open(io.BytesIO(data))
+    assert not im.getexif().get_ifd(0x8825) and not im.getexif() and "comment" not in im.info and att["mime"] == "image/jpeg"
+
+
+@pytest.mark.parametrize("name,data,mime", [("x.png", b"<html><script>alert(1)</script></html>", "image/png"),
+                                            ("x.pdf", b"<html>not a pdf</html>", "application/pdf"),
+                                            ("x.docx", b"MZ\x90\x00 exe", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
+                                            ("x.txt", b"bin\x00ary", "text/plain"),
+                                            ("x.gif", b"GIF89a\x01\x00\x01\x00\x00\x00\x00;", "image/gif")])
+def test_F17_file_type_checked_by_content(c, name, data, mime):
+    anon(c)
+    r = c.post("/api/public/appeals", data={"type": "problem", "text": "Проверка типа файла по содержимому", "branch_code": "PVL"}, files={"file": (name, data, mime)})
+    assert r.status_code == 415
+
+
+def test_ok_real_documents_accepted(c):
+    anon(c)
+    for name, data, mime in (("a.pdf", b"%PDF-1.4\n%...", "application/pdf"), ("a.txt", "Текст заметки".encode("cp1251"), "text/plain"),
+                             ("a.docx", b"PK\x03\x04rest", "application/vnd.openxmlformats-officedocument.wordprocessingml.document")):
+        r = c.post("/api/public/appeals", data={"type": "problem", "text": "Документ к обращению про склад", "branch_code": "PVL"}, files={"file": (name, data, mime)})
+        assert r.status_code == 200, (name, r.text)
+
+
+# ---------- F-18: текст внутренней ошибки не уходит наружу ----------
+
+def test_F18_ai_error_text_not_returned(c, monkeypatch):
+    from mf import ai as ai_pkg
+
+    def boom(*a, **k):
+        raise RuntimeError("Error code: 401 - Incorrect API key provided: sk-proj-****abcd")
+    monkeypatch.setattr(ai_pkg, "classify_appeal", boom)
+    anon(c)
+    r = c.post("/api/public/appeals", data={"type": "problem", "text": "Проверка утечки текста ошибки", "branch_code": "PVL"}).json()
+    assert r["ai_engine"] == "error" and "sk-" not in json.dumps(r, ensure_ascii=False)
+    r = c.post("/api/public/brief", json={"text": "Проверка утечки текста ошибки в пересказе"}).json()
+    assert r["engine"] == "error"

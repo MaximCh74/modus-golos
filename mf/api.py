@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import io
+import logging
 import mimetypes
 import secrets
 import time
@@ -20,13 +21,36 @@ from . import config
 from .config import LLM_MODEL, PUBLIC_URL
 
 router = APIRouter()
+log = logging.getLogger("mf.api")
 
 MAX_ATTACH = 10 * 1024 * 1024
 ALLOWED_MIME = {
-    "image/jpeg", "image/png", "image/webp", "image/gif", "application/pdf", "text/plain", "text/csv",
+    "image/jpeg", "image/png", "image/webp", "application/pdf", "text/plain", "text/csv",
     "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-}
+}   # GIF убран (аудит 12.11): декодер GIF в Pillow 12.3.0 уязвим, фото с телефона — JPEG/PNG/WebP
+OLE = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"   # старые .doc/.xls
+
+
+def _content_ok(mime: str, data: bytes) -> bool:
+    """F-17: тип по содержимому, а не по заголовку клиента."""
+    if mime == "application/pdf":
+        return data[:5] == b"%PDF-"
+    if mime.endswith("openxmlformats-officedocument.wordprocessingml.document") or mime.endswith("openxmlformats-officedocument.spreadsheetml.sheet"):
+        return data[:4] == b"PK\x03\x04"
+    if mime in ("application/msword", "application/vnd.ms-excel"):
+        return data[:8] == OLE
+    if mime in ("text/plain", "text/csv"):
+        if b"\x00" in data:
+            return False
+        for enc in ("utf-8", "cp1251"):
+            try:
+                data.decode(enc)
+                return True
+            except UnicodeDecodeError:
+                continue
+        return False
+    return False
 
 
 class RateLimit:
@@ -79,10 +103,15 @@ async def save_attachment(appeal_id: int, upload: UploadFile | None) -> dict | N
         return None
     if len(data) > MAX_ATTACH:
         raise HTTPException(413, "Файл больше 10 МБ")
-    mime = upload.content_type or mimetypes.guess_type(upload.filename)[0] or "application/octet-stream"
+    mime = (upload.content_type or mimetypes.guess_type(upload.filename)[0] or "application/octet-stream").split(";")[0].strip().lower()
     if mime not in ALLOWED_MIME:
-        raise HTTPException(415, "Допустимы изображения, PDF, Word, Excel и текст")
+        raise HTTPException(415, "Допустимы фото (JPEG, PNG, WebP), PDF, Word, Excel и текст")
     ext = Path(upload.filename).suffix.lower()[:8]
+    if mime.startswith("image/"):
+        # F-17: фото пересохраняется без метаданных — EXIF с координатами, временем и моделью телефона мог бы выдать анонимного автора
+        data, mime, ext = images.clean_bytes(images.upright(images.open_image(data)))
+    elif not _content_ok(mime, data):
+        raise HTTPException(415, "Содержимое файла не совпадает с его типом")
     stored = f"{appeal_id}-{secrets.token_hex(8)}{ext}"
     (config.UPLOAD_DIR / stored).write_bytes(data)
     aid = db.ex("INSERT INTO attachments(appeal_id, filename, stored, mime, size, created_at) VALUES(?,?,?,?,?,?)",
@@ -163,7 +192,8 @@ async def public_qr(code: str, request: Request):
 @router.post("/public/appeals")
 async def public_create(request: Request, type: str = Form(...), text: str = Form(...), branch_code: str = Form(...),
                         file: UploadFile | None = File(None), site_city: str = Form(""), author_urgency: str = Form(""),
-                        author_scope: str = Form(""), input_mode: str = Form(""), praise_to_user_id: str = Form(""), praise_to_department_id: str = Form("")):
+                        author_scope: str = Form(""), input_mode: str = Form(""), praise_to_user_id: str = Form(""), praise_to_department_id: str = Form(""),
+                        is_anonymous: str = Form("")):
     """QR-форма: один экран, без входа. Категорию и приоритет ставит ИИ (mf/ai: LLM, без ключа — словарь ключевых слов);
     «Без ответственного» — только при вакансии категории или если ни ИИ, ни словарь не уверены (ТЗ §7).
     Если в браузере уже есть демо-вход — обращение привязывается к пользователю и даёт баллы."""
@@ -174,6 +204,8 @@ async def public_create(request: Request, type: str = Form(...), text: str = For
     if type not in ("problem", "suggestion", "praise"):
         raise HTTPException(422, "Выберите «Проблема», «Идея» или «Спасибо»")
     user = auth.current(request)
+    if user and parse_bool(is_anonymous) and type != "praise":
+        user = None   # F-08: вошедший сотрудник тоже может отправить по QR анонимно — без связи с ним, только трекинг-ссылка
     cls = await classify(text, type, author_urgency or None, author_scope or None) if type != "praise" else None
     a = appeals.create(type=type, text=text, category_id=cls["category_id"] if cls else None, priority=(cls or {}).get("priority") or "",
                        branch_id=branch["id"], author=user, is_anonymous=user is None, source="qr", ai=cls,
@@ -198,8 +230,9 @@ async def classify(text: str, type_hint: str | None, author_urgency: str | None 
     try:
         return await asyncio.to_thread(ai.classify_appeal, text, cats, type_hint, author_urgency, author_scope, supports, clarifications)
     except Exception as e:   # noqa: BLE001
+        log.warning("классификация обращения: %s", e)   # F-18: подробности — в журнал, наружу — только «error»
         return {"category_id": None, "category": None, "confidence": 0.0, "priority": appeals.matrix_priority(type_hint or "problem", author_urgency, author_scope) or "medium",
-                "brief": None, "engine": f"error: {e}"[:120]}
+                "brief": None, "engine": "error"}
 
 
 class BriefQ(BaseModel):

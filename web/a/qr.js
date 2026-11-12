@@ -38,8 +38,16 @@
   const toField = field('Кому спасибо', to, 'Коллега или отдел — адресат и его руководитель получат уведомление');
   const site = h('input', { type: 'text', name: 'site_city', placeholder: 'Например: Атырау, объект ТЭЦ-2', maxlength: 80 });
   const submit = h('button', { type: 'submit', class: 'btn btn-primary btn-big' }, 'Отправить');
-  const foot = me ? h('div', { class: 'hint mt8' }, 'Вы вошли как ' + me.name + ' — обращение будет привязано к вам и даст баллы.')
-    : h('div', { class: 'hint mt8' }, 'Без входа обращение анонимное. Категорию и ответственного система определит сама.');
+  // F-08: вошедший сотрудник тоже может отправить анонимно — без связи с ним, только ссылка на статус
+  const anon = h('input', { type: 'checkbox' });
+  const footText = h('span', {});
+  const renderFoot = () => { footText.textContent = !me ? 'Без входа обращение анонимное. Категорию и ответственного система определит сама.'
+    : anon.checked ? 'Анонимно: обращение не будет связано с вами и не даст баллов — статус по ссылке после отправки.'
+      : 'Вы вошли как ' + me.name + ' — обращение будет привязано к вам и даст баллы.'; };
+  anon.addEventListener('change', renderFoot);
+  renderFoot();
+  const anonRow = me ? h('label', { class: 'check mt8' }, anon, 'Анонимно') : null;
+  const foot = h('div', { class: 'hint mt8' }, footText);
   const form = h('form', { class: 'card' },
     h('div', { class: 'type-switch three' }, btnProblem, btnIdea, btnPraise),
     h('div', { class: 'row' }, h('div', { class: 'spacer' }, text), mic),
@@ -50,11 +58,13 @@
     h('div', { class: 'mt8' }, field('Фото или файл (необязательно)', file)),
     simBox,
     submit,
+    anonRow,
     foot);
   const setType = t => {
     type = t;
     btnProblem.classList.toggle('on', t === 'problem'); btnIdea.classList.toggle('on', t === 'suggestion'); btnPraise.classList.toggle('on', t === 'praise');
     chipRow.classList.toggle('hidden', t === 'praise'); understood.classList.toggle('hidden', t === 'praise'); toField.classList.toggle('hidden', t !== 'praise');
+    if (anonRow) anonRow.classList.toggle('hidden', t === 'praise');
     text.placeholder = t === 'praise' ? 'Кому и за что спасибо — текстом или голосом' : t === 'suggestion' ? 'Что предлагаете и что это даст' : 'Что происходит? Если есть идея, как исправить — напишите.';
     renderChips();
   };
@@ -85,6 +95,7 @@
     }
     const fd = new FormData();
     fd.set('type', type); fd.set('text', text.value); fd.set('branch_code', branch.code); fd.set('input_mode', inputMode);
+    if (me && anon.checked && type !== 'praise') fd.set('is_anonymous', '1');
     if (branch.kind === 'field') fd.set('site_city', site.value);
     if (type === 'praise') {
       const t = to.value;

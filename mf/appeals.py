@@ -319,7 +319,7 @@ def create(*, type: str, text: str, proposed_solution: str | None = None, catego
         raise HTTPException(422, "Категория не найдена")
     if branch_id and not db.one("SELECT 1 FROM branches WHERE id=?", (branch_id,)):
         raise HTTPException(422, "Филиал не найден")
-    if author:
+    if author and not is_anonymous:   # F-08: анонимному — ни отдела, ни филиала автора (в маленьком отделе это раскрыло бы его)
         branch_id = branch_id or author["branch_id"]
         department_id = department_id or author["department_id"]
     number = next_number()
