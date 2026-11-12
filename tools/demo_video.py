@@ -91,6 +91,15 @@ def main() -> None:
         page.goto(f"{base}/panel#/summary"); page.wait_for_selector("text=Повторяющиеся темы", timeout=60000); page.wait_for_timeout(2500)
         page.evaluate("document.querySelector('.cluster') && document.querySelector('.cluster').scrollIntoView()"); shot(page, "16_clusters")
         page.goto(f"{base}/panel#/meetings"); page.wait_for_selector("table"); shot(page, "17_meetings")
+        # Пункты очереди 12.11: «Директор в кармане» на телефоне и «Спасибо коллеге»
+        login(ph, base, 1)
+        ph.goto(f"{base}/boss"); ph.wait_for_selector(".boss-tile b:not(:has-text('…'))"); ph.wait_for_timeout(1500); shot(ph, "18_boss_phone")
+        ph.fill(".boss-ask-text", "Кто просрочил?"); ph.click(".boss-send"); ph.wait_for_selector(".boss-sheet .boss-answer", timeout=60000); shot(ph, "19_boss_answer_phone")
+        ph.keyboard.press("Escape")
+        login(ph, base, 6)
+        ph.goto(f"{base}/app#/new?type=praise"); ph.wait_for_selector("form"); ph.fill("textarea[name=text]", "Айгерим, спасибо за быстрый договор по Атырау — клиент подписал в тот же день")
+        ph.fill(".personpick input", "Айге"); ph.wait_for_selector(".personpick .pick-menu button", timeout=10000); ph.click(".personpick .pick-menu button >> nth=0"); ph.wait_for_timeout(400)
+        shot(ph, "20_thanks_form_phone", full=True)
         ctx.close(); phone.close(); browser.close()
     if not a.no_video:
         for sub, name in (("", "backup.mp4"), ("phone", "backup_phone.mp4")):
