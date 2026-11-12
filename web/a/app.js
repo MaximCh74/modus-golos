@@ -30,7 +30,7 @@ function renderTop() {
   top.replaceChildren(
     brandLock('#/', 'Модус Голос — на главную приложения', 'brand'),
     h('div', { class: 'spacer' }),
-    h('span', { class: 'small muted', title: 'Мои баллы' }, iconText('star', String(ME.points || 0))),
+    showPoints() ? h('span', { class: 'small muted', title: 'Мои баллы' }, iconText('star', String(ME.points || 0))) : null,
     h('a', { href: '#/notifications', class: 'btn btn-sm bell', title: 'Уведомления' }, icon('bell'), ME.unread ? h('span', { class: 'n' }, String(ME.unread)) : null),
     h('a', { href: '/login', class: 'btn btn-sm', title: 'Сменить пользователя' }, ME.name.split(' ')[0]));
 }
@@ -65,6 +65,9 @@ function placeholder(title, text) {
     h('div', { class: 'card card-info' }, text || 'Раздел в работе.', h('div', { class: 'hint mt8' }, 'Честная маркировка: раздел ещё не реализован.'))));
 }
 
+// Баллы — только сотрудникам (замечание владельца 13.11): директору и администратору звезду, «Мои баллы» и баллы в своём профиле не показываем.
+function showPoints() { return ME.role !== 'director' && ME.role !== 'admin'; }
+
 function tabs(active) {
   const items = [['#/changes', 'Результаты обращений'], ['#/rewards', 'Награды'], ['#/league', 'Лига']];
   items.push(['#/tasks', 'Мои поручения' + (ME.tasks_open ? ' · ' + ME.tasks_open : '')], ['#/u/' + ME.id, 'Мой профиль']);
@@ -97,7 +100,7 @@ async function home() {
       h('a', { href: '#/new?type=problem', class: 'btn btn-primary btn-big' }, 'Сообщить о проблеме'),
       h('a', { href: '#/new?type=suggestion', class: 'btn btn-outline btn-big' }, 'Предложить улучшение')),
     h('div', { class: 'row mt8 mb8' }, h('a', { href: '#/new?type=praise', class: 'btn btn-sm' }, 'Сказать спасибо'), h('div', { class: 'spacer' }),
-      h('a', { href: '#/points', class: 'chip chip-points' }, iconText('star', 'Мои баллы: '), h('b', {}, String(pts.balance)))),   // чип, а не ссылка (замечание владельца 12.11)
+      showPoints() ? h('a', { href: '#/points', class: 'chip chip-points' }, iconText('star', 'Мои баллы: '), h('b', {}, String(pts.balance))) : null),   // чип, а не ссылка (замечание владельца 12.11)
     tasksCard,
     tabs(null),
     h('div', { class: 'lbl mt16' }, 'Мои обращения'),
@@ -305,7 +308,7 @@ async function profileScreen(uid) {
   const file = h('input', { type: 'file', accept: 'image/*', class: 'visually-hidden', tabindex: '-1' });
   file.addEventListener('change', async () => { if (!file.files[0]) return; const fd = new FormData(); fd.set('file', file.files[0]); try { await API.postForm('/api/me/avatar', fd); toast('Аватарка обновлена'); profileScreen(uid); } catch (e) { toast(e.message, 'bad'); } });
   const adminMenu = (ME.role === 'admin' || ME.role === 'director') && u.avatar && !mine ? menuButton([['Убрать аватарку', async () => { await API.post('/api/admin/users/' + uid + '/avatar/remove'); toast('Аватарка убрана'); profileScreen(uid); }]]) : null;
-  const stats = [[u.points, 'баллов', 'points'], [u.implemented.length, 'внедрено', null], [u.thanks, '«спасибо»', null], [u.supported, 'поддержал коллег', null]].filter(x => x[0] || x[2] === 'points');
+  const stats = [[u.points, 'баллов', 'points'], [u.implemented.length, 'внедрено', null], [u.thanks, '«спасибо»', null], [u.supported, 'поддержал коллег', null]].filter(x => (x[0] || x[2] === 'points') && !(x[2] === 'points' && mine && !showPoints()));
   root.replaceChildren(h('div', { class: 'wrap' }, h('a', { href: '#/', class: 'small ict' }, icon('arrow-left', { size: 14 }), 'Назад'),
     h('div', { class: 'card' }, h('div', { class: 'profile-head' }, avatarEl(u, 'lg'), h('div', { class: 'spacer' }, h('div', { class: 'h1' }, u.name), h('div', { class: 'small muted' }, [u.position, u.city || u.branch, u.department].filter(Boolean).join(' · ')),
       mine ? h('div', { class: 'row mt8' }, h('button', { class: 'btn btn-sm btn-outline', onclick: () => file.click() }, iconText('user', u.avatar ? 'Сменить аватарку' : 'Загрузить аватарку')), file) : null), adminMenu),
