@@ -132,7 +132,7 @@ def ai_sentences(f: dict, user: dict) -> list[dict] | None:
         except llm.LLMError as e:
             log.warning("сводка: %s", e)
             return None
-        bad = next((s for s in sentences if not _numbers(s) <= allowed), None)
+        bad = next((s for s in sentences if not llm.numbers_in_answer(s) <= allowed or llm.negates_nonzero(s, f)), None)
         if bad:
             log.warning("сводка (попытка %d): лишние числа в «%s»", attempt + 1, bad)
             continue

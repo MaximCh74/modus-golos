@@ -139,10 +139,11 @@ def greeting(user: dict, h: dict) -> dict:
     text, engine = None, "template"
     if llm.available():
         facts = {**_greeting_facts(h), "greeting": director.greeting(user)}
-        allowed = {int(x) for x in re.findall(r"\d+", json.dumps(facts, ensure_ascii=False))}
+        allowed = llm.numeric_values(facts)
         try:
             cand = llm.boss_greeting(facts)
-            if {int(x) for x in re.findall(r"\d+", cand)} <= allowed and not llm.has_forbidden(cand) and cand.startswith(director.greeting(user)[:12]):
+            if llm.numbers_in_answer(cand) <= allowed and not llm.negates_nonzero(cand, {"overdue": facts["overdue"], "decisions_pending": facts["decisions"]}) \
+                    and not llm.has_forbidden(cand) and cand.startswith(director.greeting(user)[:12]):
                 text, engine = cand, "openai"
             else:
                 log.warning("приветствие: числа или термины не прошли проверку: %s", cand)
@@ -367,7 +368,8 @@ def template_answer(q: str, f: dict) -> str:
 
 
 def _allowed_numbers(f: dict) -> set[int]:
-    return {int(x) for x in re.findall(r"\d+", json.dumps(f, ensure_ascii=False))} | {1}
+    """F-12: только числа из числовых полей фактов — номера обращений и цифры из текстов сотрудников числами не считаются."""
+    return llm.numeric_values(f)
 
 
 def ai_answer(question: str, q: str, f: dict) -> str | None:
@@ -382,7 +384,11 @@ def ai_answer(question: str, q: str, f: dict) -> str | None:
         except llm.LLMError as e:
             log.warning("ответ директору: %s", e)
             return None
-        nums = {int(x) for x in re.findall(r"\d+", text)}
+        nums = llm.numbers_in_answer(text)
+        lie = llm.negates_nonzero(text, f)
+        if lie:
+            log.warning("ответ (попытка %d): «нет» вместо ненулевого факта (%s) в «%s»", attempt + 1, lie, text)
+            continue
         if not nums <= allowed:
             log.warning("ответ (попытка %d): лишние числа %s в «%s»", attempt + 1, sorted(nums - allowed), text)
             continue

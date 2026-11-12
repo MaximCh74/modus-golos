@@ -316,7 +316,7 @@ async def create_appeal(request: Request, type: str = Form(...), text: str = For
         category_id = category_id or (cls["category_id"] or "")
         if cls.get("engine") != "openai":
             cls = {**cls, "category_id": int(category_id) if category_id else None}
-    prio = priority if priority in appeals.PRIORITIES else ((cls or {}).get("priority") or "")
+    prio = priority if priority in appeals.PRIORITIES else ((cls or {}).get("priority") or "")   # None от ИИ (F-12) → матрица ответа автора
     a = appeals.create(type=type, text=text, proposed_solution=proposed_solution, category_id=int(category_id) if category_id else None,
                        priority=prio, author=user, is_anonymous=parse_bool(is_anonymous), source="app", ai=cls,
                        author_urgency=author_urgency or None, author_scope=author_scope or None, input_mode=input_mode or "text",
