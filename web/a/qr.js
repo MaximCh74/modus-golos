@@ -46,7 +46,7 @@
       : 'Вы вошли как ' + me.name + ' — обращение будет привязано к вам и даст баллы.'; };
   anon.addEventListener('change', renderFoot);
   renderFoot();
-  const anonRow = me ? h('label', { class: 'check mt8' }, anon, 'Анонимно') : null;
+  const anonRow = me ? h('label', { class: 'check mt8 mb8' }, anon, 'Анонимно') : null;
   const foot = h('div', { class: 'hint mt8' }, footText);
   const form = h('form', { class: 'card' },
     h('div', { class: 'type-switch three' }, btnProblem, btnIdea, btnPraise),
@@ -57,8 +57,8 @@
     branch.kind === 'field' ? field('Город / объект (необязательно)', site, 'Без геолокации — чтобы не запрашивать разрешений') : null,
     h('div', { class: 'mt8' }, field('Фото или файл (необязательно)', file)),
     simBox,
-    submit,
     anonRow,
+    submit,
     foot);
   const setType = t => {
     type = t;
