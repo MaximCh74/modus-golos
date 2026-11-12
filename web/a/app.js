@@ -97,7 +97,7 @@ async function home() {
       h('a', { href: '#/new?type=problem', class: 'btn btn-primary btn-big' }, 'Сообщить о проблеме'),
       h('a', { href: '#/new?type=suggestion', class: 'btn btn-outline btn-big' }, 'Предложить улучшение')),
     h('div', { class: 'row mt8 mb8' }, h('a', { href: '#/new?type=praise', class: 'btn btn-sm' }, 'Сказать спасибо'), h('div', { class: 'spacer' }),
-      h('a', { href: '#/points', class: 'small' }, 'Мои баллы: ', h('b', {}, String(pts.balance)))),
+      h('a', { href: '#/points', class: 'chip chip-points' }, iconText('star', 'Мои баллы: '), h('b', {}, String(pts.balance)))),   // чип, а не ссылка (замечание владельца 12.11)
     tasksCard,
     tabs(null),
     h('div', { class: 'lbl mt16' }, 'Мои обращения'),

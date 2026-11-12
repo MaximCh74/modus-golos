@@ -266,7 +266,7 @@ function siteHeader(me, cfg, opts) {
   opts = opts || {}; cfg = cfg || {};
   const right = me
     ? h('div', { class: 'row' }, h('span', { class: 'small muted' }, me.name.split(' ')[0]), h('a', { href: me.role === 'employee' ? '/app' : '/panel', class: 'btn btn-sm' }, me.role === 'employee' ? 'Приложение' : 'Панель'))
-    : h('div', { class: 'row' }, cfg.bitrix && window.self === window.top ? h('a', { href: cfg.bitrix_login, class: 'btn btn-sm btn-outline' }, iconText('log-in', 'Войти через Битрикс24')) : null,
+    : h('div', { class: 'row' }, cfg.bitrix && window.self === window.top ? h('a', { href: cfg.bitrix_login, class: 'btn btn-sm btn-outline bx-login' }, iconText('log-in', 'Войти через Битрикс24')) : null,
         h('a', { href: '/login' + (opts.next ? '?next=' + encodeURIComponent(opts.next) : ''), class: 'btn btn-outline' }, iconText('user', 'Войти')));
   return h('header', { class: 'site-head' },
     h('a', { href: '/', class: 'brand-lock', title: 'Модус Голос — на главную' }, h('img', { src: '/a/img/logo.svg', alt: 'Модус Трейд' }), h('span', { class: 'div' }), h('span', {}, h('b', {}, 'Модус Голос'), h('small', {}, 'Каждый голос услышан'))),
@@ -399,6 +399,17 @@ function closeHelp() { document.querySelectorAll('.help-wrap.open').forEach(w =>
 document.addEventListener('click', ev => { if (!ev.target.closest('.help-wrap')) closeHelp(); });
 document.addEventListener('keydown', ev => { if (ev.key === 'Escape') closeHelp(); });
 window.addEventListener('scroll', () => { if (Date.now() - _helpOpenedAt > 400) closeHelp(); }, true);   // прокрутка закрывает поповер (он fixed); сразу после открытия — не считается
+
+// ---------- ряд вкладок: если не влезает — затухание у правого края, пока не долистали (замечание владельца 12.11) ----------
+function watchTabs(el) {
+  if (el.dataset.watched) return;
+  el.dataset.watched = '1';
+  const upd = () => el.classList.toggle('more-right', el.scrollWidth - el.clientWidth - el.scrollLeft > 2);
+  el.addEventListener('scroll', upd, { passive: true });
+  if (window.ResizeObserver) new ResizeObserver(upd).observe(el);
+  requestAnimationFrame(upd);
+}
+new MutationObserver(() => document.querySelectorAll('.tabs:not([data-watched])').forEach(watchTabs)).observe(document.documentElement, { childList: true, subtree: true });
 
 // ---------- меню «…» (этап 9, правило 3: одна главная кнопка, остальное в меню) — общее для панели, приложения и совещаний ----------
 function closeMenus() { document.querySelectorAll('.menu-wrap.open').forEach(m => m.classList.remove('open')); }
