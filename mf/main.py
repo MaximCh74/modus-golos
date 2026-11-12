@@ -4,17 +4,19 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import re
 import threading
+from urllib.parse import urlparse
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from starlette.datastructures import MutableHeaders
 
 from . import api, appeals, auth, db, meetings, seed
 from .ai import stt
-from .config import ROOT
+from .config import PUBLIC_URL, ROOT
 from .integrations import bitrix
 
 log = logging.getLogger("mf")
@@ -50,6 +52,37 @@ def security_headers(scope) -> dict:
     h["Cross-Origin-Opener-Policy"] = "unsafe-none"
     return h
 PAGES = {"/": "index.html", "/login": "login.html", "/app": "app.html", "/panel": "panel.html"}
+HSTS = "max-age=31536000"
+
+
+def safe_next(n) -> str:
+    """Куда вернуть после входа — только путь своего сайта (аудит 12.11, F-13): «/app#/x» да, «//evil.example», «https://…», «/\\evil» — нет."""
+    n = n if isinstance(n, str) else ""
+    return n if re.fullmatch(r"/(?![/\\])[^\s\\]*", n) else ""
+
+
+def _header(scope, name: bytes) -> str:
+    for k, v in scope.get("headers") or []:
+        if k == name:
+            return v.decode("latin-1")
+    return ""
+
+
+def cross_origin(scope) -> bool:
+    """Изменяющий запрос к /api с чужой страницы (аудит 12.11, F-20; защита в глубину к SameSite=Lax и JSON). Origin должен совпасть
+    с Host запроса или адресом MF_PUBLIC_URL; без Origin — отказ только при Sec-Fetch-Site: cross-site. curl и сервисы без браузера — проходят."""
+    if scope.get("method") not in ("POST", "PUT", "PATCH", "DELETE") or not scope.get("path", "").startswith("/api/"):
+        return False
+    origin = _header(scope, b"origin")
+    if not origin:
+        return _header(scope, b"sec-fetch-site").lower() == "cross-site"
+    if origin == "null":
+        return True
+    o = urlparse(origin).netloc.lower()
+    ok = {_header(scope, b"host").lower()}
+    if PUBLIC_URL:
+        ok.add(urlparse(PUBLIC_URL).netloc.lower())
+    return o not in ok
 
 
 class Headers:
@@ -69,10 +102,14 @@ class Headers:
                 for k, v in security_headers(scope).items():
                     if k not in headers:
                         headers.append(k, v)
+                if scope.get("scheme") == "https" and "strict-transport-security" not in headers:
+                    headers.append("Strict-Transport-Security", HSTS)   # F-11: через туннель (https) — только https
                 if path.startswith("/a/") or not path.startswith("/api/"):
                     headers["Cache-Control"] = "no-cache"
             await send(message)
 
+        if cross_origin(scope):
+            return await JSONResponse({"detail": "Запрос с чужой страницы отклонён"}, status_code=403)(scope, receive, send_wrapped)
         await self.app(scope, receive, send_wrapped)
 
 
@@ -247,7 +284,7 @@ async def bitrix_login(request: Request, next: str = ""):
     вместо этого страница, которая подхватит сессию из sessionStorage или попросит открыть пункт меню заново (вход там автоматический)."""
     _bitrix_required()
     dest = request.headers.get("sec-fetch-dest", "").lower()
-    url = bitrix.authorize_url(next if next.startswith("/") else "")
+    url = bitrix.authorize_url(safe_next(next))
     if dest == "iframe":
         return page("bitrix_app.html")
     if dest == "document":   # обычная вкладка — сразу на портал
@@ -272,8 +309,8 @@ async def bitrix_callback(request: Request, code: str = "", state: str = ""):
     if not user:
         return HTMLResponse(_not_mapped_page(), status_code=403)
     auth.logout(request.cookies.get(auth.COOKIE))
-    resp = RedirectResponse(next_url or _home_for(user), status_code=302)
-    auth.set_cookie(resp, auth.login(user["id"]))
+    resp = RedirectResponse(safe_next(next_url) or _home_for(user), status_code=302)
+    auth.set_cookie(resp, auth.login(user["id"]), request=request)
     return resp
 
 

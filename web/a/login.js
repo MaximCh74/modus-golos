@@ -2,7 +2,8 @@
 // Демо-вход «Войти как…» без паролей. В пилоте — Битрикс24 или корпоративная учётка.
 (async function () {
   const root = document.getElementById('root');
-  const next = qs('next') || '';
+  const raw = qs('next') || '';
+  const next = /^\/(?![\/\\])[^\s\\]*$/.test(raw) ? raw : '';   // только путь своего сайта: //evil.example и https://… — нет (F-13)
   const [me, cfg] = await Promise.all([API.me(), API.get('/api/public/config').catch(() => ({}))]);
   const demo = cfg.demo_login !== false;   // MF_DEMO_LOGIN=0 (пилот) — без «Войти как…»: только Битрикс24 или личное приглашение
   const users = demo ? await API.get('/api/auth/users').catch(() => []) : [];

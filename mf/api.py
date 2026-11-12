@@ -262,7 +262,7 @@ async def login_as(body: LoginAs, request: Request, response: Response):
         raise HTTPException(404, "Демо-вход выключен — войдите через Битрикс24 или по личному приглашению")
     login_limit.check(client_ip(request))
     auth.logout(request.cookies.get(auth.COOKIE))
-    auth.set_cookie(response, auth.login(body.user_id, demo=True))
+    auth.set_cookie(response, auth.login(body.user_id, demo=True), request=request)
     return auth.public(auth.user_by_id(body.user_id))
 
 
@@ -1335,7 +1335,7 @@ async def public_invite_accept(token: str, request: Request, response: Response)
     invite_limit.check(client_ip(request))
     u = staff.accept(token)
     auth.logout(request.cookies.get(auth.COOKIE))
-    auth.set_cookie(response, auth.login(u["id"]), days=365)
+    auth.set_cookie(response, auth.login(u["id"]), days=365, request=request)
     out = auth.public(u)
     out["home"] = "/app" if u["role"] == "employee" else "/panel"
     return out

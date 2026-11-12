@@ -510,3 +510,48 @@ def test_F12_brief_not_made_when_text_commands_the_ai(monkeypatch):
 def test_F12_ai_instruction_detector(text, flag):
     from mf.ai import llm
     assert llm.addresses_ai(text) is flag
+
+
+# ---------- F-13: после входа — только на свой сайт ----------
+
+def test_F13_bitrix_login_next_cannot_leave_site(c, fake_bitrix):
+    legit_tokens()
+    db.ex("UPDATE users SET bitrix_id=5 WHERE id=4")
+    anon(c)
+    for bad in ("//evil.example/phish", "https://evil.example", "/\\evil.example"):
+        loc = c.get("/bitrix/login", params={"next": bad}, headers={"Sec-Fetch-Dest": "document"}, follow_redirects=False).headers["location"]
+        state = parse_qs(urlparse(loc).query)["state"][0]
+        assert bitrix.check_state(state) == ""
+    # даже подписанный злоумышленником-старым state не уводит наружу
+    state = bitrix.make_state("//evil.example/phish")
+    r = c.get("/bitrix/callback", params={"code": "c", "state": state}, follow_redirects=False)
+    assert r.status_code == 302 and r.headers["location"] == "/panel"
+    js = (ROOT / "web" / "a" / "login.js").read_text(encoding="utf-8")
+    assert "qs('next')" in js and "test(raw)" in js
+
+
+# ---------- F-11: Secure-cookie и HSTS по https ----------
+
+def test_F11_secure_cookie_and_hsts_over_https():
+    with TestClient(app, base_url="https://testserver") as s:
+        r = s.post("/api/auth/login-as", json={"user_id": 6})
+        sc = r.headers["set-cookie"].lower()
+        assert "secure" in sc and "httponly" in sc and "samesite=lax" in sc
+        assert s.get("/").headers.get("strict-transport-security") == "max-age=31536000"
+    with TestClient(app) as h:   # http://localhost (ноутбук без туннеля) — без Secure, иначе браузер не сохранит cookie
+        assert "secure" not in h.post("/api/auth/login-as", json={"user_id": 6}).headers["set-cookie"].lower()
+        assert "strict-transport-security" not in h.get("/").headers
+
+
+# ---------- F-20: изменяющие запросы с чужой страницы ----------
+
+def test_F20_cross_origin_post_rejected_same_origin_ok(c):
+    login(c, 6)
+    a = db.one("SELECT id FROM appeals WHERE number='A-011'")["id"]
+    assert c.post(f"/api/appeals/{a}/support", headers={"Origin": "https://evil.example"}).status_code == 403
+    assert c.post(f"/api/appeals/{a}/support", headers={"Origin": "null"}).status_code == 403
+    assert c.post(f"/api/appeals/{a}/support", headers={"Sec-Fetch-Site": "cross-site"}).status_code == 403
+    assert db.one("SELECT 1 FROM supports WHERE appeal_id=? AND user_id=6", (a,)) is None
+    assert c.post(f"/api/appeals/{a}/support", headers={"Origin": "http://testserver", "Sec-Fetch-Site": "same-origin"}).status_code == 200
+    # формы портала Битрикс24 (/bitrix/*) приходят с портала — их это правило не касается
+    assert c.post("/bitrix/install", data={"x": "1"}, headers={"Origin": f"https://{PORTAL}"}).status_code == 400

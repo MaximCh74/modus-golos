@@ -90,9 +90,10 @@ def login(user_id: int, demo: bool = False) -> str:
     return token
 
 
-def set_cookie(response, token: str, cross_site: bool = False, days: int = 30) -> None:
+def set_cookie(response, token: str, cross_site: bool = False, days: int = 30, request: Request | None = None) -> None:
     """Сессионная cookie (days — срок; вход по личному приглашению ставит долгую, устройство помнит сотрудника).
-    cross_site=True — вход из iframe Битрикс24: браузер отдаёт cookie третьей стороне только с SameSite=None; Secure."""
+    cross_site=True — вход из iframe Битрикс24: браузер отдаёт cookie третьей стороне только с SameSite=None; Secure.
+    По https (туннель: uvicorn берёт схему из X-Forwarded-Proto) cookie — с Secure (аудит 12.11, F-11); на http://localhost — без."""
     if cross_site:
         # CHIPS: Partitioned — cookie привязана к паре «наш сайт внутри портала», браузеры (Chrome, Firefox) отдают её во фрейме;
         # Starlette не знает атрибут Partitioned, поэтому заголовок собирается вручную
@@ -100,7 +101,8 @@ def set_cookie(response, token: str, cross_site: bool = False, days: int = 30) -
         response.headers.append("set-cookie", f"{COOKIE}={token}; Path=/; Max-Age={age}; HttpOnly; Secure; SameSite=None; Partitioned")
         response.headers.append("set-cookie", f"{FRAME_COOKIE}=1; Path=/; Max-Age={age}; Secure; SameSite=None; Partitioned")
     else:
-        response.set_cookie(COOKIE, token, httponly=True, samesite="lax", max_age=days * 86400, path="/")
+        response.set_cookie(COOKIE, token, httponly=True, samesite="lax", max_age=days * 86400, path="/",
+                            secure=bool(request is not None and request.url.scheme == "https"))
 
 
 def logout(token: str | None) -> None:
