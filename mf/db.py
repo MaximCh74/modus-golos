@@ -101,6 +101,7 @@ MIGRATIONS = [
     ("users", "login", "TEXT"),   # этап 8: внутренний логин демо-директора (sergey)
     ("users", "phone", "TEXT"),   # этап 8: телефон (ручное добавление, склейка с Битриксом по телефону)
     ("appeals", "praise_to_user_id", "INTEGER"), ("appeals", "praise_to_department_id", "INTEGER"),   # «Кому спасибо» (коллега или отдел)
+    ("sessions", "demo", "INTEGER NOT NULL DEFAULT 0"),   # аудит 12.11, F-03: сессия из «Войти как…» (демо) — опасное только с ноутбука
 ]
 
 _conn: sqlite3.Connection | None = None

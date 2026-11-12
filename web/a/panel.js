@@ -464,6 +464,7 @@ async function adminScreen() {
       h('div', { class: 'row mt8' }, h('button', { class: 'btn btn-sm btn-primary', disabled: !bx.tokens, onclick: async ev => { ev.target.disabled = true; try { const r = await API.post('/api/admin/bitrix/sync'); toast('Синхронизация: в портале ' + r.portal_users + ', новых ' + r.created + ', обновлено ' + r.updated + ', деактивировано ' + r.deactivated); adminScreen(); } catch (e) { toast(e.message, 'bad'); ev.target.disabled = false; } } }, iconText('refresh', 'Синхронизировать сотрудников')), h('span', { class: 'hint' }, 'сотрудники и отделы из портала; автоматически — раз в сутки')))
       : h('div', { class: 'small mt8' }, bx.webhook ? 'Только входящий вебхук: уведомления дублируются в чат, входа через Битрикс24 нет.' : 'Не подключён: нет настроек в .env. Инструкция — docs/BITRIX24.md. Без настроек ничего не имитируется.'));
   root.replaceChildren(h('div', { class: 'wrap wrap-wide' }, h('div', { class: 'h1' }, 'Администрирование'),
+    ME.demo ? h('div', { class: 'card card-warn small' }, h('b', {}, 'Демо-вход. '), 'Смотреть можно всё; добавлять и править сотрудников, выдавать приглашения, синхронизировать Битрикс24 и сбрасывать демо-базу — только с ноутбука ведущего или после входа через Битрикс24.') : null,
     staffSection(d, adminScreen),
     h('div', { class: 'split' },
       h('div', {},

@@ -15,7 +15,7 @@ from mf.main import app
 
 @pytest.fixture(scope="module")
 def c():
-    with TestClient(app) as client:
+    with TestClient(app, client=("127.0.0.1", 50000)) as client:   # импорт, правка сотрудников и приглашения — с ноутбука: демо-сессиям снаружи закрыто (F-03)
         yield client
 
 

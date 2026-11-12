@@ -32,21 +32,25 @@ ALLOWED_MIME = {
 class RateLimit:
     """QR-форма без входа: не больше limit обращений с одного IP за window секунд (защита от спама, ТЗ v1.1 §14)."""
 
-    def __init__(self, limit: int, window: int):
-        self.limit, self.window, self.hits = limit, window, {}
+    def __init__(self, limit: int, window: int, message: str = "Слишком много обращений подряд — попробуйте через несколько минут"):
+        self.limit, self.window, self.hits, self.message = limit, window, {}, message
 
     def check(self, key: str) -> None:
         now = time.time()
         arr = [t for t in self.hits.get(key, []) if now - t < self.window]
         if len(arr) >= self.limit:
-            raise HTTPException(429, "Слишком много обращений подряд — попробуйте через несколько минут")
+            raise HTTPException(429, self.message)
         arr.append(now)
         self.hits[key] = arr
+        if len(self.hits) > 5000:   # старые адреса не копятся в памяти
+            for k in [k for k, v in self.hits.items() if not v or now - v[-1] >= self.window]:
+                self.hits.pop(k, None)
 
 
 qr_limit = RateLimit(10, 600)
 stt_limit = RateLimit(20, 600)
 invite_limit = RateLimit(30, 600)   # страница приглашения: токены случайные 256 бит, лимит — гигиена
+login_limit = RateLimit(30, 600, "Слишком много входов подряд — попробуйте через несколько минут")   # F-03: демо-вход
 
 
 def client_ip(request: Request) -> str:
@@ -106,7 +110,8 @@ async def public_glossary():
 async def public_config(request: Request):
     """Что доступно без входа: подключён ли Битрикс24 (кнопка «Войти через Битрикс24»), публичный адрес."""
     return {"bitrix": bitrix.configured(), "bitrix_login": "/bitrix/login" if bitrix.configured() else None,
-            "bitrix_portal": bitrix.portal() if bitrix.configured() else None, "public_url": base_url(request)}
+            "bitrix_portal": bitrix.portal() if bitrix.configured() else None, "public_url": base_url(request),
+            "demo_login": auth.demo_login_enabled()}
 
 
 @router.get("/public/branches")
@@ -235,6 +240,8 @@ class LoginAs(BaseModel):
 
 @router.get("/auth/users")
 async def auth_users():
+    if not auth.demo_login_enabled():
+        raise HTTPException(404, "Демо-вход выключен")
     rows = db.q("""SELECT u.id, u.name, u.role, u.position, b.name AS branch, d.name AS department
                    FROM users u LEFT JOIN branches b ON b.id=u.branch_id LEFT JOIN departments d ON d.id=u.department_id
                    WHERE u.active=1 ORDER BY CASE u.role WHEN 'director' THEN 0 WHEN 'admin' THEN 1 WHEN 'responsible' THEN 2 ELSE 3 END, u.id""")
@@ -245,8 +252,12 @@ async def auth_users():
 
 @router.post("/auth/login-as")
 async def login_as(body: LoginAs, request: Request, response: Response):
+    """Демо-вход «Войти как…» (F-03): сессия помечается как демо; MF_DEMO_LOGIN=0 — выключен; ограничение частоты по адресу."""
+    if not auth.demo_login_enabled():
+        raise HTTPException(404, "Демо-вход выключен — войдите через Битрикс24 или по личному приглашению")
+    login_limit.check(client_ip(request))
     auth.logout(request.cookies.get(auth.COOKIE))
-    auth.set_cookie(response, auth.login(body.user_id))
+    auth.set_cookie(response, auth.login(body.user_id, demo=True))
     return auth.public(auth.user_by_id(body.user_id))
 
 
@@ -265,6 +276,7 @@ async def me(request: Request):
     out["points"] = appeals.balance(user["id"])
     t = meetings.my_tasks_counts(user["id"])   # «Мои поручения» со счётчиком невыполненных (пункт 1 очереди 12.11)
     out["tasks_open"], out["tasks_overdue"] = t["open"], t["overdue"]
+    out["demo"] = bool(user.get("demo_restricted"))   # демо-вход снаружи: часть действий администратора закрыта (F-03)
     return out
 
 
@@ -424,7 +436,7 @@ async def avatar_file(name: str):
 @router.post("/admin/users/{user_id}/avatar/remove")
 async def remove_avatar(user_id: int, request: Request):
     """Администратор убирает неуместную аватарку."""
-    auth.require(request, "admin", "director")
+    auth.require_full(request, "admin", "director")
     old = db.one("SELECT avatar FROM users WHERE id=?", (user_id,))
     if old and old["avatar"]:
         (config.AVATAR_DIR / old["avatar"]).unlink(missing_ok=True)
@@ -1148,7 +1160,7 @@ USER_FIELDS = "id, name, role, position, branch_id, department_id, manager_id, a
 async def admin_user(body: UserBody, request: Request):
     """Сотрудники: добавить, изменить, отключить. Этап 8 §4: телефон (ручное добавление рабочих, склейка с Битриксом по номеру),
     телефон и почта не могут принадлежать двум людям, отключение гасит сессии и приглашения, история остаётся."""
-    user = auth.require(request, "admin", "director")
+    user = auth.require_full(request, "admin", "director")
     name = " ".join(body.name.split())
     if len(name) < 3 or body.role not in auth.ROLES:
         raise HTTPException(422, "Имя и роль обязательны")
@@ -1191,7 +1203,7 @@ class ActiveBody(BaseModel):
 @router.post("/admin/users/{user_id:int}/active")
 async def admin_user_active(user_id: int, body: ActiveBody, request: Request):
     """Отключить (сессии и приглашения гаснут, обращения и история остаются) или включить обратно."""
-    user = auth.require(request, "admin", "director")
+    user = auth.require_full(request, "admin", "director")
     return staff.set_active(user_id, body.active, user)
 
 
@@ -1205,7 +1217,7 @@ async def admin_users_template(request: Request):
 @router.post("/admin/users/import")
 async def admin_users_import(request: Request, file: UploadFile = File(...), invite: str = Form("1")):
     """Импорт из CSV или Excel по шаблону: ошибочная строка — в отчёт, остальные заводятся; новым — приглашения (invite=1)."""
-    user = auth.require(request, "admin", "director")
+    user = auth.require_full(request, "admin", "director")
     data = await file.read(5 * 1024 * 1024 + 1)
     if not data:
         raise HTTPException(422, "Файл пустой")
@@ -1233,7 +1245,7 @@ def _invite_out(inv: dict, request: Request) -> dict:
 @router.post("/admin/invites")
 async def admin_invite_issue(body: InviteBody, request: Request):
     """Выдать личное приглашение (или выдать заново: прежняя ссылка сразу перестаёт работать, прежнее устройство выходит)."""
-    user = auth.require(request, "admin", "director")
+    user = auth.require_full(request, "admin", "director")
     return _invite_out(staff.issue(body.user_id, user["id"]), request)
 
 
@@ -1268,7 +1280,7 @@ async def admin_invite_get(invite_id: int, request: Request):
 
 @router.post("/admin/invites/{invite_id:int}/revoke")
 async def admin_invite_revoke(invite_id: int, request: Request):
-    auth.require(request, "admin", "director")
+    auth.require_full(request, "admin", "director")
     return _invite_out(staff.revoke(invite_id), request)
 
 
@@ -1314,7 +1326,7 @@ async def public_invite_accept(token: str, request: Request, response: Response)
 @router.post("/admin/bitrix/sync")
 async def admin_bitrix_sync(request: Request):
     """Этап 8 §3: сотрудники и отделы из Битрикс24 → наши пользователи (кнопка у администратора; автоматически — раз в сутки)."""
-    auth.require(request, "admin", "director")
+    auth.require_full(request, "admin", "director")
     if not bitrix.notify_available():
         raise HTTPException(503, "Битрикс24 не подключён или приложение ещё не установлено (нет токенов портала)")
     import asyncio
@@ -1326,14 +1338,14 @@ async def admin_bitrix_sync(request: Request):
 
 @router.post("/admin/demo-snapshot")
 async def admin_demo_snapshot(request: Request):
-    auth.require(request, "admin", "director")
+    auth.require_full(request, "admin", "director")
     return demo.snapshot()
 
 
 @router.post("/admin/demo-reset")
 async def admin_demo_reset(request: Request):
     """Вернуть базу в демо-состояние за секунды, без вызовов ИИ. Сессии сбрасываются — войти заново."""
-    auth.require(request, "admin", "director")
+    auth.require_full(request, "admin", "director")
     r = demo.reset()
     realtime.publish_all({"type": "demo_reset"})
     return r
@@ -1342,7 +1354,7 @@ async def admin_demo_reset(request: Request):
 @router.get("/admin/preflight")
 async def admin_preflight(request: Request, stt_test: str = "1"):
     """Проверка «за час до выхода»: ключ, STT на GPU, база в демо-состоянии. Внешний туннель и батарею проверяет tools/preflight.sh."""
-    auth.require(request, "admin", "director")
+    auth.require_full(request, "admin", "director")   # тратит вызовы ИИ и GPU — только с ноутбука или из настоящего входа
     import asyncio
     out = {"checks": []}
     # ключ OpenAI — короткий вызов

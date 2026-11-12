@@ -490,13 +490,19 @@ def install_from_form(form: dict) -> dict:
 
 # ---------- уведомления и задачи ----------
 
+def _demo_request() -> bool:
+    """Действие из демо-входа снаружи (F-03): в настоящий Битрикс24 не дублируем."""
+    from .. import auth
+    return auth.DEMO_REQUEST.get()
+
+
 def _public_url() -> str:
     return config.PUBLIC_URL or ""
 
 
 def notify(user_id: int | None, text: str, link: str | None = None) -> None:
     """Дубль уведомления в чат Битрикса (im.notify.system.add) со ссылкой обратно. Не блокирует запрос: отправка в фоне; в тестах — синхронно."""
-    if not user_id or not notify_available():
+    if not user_id or not notify_available() or _demo_request():
         return
     row = db.one("SELECT bitrix_id FROM users WHERE id=? AND active=1", (user_id,))
     if not row or not row["bitrix_id"]:
@@ -519,7 +525,7 @@ def _send_notify(bitrix_user_id: int, message: str) -> None:
 
 def create_task(assignee_user_id: int, title: str, description: str, due_date: str | None) -> int | None:
     """Поручение с совещания → задача Битрикса (tasks.task.add) со ссылкой обратно; → id задачи или None."""
-    if not tasks_enabled() or not notify_available():
+    if not tasks_enabled() or not notify_available() or _demo_request():
         return None
     row = db.one("SELECT bitrix_id FROM users WHERE id=? AND active=1", (assignee_user_id,))
     if not row or not row["bitrix_id"]:

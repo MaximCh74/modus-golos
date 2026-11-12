@@ -210,3 +210,59 @@ def test_F02_oauth_code_from_other_portal_rejected(c, fake_bitrix):
 def test_ok_frame_ancestors_only_portal(c):
     csp = c.get("/panel").headers["content-security-policy"]
     assert re.search(r"frame-ancestors ([^;]+)", csp).group(1).split() == ["'self'", f"https://{PORTAL}"]
+
+
+# ---------- F-03: демо-вход («Войти как…») — вариант А ----------
+
+def test_F03_demo_session_from_outside_cannot_do_dangerous_admin_actions(c, monkeypatch):
+    from mf import demo
+    called = []
+    monkeypatch.setattr(demo, "snapshot", lambda *a, **k: called.append("snapshot") or {"ok": True})
+    monkeypatch.setattr(demo, "reset", lambda *a, **k: called.append("reset") or {"ok": True})
+    login(c, 15)   # администратор через демо-вход, запрос «снаружи»
+    assert c.get("/api/me").json()["demo"] is True
+    for url, body in (("/api/admin/demo-snapshot", None), ("/api/admin/demo-reset", None), ("/api/admin/bitrix/sync", None),
+                      ("/api/admin/users", {"name": "Взломщик Тестов", "role": "admin"}), ("/api/admin/users/6/active", {"active": False}),
+                      ("/api/admin/invites", {"user_id": 6}), ("/api/admin/invites/1/revoke", None), ("/api/admin/users/6/avatar/remove", None)):
+        r = c.post(url, json=body if body is not None else {})
+        assert r.status_code == 403 and "демо" in r.json()["detail"], (url, r.status_code)
+    r = c.post("/api/admin/users/import", files={"file": ("a.csv", "Имя;Город\nТест Тестов;Омск\n".encode("utf-8"), "text/csv")})
+    assert r.status_code == 403
+    assert c.get("/api/admin/preflight").status_code == 403
+    assert called == [] and db.one("SELECT active FROM users WHERE id=6")["active"] == 1
+    # смотреть можно: настройки и списки
+    assert c.get("/api/admin/settings").status_code == 200
+
+
+def test_ok_demo_session_from_laptop_keeps_admin_tools(monkeypatch):
+    from mf import demo
+    called = []
+    monkeypatch.setattr(demo, "reset", lambda *a, **k: called.append("reset") or {"ok": True})
+    with TestClient(app, client=("127.0.0.1", 50000)) as local:
+        login(local, 15)
+        assert local.get("/api/me").json()["demo"] is False
+        assert local.post("/api/admin/demo-reset").status_code == 200 and called == ["reset"]
+        # тот же адрес петли, но с заголовком Cloudflare — это запрос через туннель, снаружи
+        assert local.post("/api/admin/demo-reset", headers={"CF-Connecting-IP": "203.0.113.9"}).status_code == 403
+
+
+def test_F03_demo_actions_are_not_duplicated_to_bitrix(c, fake_bitrix):
+    legit_tokens()
+    db.ex("UPDATE users SET bitrix_id=1 WHERE id=1")
+    login(c, 6)   # сотрудник через демо-вход говорит «спасибо» директору
+    r = c.post("/api/appeals", data={"type": "praise", "text": "Спасибо за помощь с отчётом", "praise_to_user_id": "1"})
+    assert r.status_code == 200
+    assert not fake_bitrix.to(PORTAL, "im.notify.system.add")
+    assert db.one("SELECT COUNT(*) AS n FROM notifications WHERE user_id=1 AND text LIKE '%Спасибо за помощь с отчётом%'")["n"] == 1   # внутри системы — есть
+
+
+def test_F03_demo_login_rate_limited_and_switch_off(c, monkeypatch):
+    from mf import api
+    anon(c)
+    codes = [c.post("/api/auth/login-as", json={"user_id": 6}).status_code for _ in range(35)]
+    assert codes.count(429) >= 1
+    api.login_limit.hits.clear()
+    monkeypatch.setenv("MF_DEMO_LOGIN", "0")
+    anon(c)
+    assert c.post("/api/auth/login-as", json={"user_id": 1}).status_code == 404
+    assert c.get("/api/auth/users").status_code == 404 and c.get("/api/public/config").json()["demo_login"] is False

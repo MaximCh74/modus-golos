@@ -2,6 +2,8 @@
 Права проверяются на уровне API, а не только скрытием кнопок."""
 from __future__ import annotations
 
+import contextvars
+import os
 import secrets
 
 from fastapi import HTTPException, Request
@@ -13,6 +15,25 @@ FRAME_COOKIE = "mf_frame"   # признак сессии внутри iframe Б
 ROLES = ("employee", "responsible", "director", "admin")
 STAFF = ("responsible", "director", "admin")
 ROLE_LABEL = {"employee": "Сотрудник", "responsible": "Ответственный", "director": "Директор", "admin": "Администратор"}
+# Аудит 12.11, F-03 (вариант А): «Войти как…» остаётся для жюри, но такие сессии помечены как демо. Снаружи (через туннель) им закрыты
+# сброс и снапшот демо-базы, синхронизация Битрикса, импорт и правка сотрудников, приглашения, предпроверка; их действия не дублируются
+# в Битрикс24. С ноутбука ведущего (http://localhost:8070, без заголовков Cloudflare) — всё как раньше. MF_DEMO_LOGIN=0 — демо-входа нет (пилот).
+DEMO_REQUEST = contextvars.ContextVar("mf_demo_request", default=False)
+DEMO_DENIED = ("В демо-входе это недоступно: сброс и снапшот демо-базы, Битрикс24, импорт и правка сотрудников, приглашения — "
+               "только с ноутбука ведущего (http://localhost:8070) или после входа через Битрикс24")
+
+
+def demo_login_enabled() -> bool:
+    return os.environ.get("MF_DEMO_LOGIN", "1").strip() != "0"
+
+
+def is_local(request: Request) -> bool:
+    """Запрос с самого ноутбука: адрес петли и без заголовков Cloudflare (туннель добавляет их всегда, снаружи их не убрать)."""
+    host = request.client.host if request.client else ""
+    if host not in ("127.0.0.1", "::1", "localhost"):
+        return False
+    hd = request.headers
+    return not (hd.get("cf-connecting-ip") or hd.get("cf-ray") or hd.get("cdn-loop"))
 
 
 def display_name(user: dict) -> str:
@@ -34,7 +55,14 @@ def current(request: Request) -> dict | None:
     token = token or request.query_params.get("s") or request.cookies.get(COOKIE)
     if not token:
         return None
-    return db.one("SELECT u.* FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token=? AND u.active=1", (token,))
+    row = db.one("SELECT u.*, s.demo AS session_demo FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token=? AND u.active=1", (token,))
+    if not row:
+        return None
+    demo = bool(row.pop("session_demo"))
+    row["demo_restricted"] = demo and not is_local(request)
+    if row["demo_restricted"]:
+        DEMO_REQUEST.set(True)   # уведомления этого запроса не дублируются в Битрикс24 (bitrix.notify, bitrix.create_task)
+    return row
 
 
 def require(request: Request, *roles: str) -> dict:
@@ -46,11 +74,19 @@ def require(request: Request, *roles: str) -> dict:
     return user
 
 
-def login(user_id: int) -> str:
+def require_full(request: Request, *roles: str) -> dict:
+    """Как require, но демо-сессии снаружи — 403 (опасные действия: сброс демо, Битрикс, импорт и правка сотрудников, приглашения)."""
+    user = require(request, *roles)
+    if user.get("demo_restricted"):
+        raise HTTPException(403, DEMO_DENIED)
+    return user
+
+
+def login(user_id: int, demo: bool = False) -> str:
     if not user_by_id(user_id):
         raise HTTPException(404, "Пользователь не найден")
     token = secrets.token_urlsafe(32)
-    db.ex("INSERT INTO sessions(token, user_id, created_at) VALUES(?, ?, ?)", (token, user_id, db.now_iso()))
+    db.ex("INSERT INTO sessions(token, user_id, created_at, demo) VALUES(?, ?, ?, ?)", (token, user_id, db.now_iso(), 1 if demo else 0))
     return token
 
 
