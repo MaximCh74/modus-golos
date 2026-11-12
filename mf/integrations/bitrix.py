@@ -7,7 +7,9 @@
   поручения → tasks.task.add (скоуп task).
 Секреты только в .env (BITRIX_PORTAL, BITRIX_CLIENT_ID, BITRIX_CLIENT_SECRET, при желании BITRIX_WEBHOOK_URL, BITRIX_TASKS=1);
 токены портала — в папке данных (var/bitrix_tokens.json, в git не попадает). Без настроек модуль неактивен: кнопок входа нет,
-уведомления не дублируются. НЕ ПРОВЕРЕНО НА ЖИВОМ ПОРТАЛЕ — ждёт тестовый портал (docs/BITRIX24.md, docs/STATUS.md)."""
+уведомления не дублируются. Проверено на живом портале владельца 12.11.2026: открытие во фрейме, синхронизация, уведомление в чат
+(docs/BITRIX24.md «Статус»). Сотрудники без Битрикса (ручное добавление, импорт, приглашения) — mf/staff.py; склейка с порталом —
+match_user по почте и телефону, спорные случаи — merge_issue → отчёт синхронизации (settings bitrix_sync.conflicts)."""
 from __future__ import annotations
 
 import base64
@@ -25,7 +27,7 @@ from .. import config, db
 log = logging.getLogger("mf.bitrix")
 OAUTH_HOST = os.environ.get("BITRIX_OAUTH_HOST", "https://oauth.bitrix24.tech").rstrip("/")
 # встраивание в iframe разрешается только порталу из .env: frame-ancestors https://<BITRIX_PORTAL> (mf/main.py)
-SCOPES_NEEDED = ("user", "im", "task")   # user (или user_brief) — user.current; im — im.notify.*; task — tasks.task.add (при BITRIX_TASKS=1)
+SCOPES_NEEDED = ("user", "department", "im", "task")   # user — user.current/user.get; department — названия отделов (sync); im — im.notify.*; task — tasks.task.add
 TIMEOUT = 12.0
 
 
@@ -207,8 +209,8 @@ def sync_users() -> dict:
         before = db.one("SELECT COUNT(*) AS n FROM users")["n"]
         email = (bx.get("EMAIL") or "").strip().lower()
         phone = _digits(bx.get("PERSONAL_MOBILE") or bx.get("WORK_PHONE"))
-        cands = {r["id"] for r in db.q("SELECT id FROM users WHERE bitrix_id IS NULL AND ((?!='' AND lower(email)=?) OR (?!='' AND phone IS NOT NULL AND phone!=''))", (email, email, phone))
-                 if not phone or _digits(r.get("phone")) == phone or True}
+        known = db.one("SELECT id FROM users WHERE bitrix_id=?", (bid,))
+        cands = merge_candidates(email, phone) if not known else {}   # первая склейка: кто из наших без ID совпал по почте/телефону
         u = match_user({**bx, "PHONE": phone}, create=True)
         if not u:
             continue
@@ -227,8 +229,10 @@ def sync_users() -> dict:
         if phone and not u.get("phone"):
             sets["phone"] = phone
         db.ex("UPDATE users SET " + ", ".join(f"{k}=?" for k in sets) + " WHERE id=?", (*sets.values(), u["id"]))
-        if len(cands) > 1:
-            conflicts.append({"bitrix_id": bid, "name": u["name"], "candidates": sorted(cands)})
+        if not known:
+            issue = merge_issue(bid, u, bx, cands)
+            if issue:
+                conflicts.append(issue)
     if rows:   # полный список получен — пропавшие из портала (с нашим bitrix_id) считаем уволенными
         for r in db.q("SELECT id, bitrix_id FROM users WHERE bitrix_id IS NOT NULL AND active=1"):
             if r["bitrix_id"] not in seen:
@@ -237,6 +241,35 @@ def sync_users() -> dict:
     db.set_setting("bitrix_sync", report)
     log.info("Битрикс24: синхронизация — %s", report)
     return report
+
+
+def merge_candidates(email: str, phone: str) -> dict[int, str]:
+    """Этап 8 §4/§5: наши сотрудники без ID Битрикса, у которых совпала почта или телефон (последние 10 цифр): id → чем совпали.
+    Так человек, заведённый администратором вручную или импортом, при синхронизации становится одним профилем с учёткой портала."""
+    out: dict[int, str] = {}
+    if email:
+        for r in db.q("SELECT id FROM users WHERE bitrix_id IS NULL AND lower(email)=?", (email,)):
+            out[r["id"]] = "почта"
+    if phone:
+        for r in db.q("SELECT id, phone FROM users WHERE bitrix_id IS NULL AND phone IS NOT NULL AND phone != ''"):
+            if _digits(r["phone"]) == phone:
+                out[r["id"]] = "почта и телефон" if r["id"] in out else "телефон"
+    return out
+
+
+def merge_issue(bid: int, u: dict, bx: dict, cands: dict[int, str]) -> dict | None:
+    """Спорная склейка — показать администратору: почта или телефон совпали у нескольких наших людей, либо склеили по почте/телефону,
+    а имена не похожи (ни одного общего слова). Склейка при этом выполняется — по почте и телефону, как договорились в ТЗ."""
+    bx_name = " ".join(x for x in ((bx.get("NAME") or "").strip(), (bx.get("LAST_NAME") or "").strip()) if x)
+    base = {"bitrix_id": bid, "bitrix_name": bx_name, "name": u["name"], "user_id": u["id"]}
+    if len(cands) > 1:
+        names = {r["id"]: r["name"] for r in db.q("SELECT id, name FROM users WHERE id IN (%s)" % ",".join("?" * len(cands)), tuple(cands))}
+        return {**base, "reason": "several", "candidates": [{"id": i, "name": names.get(i), "by": by} for i, by in sorted(cands.items())]}
+    if u["id"] in cands:
+        ours, theirs = set(_norm_name(u["name"]).split()), set(_norm_name(bx_name).split())
+        if theirs and not (ours & theirs):
+            return {**base, "reason": "name", "candidates": [{"id": u["id"], "name": u["name"], "by": cands[u["id"]]}]}
+    return None
 
 
 def call(method: str, params: dict | None = None, *, token: str | None = None, endpoint: str | None = None, _retry: bool = True):

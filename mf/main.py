@@ -186,6 +186,12 @@ async def track_page(token: str):
     return page("track.html")
 
 
+@app.get("/i/{token}")
+async def invite_page(token: str):
+    """Личное приглашение сотрудника без Битрикса (этап 8 §4): одна кнопка «Войти», ссылка одноразовая."""
+    return page("invite.html")
+
+
 @app.get("/app")
 @app.get("/app/{rest:path}")
 async def app_page(rest: str = ""):

@@ -7,6 +7,12 @@ python-multipart==0.0.32
 qrcode==8.2
 # этапы 2–3: ИИ (без ключа работает запасной заскриптованный разбор)
 openai==2.44.0
+# этап 8 §4: карточки-приглашения PDF (reportlab + статические начертания Montserrat через fontTools), QR для PDF (Pillow),
+# импорт списка из Excel (openpyxl); аватарки — тоже Pillow
+reportlab==5.0.0
+Pillow==12.3.0
+fonttools==4.63.0
+openpyxl==3.1.5
 # тесты
 pytest==9.1.1
 httpx==0.28.1

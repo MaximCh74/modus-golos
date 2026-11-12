@@ -55,6 +55,10 @@ CREATE TABLE IF NOT EXISTS appeal_embeddings (appeal_id INTEGER PRIMARY KEY, mod
 CREATE TABLE IF NOT EXISTS notifications (
   id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, text TEXT NOT NULL, link TEXT, created_at TEXT NOT NULL, read_at TEXT);
 CREATE TABLE IF NOT EXISTS sessions (token TEXT PRIMARY KEY, user_id INTEGER NOT NULL, created_at TEXT NOT NULL);
+-- этап 8 §4: личные одноразовые приглашения для сотрудников без Битрикса (ссылка /i/<token> и QR)
+CREATE TABLE IF NOT EXISTS invites (
+  id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, token TEXT UNIQUE NOT NULL, created_by INTEGER,
+  created_at TEXT NOT NULL, expires_at TEXT NOT NULL, used_at TEXT, revoked_at TEXT);
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 
 CREATE INDEX IF NOT EXISTS ix_appeals_status ON appeals(status);
@@ -62,6 +66,7 @@ CREATE INDEX IF NOT EXISTS ix_appeals_resp ON appeals(responsible_id);
 CREATE INDEX IF NOT EXISTS ix_events_appeal ON appeal_events(appeal_id);
 CREATE INDEX IF NOT EXISTS ix_notif_user ON notifications(user_id, read_at);
 CREATE INDEX IF NOT EXISTS ix_ledger_user ON points_ledger(user_id);
+CREATE INDEX IF NOT EXISTS ix_invites_user ON invites(user_id);
 
 -- журналы только на добавление (ТЗ v1.1, раздел 14)
 CREATE TRIGGER IF NOT EXISTS t_events_no_update BEFORE UPDATE ON appeal_events BEGIN SELECT RAISE(ABORT, 'appeal_events: append-only'); END;

@@ -23,6 +23,7 @@ SHIFT = [
     ("meeting_items", "reminded_at", "iso"), ("meeting_items", "overdue_at", "iso"),
     ("points_ledger", "created_at", "iso"), ("reward_claims", "created_at", "iso"), ("reward_claims", "decided_at", "iso"),
     ("notifications", "created_at", "iso"), ("notifications", "read_at", "iso"), ("sessions", "created_at", "iso"),
+    ("invites", "created_at", "iso"), ("invites", "expires_at", "iso"), ("invites", "used_at", "iso"), ("invites", "revoked_at", "iso"),   # этап 8 §4
 ]
 TRIGGERS = ("t_events_no_update", "t_events_no_delete", "t_ledger_no_update", "t_ledger_no_delete")
 

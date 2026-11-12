@@ -54,8 +54,9 @@ def login(user_id: int) -> str:
     return token
 
 
-def set_cookie(response, token: str, cross_site: bool = False) -> None:
-    """Сессионная cookie. cross_site=True — вход из iframe Битрикс24: браузер отдаёт cookie третьей стороне только с SameSite=None; Secure."""
+def set_cookie(response, token: str, cross_site: bool = False, days: int = 30) -> None:
+    """Сессионная cookie (days — срок; вход по личному приглашению ставит долгую, устройство помнит сотрудника).
+    cross_site=True — вход из iframe Битрикс24: браузер отдаёт cookie третьей стороне только с SameSite=None; Secure."""
     if cross_site:
         # CHIPS: Partitioned — cookie привязана к паре «наш сайт внутри портала», браузеры (Chrome, Firefox) отдают её во фрейме;
         # Starlette не знает атрибут Partitioned, поэтому заголовок собирается вручную
@@ -63,7 +64,7 @@ def set_cookie(response, token: str, cross_site: bool = False) -> None:
         response.headers.append("set-cookie", f"{COOKIE}={token}; Path=/; Max-Age={age}; HttpOnly; Secure; SameSite=None; Partitioned")
         response.headers.append("set-cookie", f"{FRAME_COOKIE}=1; Path=/; Max-Age={age}; Secure; SameSite=None; Partitioned")
     else:
-        response.set_cookie(COOKIE, token, httponly=True, samesite="lax", max_age=30 * 86400, path="/")
+        response.set_cookie(COOKIE, token, httponly=True, samesite="lax", max_age=days * 86400, path="/")
 
 
 def logout(token: str | None) -> None:

@@ -13,7 +13,7 @@ from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, Reque
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
-from . import ai, appeals, auth, commands, db, demo, director, meetings, realtime
+from . import ai, appeals, auth, commands, db, demo, director, meetings, realtime, staff
 from .ai import llm, similar, stt
 from .integrations import bitrix
 from . import config
@@ -46,6 +46,7 @@ class RateLimit:
 
 qr_limit = RateLimit(10, 600)
 stt_limit = RateLimit(20, 600)
+invite_limit = RateLimit(30, 600)   # страница приглашения: токены случайные 256 бит, лимит — гигиена
 
 
 def client_ip(request: Request) -> str:
@@ -944,7 +945,7 @@ async def decide_claim(claim_id: int, body: ClaimDecision, request: Request):
     return {"ok": True}
 
 
-SETTING_KEYS = ("points", "director_wait_days", "news_days", "similar_threshold", "cluster_threshold", "league_weights", "dev_department_head_id", "tz_offset_hours")
+SETTING_KEYS = ("points", "director_wait_days", "news_days", "similar_threshold", "cluster_threshold", "league_weights", "dev_department_head_id", "tz_offset_hours", "invite_days")
 
 
 @router.get("/admin/settings")
@@ -954,7 +955,9 @@ async def admin_settings(request: Request):
             "categories": db.q("""SELECT c.id, c.name, c.responsible_user_id, c.suggestion_responsible_user_id, c.sla_first_response_hours AS sla,
                                   u.name AS responsible, s.name AS suggestion_responsible, (SELECT COUNT(*) FROM appeals a WHERE a.category_id=c.id) AS appeals
                                   FROM categories c LEFT JOIN users u ON u.id=c.responsible_user_id LEFT JOIN users s ON s.id=c.suggestion_responsible_user_id ORDER BY c.id"""),
-            "users": db.q("SELECT id, name, role, position, branch_id, department_id, manager_id, active, avatar, email, bitrix_id FROM users ORDER BY active DESC, name"),
+            "users": db.q("SELECT id, name, role, position, branch_id, department_id, manager_id, active, avatar, email, bitrix_id, phone FROM users ORDER BY active DESC, name"),
+            "invites": staff.latest_by_user(),   # этап 8 §4: последнее приглашение каждого (статус, срок)
+            "invite_days": staff.invite_days(),
             "bitrix": bitrix.status(),
             "branches": db.q("SELECT id, code, name, city, kind FROM branches ORDER BY is_hq DESC, name"),
             "departments": db.q("SELECT id, name FROM departments ORDER BY id"),
@@ -1042,27 +1045,176 @@ class UserBody(BaseModel):
     active: bool = True
     email: str | None = None
     bitrix_id: int | None = None
+    phone: str | None = None
+    invite: bool = False   # этап 8 §4: сразу выдать личное приглашение (для тех, кого нет в Битриксе)
+
+
+USER_FIELDS = "id, name, role, position, branch_id, department_id, manager_id, active, email, bitrix_id, phone"
 
 
 @router.post("/admin/users")
 async def admin_user(body: UserBody, request: Request):
-    """Сотрудники: добавить, изменить, отключить (в пилоте — из Битрикс24)."""
+    """Сотрудники: добавить, изменить, отключить. Этап 8 §4: телефон (ручное добавление рабочих, склейка с Битриксом по номеру),
+    телефон и почта не могут принадлежать двум людям, отключение гасит сессии и приглашения, история остаётся."""
     user = auth.require(request, "admin", "director")
     name = " ".join(body.name.split())
     if len(name) < 3 or body.role not in auth.ROLES:
         raise HTTPException(422, "Имя и роль обязательны")
     if body.id == user["id"] and not body.active:
         raise HTTPException(409, "Нельзя отключить себя")
-    email = (body.email or "").strip().lower() or None
-    vals = (name, body.role, (body.position or "").strip() or None, body.branch_id, body.department_id, body.manager_id, 1 if body.active else 0, email, body.bitrix_id or None)
+    email = staff.norm_email(body.email)
+    phone = staff.norm_phone(body.phone)
+    if phone and len(staff.phone_key(phone)) < 10:
+        raise HTTPException(422, "Телефон некорректен — нужен номер с кодом, например +7 701 000 00 00")
+    dup = staff.find_by_phone(phone, exclude_id=body.id)
+    if dup:
+        raise HTTPException(409, f"Этот телефон уже у сотрудника «{dup['name']}» — один человек должен быть одним профилем")
+    dup = staff.find_by_email(email, exclude_id=body.id)
+    if dup:
+        raise HTTPException(409, f"Эта почта уже у сотрудника «{dup['name']}»")
+    vals = (name, body.role, (body.position or "").strip() or None, body.branch_id, body.department_id, body.manager_id, 1 if body.active else 0, email, body.bitrix_id or None, phone)
     if body.id:
-        if not db.one("SELECT 1 FROM users WHERE id=?", (body.id,)):
+        prev = db.one("SELECT active FROM users WHERE id=?", (body.id,))
+        if not prev:
             raise HTTPException(404, "Сотрудник не найден")
-        db.ex("UPDATE users SET name=?, role=?, position=?, branch_id=?, department_id=?, manager_id=?, active=?, email=?, bitrix_id=? WHERE id=?", (*vals, body.id))
+        db.ex("UPDATE users SET name=?, role=?, position=?, branch_id=?, department_id=?, manager_id=?, active=?, email=?, bitrix_id=?, phone=? WHERE id=?", (*vals, body.id))
         uid = body.id
+        if prev["active"] and not body.active:
+            staff.on_deactivated(uid)
     else:
-        uid = db.ex("INSERT INTO users(name, role, position, branch_id, department_id, manager_id, active, email, bitrix_id) VALUES(?,?,?,?,?,?,?,?,?)", vals)
-    return db.one("SELECT id, name, role, position, branch_id, department_id, manager_id, active, email, bitrix_id FROM users WHERE id=?", (uid,))
+        uid = db.ex("INSERT INTO users(name, role, position, branch_id, department_id, manager_id, active, email, bitrix_id, phone) VALUES(?,?,?,?,?,?,?,?,?,?)", vals)
+    out = db.one(f"SELECT {USER_FIELDS} FROM users WHERE id=?", (uid,))
+    if body.invite and out["active"]:
+        inv = staff.issue(uid, user["id"])
+        out["invite"] = _invite_out(inv, request)
+    return out
+
+
+# ---------- этап 8 §4: сотрудники без Битрикса — отключение, импорт списком, личные приглашения, карточки для печати ----------
+
+class ActiveBody(BaseModel):
+    active: bool
+
+
+@router.post("/admin/users/{user_id:int}/active")
+async def admin_user_active(user_id: int, body: ActiveBody, request: Request):
+    """Отключить (сессии и приглашения гаснут, обращения и история остаются) или включить обратно."""
+    user = auth.require(request, "admin", "director")
+    return staff.set_active(user_id, body.active, user)
+
+
+@router.get("/admin/users/template.csv")
+async def admin_users_template(request: Request):
+    auth.require(request, "admin", "director")
+    return Response(staff.template_csv(), media_type="text/csv; charset=utf-8",
+                    headers={"Content-Disposition": "attachment; filename=\"modus_golos_staff_template.csv\"; filename*=UTF-8''%D1%81%D0%BE%D1%82%D1%80%D1%83%D0%B4%D0%BD%D0%B8%D0%BA%D0%B8_%D1%88%D0%B0%D0%B1%D0%BB%D0%BE%D0%BD.csv"})
+
+
+@router.post("/admin/users/import")
+async def admin_users_import(request: Request, file: UploadFile = File(...), invite: str = Form("1")):
+    """Импорт из CSV или Excel по шаблону: ошибочная строка — в отчёт, остальные заводятся; новым — приглашения (invite=1)."""
+    user = auth.require(request, "admin", "director")
+    data = await file.read(5 * 1024 * 1024 + 1)
+    if not data:
+        raise HTTPException(422, "Файл пустой")
+    if len(data) > 5 * 1024 * 1024:
+        raise HTTPException(413, "Файл больше 5 МБ")
+    rows = staff.parse_table(data, file.filename or "")
+    r = staff.import_rows(rows, user["id"], invite=parse_bool(invite))
+    base = base_url(request)
+    for inv in r["invites"]:
+        inv["card_url"] = f"/api/admin/invites/cards.pdf?ids={inv['id']}"
+    r["cards_url"] = ("/api/admin/invites/cards.pdf?ids=" + ",".join(str(i["id"]) for i in r["invites"])) if r["invites"] else None
+    r["base"] = base
+    return r
+
+
+class InviteBody(BaseModel):
+    user_id: int
+
+
+def _invite_out(inv: dict, request: Request) -> dict:
+    return {**inv, "url": staff.url_for(inv["token"], base_url(request)), "qr_svg": f"/api/admin/invites/{inv['id']}/qr.svg",
+            "card_url": f"/api/admin/invites/cards.pdf?ids={inv['id']}"}
+
+
+@router.post("/admin/invites")
+async def admin_invite_issue(body: InviteBody, request: Request):
+    """Выдать личное приглашение (или выдать заново: прежняя ссылка сразу перестаёт работать, прежнее устройство выходит)."""
+    user = auth.require(request, "admin", "director")
+    return _invite_out(staff.issue(body.user_id, user["id"]), request)
+
+
+@router.get("/admin/invites/cards.pdf")
+async def admin_invite_cards(request: Request, ids: str = "", all: str = ""):
+    """Карточки-приглашения для печати: ?ids=1,2,3 (например, весь импорт) или ?all=1 — все действующие."""
+    auth.require(request, "admin", "director")
+    if parse_bool(all):
+        rows = [staff.get(r["id"]) for r in db.q("SELECT id FROM invites WHERE used_at IS NULL AND revoked_at IS NULL AND expires_at > ? ORDER BY id", (db.now_iso(),))]
+    else:
+        try:
+            want = [int(x) for x in ids.split(",") if x.strip()]
+        except ValueError:
+            raise HTTPException(422, "ids — номера приглашений через запятую")
+        rows = [staff.get(i) for i in want]
+    rows = [r for r in rows if r and r["user"]]
+    if not rows:
+        raise HTTPException(404, "Нет приглашений для печати")
+    import asyncio
+    pdf = await asyncio.to_thread(staff.cards_pdf, rows, base_url(request))
+    return Response(pdf, media_type="application/pdf", headers={"Content-Disposition": "inline; filename=\"modus_golos_invites.pdf\""})
+
+
+@router.get("/admin/invites/{invite_id:int}")
+async def admin_invite_get(invite_id: int, request: Request):
+    auth.require(request, "admin", "director")
+    inv = staff.get(invite_id)
+    if not inv:
+        raise HTTPException(404, "Приглашение не найдено")
+    return _invite_out(inv, request)
+
+
+@router.post("/admin/invites/{invite_id:int}/revoke")
+async def admin_invite_revoke(invite_id: int, request: Request):
+    auth.require(request, "admin", "director")
+    return _invite_out(staff.revoke(invite_id), request)
+
+
+@router.get("/admin/invites/{invite_id:int}/qr.svg")
+async def admin_invite_qr(invite_id: int, request: Request):
+    auth.require(request, "admin", "director")
+    inv = staff.get(invite_id)
+    if not inv:
+        raise HTTPException(404, "Приглашение не найдено")
+    img = qrcode.make(staff.url_for(inv["token"], base_url(request)), image_factory=qrcode.image.svg.SvgPathImage, box_size=12, border=2)
+    buf = io.BytesIO(); img.save(buf)
+    return Response(buf.getvalue(), media_type="image/svg+xml", headers={"Cache-Control": "no-store"})
+
+
+@router.get("/public/invite/{token}")
+async def public_invite_info(token: str, request: Request):
+    """Страница /i/<token>: кому приглашение и можно ли войти. Токен не раскрывает ничего, кроме имени и города приглашённого."""
+    invite_limit.check(client_ip(request))
+    st, inv = staff.check(token, auth.current(request))
+    out = {"status": st, "text": staff.STATUS_TEXT.get(st)}
+    if inv and inv["user"]:
+        u = inv["user"]
+        out["user"] = {"name": u["name"], "first_name": u["name"].split()[0], "city": u["city"], "branch": u["branch"], "department": u["department"], "position": u["position"]}
+        out["expires_at"] = inv["expires_at"]
+        out["home"] = "/app"
+    return out
+
+
+@router.post("/public/invite/{token}/accept")
+async def public_invite_accept(token: str, request: Request, response: Response):
+    """Вход по личному приглашению — один раз; дальше устройство помнит сотрудника (долгая cookie), паролей нет."""
+    invite_limit.check(client_ip(request))
+    u = staff.accept(token)
+    auth.logout(request.cookies.get(auth.COOKIE))
+    auth.set_cookie(response, auth.login(u["id"]), days=365)
+    out = auth.public(u)
+    out["home"] = "/app" if u["role"] == "employee" else "/panel"
+    return out
 
 
 # ---------- этап 5: демо-состояние и проверка перед выходом ----------

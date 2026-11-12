@@ -373,8 +373,30 @@ tr.muted td { opacity: .6; }
 .ds-section { margin-top: var(--s4); }
 .ds-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
 
+/* сотрудники без Битрикса (этап 8 §4): раздел администратора и страница приглашения — без новых цветов */
+.grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.grid3 .field { margin-bottom: 0; }
+.staff-tools .btn { white-space: nowrap; }
+.staff-search { flex: 1; min-width: 200px; max-width: 360px; }
+.tbl tr.noclick { cursor: default; }
+.tbl tr.noclick:hover { background: transparent; }
+.w120 { width: 120px !important; min-width: 120px !important; }
+.staff-tbl td { vertical-align: middle; }
+.staff-tbl td:first-child { min-width: 170px; }
+.staff-tbl td input, .staff-tbl td select { min-width: 78px; }
+.staff-tbl td select { width: 104px; }
+.staff-tbl td:first-child input { width: 160px; min-width: 160px; }
+.staff-tbl th:last-child, .staff-tbl td:last-child { width: 1%; white-space: nowrap; }
+.inv-cell { gap: 6px; flex-wrap: nowrap; }
+.inv-body { display: flex; gap: var(--s2); align-items: flex-start; }
+.inv-qr { width: 168px; height: 168px; flex: none; border: 1px solid var(--line-soft); border-radius: var(--radius-sm); background: var(--white); padding: 6px; }
+.inv-text { flex: 1; min-width: 0; }
+.inv-link { font-size: 13px; flex: 1; min-width: 200px; }
+.invite .h1 { margin-top: var(--s2); }
+.invite .card b { color: var(--navy); }
+
 /* телефон */
-@media (max-width: 900px) { .feats { grid-template-columns: 1fr; } }
+@media (max-width: 900px) { .feats { grid-template-columns: 1fr; } .grid3 { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 768px) {
   .site-head { padding: 10px var(--s2); }
   .brand-lock img { height: 28px; }
@@ -397,6 +419,8 @@ tr.muted td { opacity: .6; }
   .city-pills .btn { flex: none; }
   .citypop { display: none; }
   .citycard .cc-name b { font-size: 24px; }
+  .grid3 { grid-template-columns: 1fr; }
+  .inv-body { flex-direction: column; }
 }
 @media (max-width: 480px) {
   .topbar { gap: 8px; padding: 8px 12px; }

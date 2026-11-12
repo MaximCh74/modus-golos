@@ -53,7 +53,11 @@ USERS = [  # id, name, role, branch, dept, manager, position
     (25, "Гульнара Сейтжанова", "responsible", "OMSK", 11, 1, "Руководитель отдела развития"),
     (26, "Бауыржан Сапаров", "responsible", "OMSK", 5, 2, "Ответственный за 1С"),
     (27, "Серик Нурмагамбетов", "employee", "PVL", 12, 8, "Мастер участка"),
+    # этап 8 §4: рабочий производства без Битрикса — заведён администратором вручную, вход по личному приглашению (ссылка/QR)
+    (28, "Нурлан Серикбаев", "employee", "PVL", 12, 27, "Оператор участка"),
 ]
+DEMO_WORKER = 28
+DEMO_WORKER_PHONE = "+77010000028"   # вымышленный; по телефону склеивается с Битриксом, если человек появится и там
 # 18 категорий датасета + «1С и автоматизация» по кастдеву; «Каталог и данные» → «Номенклатура и спецификации» (уточнена по кастдеву).
 # id, название, ответственный (None — вакансия «Администратор документов», сценарий 2), SLA первого ответа, ч
 CATEGORIES = [
@@ -214,6 +218,7 @@ SETTINGS = {
     "director_wait_days": 7,         # «ждёт решения дольше порога» — подсветка в «На решение» и счётчик у директора
     "news_days": 7,                  # «автор ждёт новостей» — напоминание ответственному и строка у директора
     "dev_department_head_id": 25,    # предложения по умолчанию уходят руководителю отдела развития
+    "invite_days": 14,               # срок действия личного приглашения (этап 8 §4)
 }
 
 
@@ -264,6 +269,19 @@ def add_done_appeals(now=None) -> list[str]:
     return out
 
 
+def add_demo_worker() -> dict | None:
+    """Этап 8 §4: рабочий без Битрикса (id 28) с телефоном и действующим личным приглашением — для seed и для живой демо-базы.
+    Запасной ход на показе: карточка напечатана заранее. Возвращает приглашение или None, если рабочий уже есть."""
+    from . import staff
+    if db.one("SELECT 1 FROM users WHERE id=?", (DEMO_WORKER,)):
+        return None
+    uid, name, role, br, dept, mgr, pos = next(u for u in USERS if u[0] == DEMO_WORKER)
+    b = db.one("SELECT id FROM branches WHERE code=?", (br,))
+    db.ex("INSERT INTO users(id, name, role, branch_id, department_id, manager_id, position, active, phone) VALUES(?,?,?,?,?,?,?,1,?)",
+          (uid, name, role, b["id"], dept, mgr, pos, DEMO_WORKER_PHONE))
+    return staff.issue(uid, actor_id=15)
+
+
 def rename_director() -> None:
     """Этап 8 §1: демо-директор — «Сергей Михайлович» (имя и отчество, без фамилии), внутренний логин sergey. Для seed и живой базы."""
     db.ex("UPDATE users SET name='Сергей Михайлович', login='sergey' WHERE id=1")
@@ -281,6 +299,8 @@ def run(force: bool = False) -> None:
     for i, name in enumerate(DEPARTMENTS, 1):
         db.ex("INSERT INTO departments(id, name) VALUES(?,?)", (i, name))
     for uid, name, role, br, dept, mgr, pos in USERS:
+        if uid == DEMO_WORKER:
+            continue   # заводится add_demo_worker() вместе с приглашением
         db.ex("INSERT INTO users(id, name, role, branch_id, department_id, manager_id, position, active) VALUES(?,?,?,?,?,?,?,1)",
               (uid, name, role, branch_ids[br], dept, mgr, pos))
     cats = {}
@@ -360,6 +380,7 @@ def run(force: bool = False) -> None:
     c.commit()
     rename_director()
     add_done_appeals(now)
+    add_demo_worker()
     db.ex("INSERT INTO meta(key, value) VALUES('seeded_at', ?)", (db.now_iso(),))
     c.commit()
 
