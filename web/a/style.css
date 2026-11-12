@@ -499,6 +499,27 @@ select { appearance: none; -webkit-appearance: none; padding-right: 34px; backgr
 .tbl.queue td { overflow: visible; }
 .tbl.queue td.q-main, .tbl.queue td.q-resp { overflow: hidden; }
 
+/* подсказки «?» и «Справка» (пункт 1 очереди 12.11): кнопка со знаком вопроса, поповер с одной-двумя фразами; «Мои поручения» со счётчиком */
+.help-wrap { position: relative; display: inline-flex; vertical-align: middle; margin-left: 4px; }
+.help-btn { border: 0; background: none; padding: 0 2px; color: var(--muted-2); cursor: pointer; display: inline-flex; line-height: 0; border-radius: 50%; }
+.help-btn:hover, .help-wrap.open .help-btn { color: var(--navy); }
+.help-btn:focus-visible { outline: none; box-shadow: var(--focus); }
+.help-pop { display: none; position: fixed; width: 300px; background: var(--white); border: 1px solid var(--line-soft); border-radius: var(--radius-sm); box-shadow: var(--shadow-2); padding: 10px 12px; font-size: 13px; font-weight: var(--w-body); color: var(--ink); line-height: 1.45; z-index: 40; text-align: left; white-space: normal; text-transform: none; letter-spacing: 0; }
+.help-wrap.open .help-pop { display: block; animation: rise var(--t-fast) var(--ease); }
+.help-pop b { display: block; color: var(--navy); margin-bottom: 2px; font-size: 14px; }
+.help-pop a { display: inline-block; margin-top: 6px; }
+.help-term { padding: 8px 0; border-bottom: 1px dashed var(--line-soft); }
+.help-term:last-child { border-bottom: 0; }
+.help-term b { color: var(--navy); }
+.help-term.hit { background: var(--tint); margin: 0 -12px; padding: 8px 12px; border-radius: var(--radius-sm); }
+.taskbar { display: flex; align-items: center; gap: 12px; text-decoration: none; color: var(--ink); cursor: pointer; padding: 14px var(--s3); transition: border-color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease); }
+.taskbar:hover { border-color: var(--line); box-shadow: var(--shadow-1); }
+.taskbar .ic { color: var(--navy); }
+.taskbar b { color: var(--navy); display: block; }
+.taskbar .count { min-width: 28px; height: 28px; padding: 0 8px; border-radius: var(--radius-pill); background: var(--navy); color: var(--white); font-weight: var(--w-bold); font-size: 14px; display: inline-flex; align-items: center; justify-content: center; }
+.taskbar .count.late { box-shadow: 0 0 0 2px var(--white), 0 0 0 4px var(--red); }
+.taskbar .chev { color: var(--muted-2); }
+
 /* телефон */
 @media (max-width: 900px) { .feats { grid-template-columns: 1fr; } .grid3 { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 768px) {

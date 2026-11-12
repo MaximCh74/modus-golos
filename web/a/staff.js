@@ -174,7 +174,7 @@ function staffSection(d, reload) {
   renderRows();
   const table = h('table', { class: 'tbl queue staff-tbl' },
     h('colgroup', {}, [null, 220, 150, 190, 56].map(w => { const c = document.createElement('col'); if (w) c.style.width = w + 'px'; return c; })),
-    h('thead', {}, h('tr', {}, ['Сотрудник', 'Город · отдел', 'Роль', 'Приглашение', ''].map(t => h('th', {}, t)))), tbody);
+    h('thead', {}, h('tr', {}, ['Сотрудник', 'Город · отдел', 'Роль', 'Приглашение', ''].map(t => h('th', {}, t, t === 'Приглашение' ? helpBtn('invite') : null)))), tbody);
   if (STAFF_UI.openId) { const u = users.find(x => x.id === STAFF_UI.openId); if (u) setTimeout(() => openStaff(u), 0); }
   return h('div', { class: 'card staff' },
     h('div', { class: 'row' }, h('b', {}, 'Сотрудники'), counter, h('div', { class: 'spacer' }), tools),

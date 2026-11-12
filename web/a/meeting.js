@@ -33,7 +33,7 @@ async function meetingStart(opts) {
   const sttLine = ai.stt.local ? 'Расшифровка: faster-whisper ' + ai.stt.local_model + ' локально на GPU' + (ai.stt.openai ? ', запасной — OpenAI whisper-1' : '')
     : ai.stt.openai ? 'Расшифровка: OpenAI whisper-1' : 'Расшифровка аудио недоступна (нет локальной модели и ключа) — вставьте текст';
   const llmLine = ai.llm ? 'Разбор: ' + ai.llm_model + ' через OpenAI' : 'Разбор: без ключа OpenAI — заскриптованный демо-разбор (честно помечается на экране)';
-  root.replaceChildren(h('div', { class: 'wrap' }, back(opts.backHref || '#/'), h('div', { class: 'h1' }, 'Режим совещания'),
+  root.replaceChildren(h('div', { class: 'wrap' }, back(opts.backHref || '#/'), h('div', { class: 'h1' }, 'Режим совещания', helpBtn('meeting')),
     h('div', { class: 'card' }, field('Название', title),
       h('div', { class: 'card card-warn small' }, h('b', {}, 'Участники уведомлены о записи. '), 'Запись расшифровывается автоматически; аудио и видео удаляются сразу после расшифровки — хранится только текст. Гибридная планёрка: загрузите запись видеозвонка (mp4, mov, mkv, webm) — возьмём звуковую дорожку.'),
       h('div', { class: 'grid2' }, recBtn, uploadBtn), file,
@@ -129,7 +129,7 @@ async function meetingCard(id, opts) {
     m.open_questions.length ? h('div', { class: 'small mt8' }, h('b', {}, 'Осталось открытым: '), m.open_questions.join('; ')) : null);
   const sections = ['decision', 'task', 'idea', 'linked'].map(kind => {
     const items = groups[kind] || [];
-    return h('div', { class: 'card' }, h('div', { class: 'row' }, h('div', { class: 'h2' }, KIND_LABEL[kind]),
+    return h('div', { class: 'card' }, h('div', { class: 'row' }, h('div', { class: 'h2' }, KIND_LABEL[kind], helpBtn({ decision: 'meeting_decision', task: 'task', idea: 'idea', linked: 'linked' }[kind])),
       kind === 'idea' ? h('span', { class: 'hint' }, 'уйдут директору в «На решение»') : kind === 'linked' ? h('span', { class: 'hint' }, 'автор и поддержавшие получат уведомление') : null),
       items.length ? items.map(i => itemRow(m, i, kind, staff, save, () => meetingCard(id, opts))) : h('div', { class: 'muted small' }, 'Нет'),
       m.can_edit ? addItemRow(id, kind, staff, () => meetingCard(id, opts)) : null);
@@ -143,7 +143,7 @@ async function meetingCard(id, opts) {
     } }, 'Отправить');
     const live = m.items.filter(i => !i.removed);
     const flagged = live.filter(i => i.kind === 'task' && i.flags.length).length;
-    footer = h('div', { class: 'card card-info' }, h('div', { class: 'small mb8' }, 'Проверьте пункты: исправьте текст, выберите исполнителя и срок, уберите лишнее. ' + (flagged ? 'Поручений с флагами: ' + flagged + ' — их можно отправить и так, флаг останется виден.' : '')), sendBtn);
+    footer = h('div', { class: 'card card-info' }, h('div', { class: 'small mb8' }, 'Проверьте пункты: исправьте текст, выберите исполнителя и срок, уберите лишнее. ', flagged ? h('span', {}, 'Поручений с флагами: ' + flagged + ' — их можно отправить и так, флаг останется виден.', helpBtn('flags')) : null), sendBtn);
   } else if (m.status === 'sent') {
     footer = h('div', { class: 'card card-ok small' }, h('b', {}, 'Отправлено ' + fmtDate(m.sent_at) + '. '), 'Поручения у исполнителей, идеи у директора в «На решение», авторы связанных обращений уведомлены.');
   }
@@ -244,7 +244,7 @@ async function tasksScreen(opts) {
   opts = opts || {};
   const tasks = await API.get('/api/tasks/mine');
   const act = async (t, status) => { try { await API.post('/api/tasks/' + t.id + '/status', { status }); toast('Статус: ' + TASK_ST[status]); tasksScreen(opts); } catch (e) { toast(e.message, 'bad'); } };
-  root.replaceChildren(h('div', { class: 'wrap' }, back(opts.backHref || '#/'), h('div', { class: 'h1' }, 'Мои поручения'),
+  root.replaceChildren(h('div', { class: 'wrap' }, back(opts.backHref || '#/'), h('div', { class: 'h1' }, 'Мои поручения', helpBtn('my_tasks')),
     h('p', { class: 'hint' }, 'Поручения с совещаний, где вас назначили исполнителем.'),
     h('div', { class: 'card list' }, tasks.length ? tasks.map(t => h('div', { class: 'item' },
       h('div', { class: 'row' }, tag(t.task_status === 'done' ? 'st-done' : t.task_status === 'in_progress' ? 'st-work' : 'st-new', t.task_status_label),
@@ -260,8 +260,8 @@ async function tasksScreen(opts) {
 async function decisionsScreen(opts) {
   opts = opts || {};
   const d = await API.get('/api/director/ideas');
-  root.replaceChildren(h('div', { class: 'wrap' }, back(opts.backHref || '#/'), h('div', { class: 'row' }, h('div', { class: 'h1' }, 'На решение'), h('div', { class: 'spacer' }),
-      d.over_threshold ? tag('tag-flag', 'ждут дольше ' + d.threshold_days + ' дн: ' + d.over_threshold) : h('span', { class: 'small muted' }, 'порог ' + d.threshold_days + ' дн')),
+  root.replaceChildren(h('div', { class: 'wrap' }, back(opts.backHref || '#/'), h('div', { class: 'row' }, h('div', { class: 'h1' }, 'На решение', helpBtn('decision')), h('div', { class: 'spacer' }),
+      d.over_threshold ? tag('tag-flag', 'ждут дольше ' + d.threshold_days + ' дн: ' + d.over_threshold) : h('span', { class: 'small muted' }, 'порог ' + d.threshold_days + ' дн'), helpBtn('director_wait')),
     h('p', { class: 'hint' }, 'Идеи с совещаний и предложения из обращений, которым нужны ресурсы. «Принять» для идеи создаёт обращение ответственному по категории; отклонение — только с причиной.'),
     d.pending.length ? d.pending.map(i => i.source === 'appeal' ? appealDecisionCard(i, () => decisionsScreen(opts)) : ideaCard(i, () => decisionsScreen(opts))) : h('div', { class: 'card muted' }, 'Нет идей, ожидающих решения'),
     d.decided.length ? h('div', { class: 'h2' }, 'Решено') : null,

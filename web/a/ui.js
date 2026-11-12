@@ -73,7 +73,7 @@ function eventText(e) {
     case 'comment': return 'Комментарий: ' + p.text;
     case 'clarification_requested': return 'Запрошено уточнение: ' + p.text;
     case 'clarification_answered': return 'Ответ автора: ' + p.text;
-    case 'escalated': return 'Просрочено: нет первого ответа при SLA ' + p.sla_hours + ' ч — уведомлён руководитель';
+    case 'escalated': return 'Просрочено: нет первого ответа, срок ' + p.sla_hours + ' ч прошёл — уведомлён руководитель';
     case 'discussed_at_meeting': return 'Обсуждено на совещании' + (p.meeting_title ? ' «' + p.meeting_title + '»' : '') + (p.text ? ': ' + p.text : '');
     case 'director_requested': return 'Вынесено на решение директора' + (p.text ? ': ' + p.text : '');
     case 'director_decided': return 'Директор ' + (p.decision === 'accepted' ? 'принял' : 'отклонил') + ' предложение' + (p.text ? ': ' + p.text : '');
@@ -99,7 +99,7 @@ function history(events) {
 // «Требуют внимания» одной строкой (этап 9): [[число, ссылка, подпись], …] — нули не показываем
 function attentionLine(items) {
   const parts = items.filter(x => x[0]);
-  const el = h('div', { class: 'attention' }, h('b', {}, 'Требуют внимания: '));
+  const el = h('div', { class: 'attention' }, h('b', {}, 'Требуют внимания', helpBtn('attention'), ': '));
   if (!parts.length) { el.append(h('span', { class: 'muted' }, 'ничего — всё в порядке')); return el; }
   parts.forEach((x, i) => { if (i) el.append(h('span', { class: 'muted' }, ' · ')); el.append(h('a', { href: x[1] }, x[2] + ' ' + x[0])); });
   return el;
@@ -210,7 +210,7 @@ function briefBlock(a, opts) {
   const ai = a.brief_engine === 'openai';
   const head = [a.author ? a.author.name : 'Анонимно', a.branch, a.input_mode === 'voice' ? 'голосом' : 'текстом'].filter(Boolean).join(' · ');
   return h('div', { class: 'card ' + (b.unclear ? 'card-warn' : 'card-info') + ' brief' },
-    h('div', { class: 'row' }, h('b', {}, 'Коротко'), h('span', { class: 'small muted' }, head), h('div', { class: 'spacer' }), aiMark(ai, 'пересказ ИИ', b.note || 'без ИИ')),
+    h('div', { class: 'row' }, h('b', {}, 'Коротко'), helpBtn('brief'), h('span', { class: 'small muted' }, head), h('div', { class: 'spacer' }), aiMark(ai, 'пересказ ИИ', b.note || 'без ИИ')),
     h('div', { class: 'mt8' }, h('b', {}, 'Суть: '), b.gist || '—'),
     b.proposes ? h('div', {}, h('b', {}, 'Что предлагает: '), b.proposes) : null,
     b.expects ? h('div', {}, h('b', {}, 'Чего ждёт: '), b.expects) : null,
@@ -358,3 +358,44 @@ function personPicker(opts) {
   return box;
 }
 
+
+// ---------- словарь терминов (пункт 1 очереди 12.11): подсказки «?» и «Справка» из одного источника — GET /api/public/glossary ----------
+let GLOSSARY = null, _glossaryP = null, _helpOpenedAt = 0;
+function loadGlossary() {
+  if (!_glossaryP) _glossaryP = API.get('/api/public/glossary').then(g => { GLOSSARY = g; return g; }).catch(() => { GLOSSARY = { sections: [], terms: {} }; return GLOSSARY; });
+  return _glossaryP;
+}
+function term(key) { return GLOSSARY ? (GLOSSARY.terms[key] || null) : null; }
+// Кнопка «?» рядом с метрикой, настройкой или непонятным полем: по нажатию — поповер с 1–2 фразами простым языком (position: fixed —
+// не обрезается контейнерами с overflow и не выходит за правый край экрана). Текст — из словаря по ключу; ссылка «Подробнее в справке»,
+// если у страницы есть «Справка» (window.HELP_HREF).
+function helpBtn(key, opts) {
+  opts = opts || {};
+  const wrap = h('span', { class: 'help-wrap' });
+  const btn = h('button', { type: 'button', class: 'help-btn', title: 'Что это значит', 'aria-label': 'Что это значит', 'data-term': key }, icon('help-circle', { size: opts.size || 15 }));
+  const pop = h('div', { class: 'help-pop', role: 'tooltip' });
+  wrap.append(btn, pop);
+  btn.addEventListener('click', async ev => {
+    ev.preventDefault(); ev.stopPropagation();
+    const open = wrap.classList.contains('open');
+    closeHelp();
+    if (open) return;
+    await loadGlossary();
+    const t = term(key);
+    pop.replaceChildren(...[h('b', {}, t ? t.label : key), h('div', {}, t ? t.hint : 'Пояснения пока нет.'),
+      window.HELP_HREF ? h('a', { href: window.HELP_HREF + '?t=' + encodeURIComponent(key), class: 'small' }, 'Подробнее в справке') : null].filter(Boolean));
+    wrap.classList.add('open'); _helpOpenedAt = Date.now();
+    const r = btn.getBoundingClientRect();
+    const w = Math.min(300, window.innerWidth - 16);
+    pop.style.width = w + 'px';
+    pop.style.left = Math.max(8, Math.min(r.left, window.innerWidth - w - 8)) + 'px';
+    pop.style.top = (r.bottom + 6) + 'px';
+    const pr = pop.getBoundingClientRect();
+    if (pr.bottom > window.innerHeight - 8) pop.style.top = Math.max(8, r.top - pr.height - 6) + 'px';
+  });
+  return wrap;
+}
+function closeHelp() { document.querySelectorAll('.help-wrap.open').forEach(w => w.classList.remove('open')); }
+document.addEventListener('click', ev => { if (!ev.target.closest('.help-wrap')) closeHelp(); });
+document.addEventListener('keydown', ev => { if (ev.key === 'Escape') closeHelp(); });
+window.addEventListener('scroll', () => { if (Date.now() - _helpOpenedAt > 400) closeHelp(); }, true);   // прокрутка закрывает поповер (он fixed); сразу после открытия — не считается

@@ -437,6 +437,14 @@ def my_tasks(user: dict) -> list[dict]:
     return rows
 
 
+def my_tasks_counts(user_id: int) -> dict:
+    """Счётчик для приложения: невыполненные поручения сотрудника и сколько из них просрочено."""
+    today = db.now().date().isoformat()
+    rows = db.q("""SELECT i.due_date FROM meeting_items i JOIN meetings m ON m.id=i.meeting_id
+                   WHERE i.kind='task' AND i.removed=0 AND i.assignee_id=? AND m.status='sent' AND i.task_status != 'done'""", (user_id,))
+    return {"open": len(rows), "overdue": sum(1 for r in rows if r["due_date"] and r["due_date"] < today)}
+
+
 def set_task_status(item_id: int, user: dict, status: str) -> dict:
     i = db.one("SELECT i.*, m.created_by, m.title FROM meeting_items i JOIN meetings m ON m.id=i.meeting_id WHERE i.id=? AND i.kind='task'", (item_id,))
     if not i:

@@ -8,6 +8,7 @@ let reloadTimer = null;
 // ?compact=1 — для проверки без портала
 const COMPACT = (window.self !== window.top) || location.pathname.startsWith('/bitrix/') || new URLSearchParams(location.search).get('compact') === '1';
 if (COMPACT) document.documentElement.classList.add('compact');
+window.HELP_HREF = '#/help';   // подсказки «?» ведут в «Справку» панели (пункт 1 очереди 12.11)
 
 async function boot() {
   ME = await API.me();
@@ -16,7 +17,7 @@ async function boot() {
     root.replaceChildren(h('div', { class: 'wrap' }, h('div', { class: 'card card-info' }, 'Панель доступна ответственным, директору и администратору. ', h('a', { href: '/app' }, 'Открыть приложение сотрудника'), ' · ', h('a', { href: '/login' }, 'войти как другой пользователь'))));
     return;
   }
-  DICTS = await API.get('/api/dicts');
+  [DICTS] = await Promise.all([API.get('/api/dicts'), loadGlossary()]);
   renderTop();
   if (!document.getElementById('foot')) document.body.append(h('div', { id: 'foot', class: 'foot' }, 'демо · данные синтетические, имена вымышленные · разработано Cyber QALQAN Systems'));
   window.addEventListener('hashchange', route);
@@ -47,6 +48,7 @@ function renderTop() {
     h('a', { href: '#/queue', class: 'brand' }, h('img', { src: '/a/img/logo.svg', alt: 'Модус Трейд' }), h('span', {}, 'Модус Голос', h('small', {}, 'Панель'))),
     h('div', { class: 'nav' }, nav.map(([href, label]) => h('a', { href, class: hash.startsWith(href) || (href === '#/queue' && hash.startsWith('#/appeal')) ? 'active' : '' }, label))),
     h('div', { class: 'spacer' }),
+    h('a', { href: '#/help', class: 'btn btn-sm' + (hash.startsWith('#/help') ? ' on' : ''), title: 'Справка: термины простым языком', 'aria-label': 'Справка' }, icon('help-circle')),
     h('a', { href: '#/notifications', class: 'btn btn-sm bell', title: 'Уведомления' }, icon('bell'), ME.unread ? h('span', { class: 'n' }, String(ME.unread)) : null),
     h('a', { href: '/app', class: 'btn btn-sm' }, 'Приложение'),
     h('a', { href: '/login', class: 'btn btn-sm', title: ME.name + ' · ' + ME.role_label }, h('span', {}, ME.name), h('span', { class: 'role-lbl' }, ' · ' + ME.role_label)));
@@ -60,6 +62,7 @@ async function route() {
     if (p[0] === 'appeal') { S.view = 'queue'; S.selected = Number(p[1]); if (document.getElementById('queue-table')) { await loadCard(S.selected); return; } return await queue(); }
     if (p[0].startsWith('queue?')) { S.view = 'queue'; const qp = new URLSearchParams(p[0].slice(6)); S.filters = {}; for (const [k, v] of qp) S.filters[k] = v === '1' ? true : v; S.tab = tabFromFilters(); S.selected = null; return await queue(); }
     if (p[0] !== 'appeal' && p[0] !== 'queue') closeOverlay();
+    if (p[0] === 'help' || p[0].startsWith('help?')) { S.view = 'help'; return await helpScreen(new URLSearchParams(p[0].split('?')[1] || '').get('t')); }
     if (p[0] === 'summary') { S.view = 'summary'; return await summary(); }
     if (p[0] === 'notifications') { S.view = 'notifications'; return await notifications(); }
     if (p[0] === 'meetings' && p[1] === 'new') { S.view = 'meetings'; return await meetingStart({ backHref: '#/meetings', cardPrefix: '#/meetings/' }); }
@@ -235,7 +238,7 @@ async function loadQueue(flashId) {
   const cols = loadCols();
   const overdue = rows.filter(r => r.overdue).length, unassigned = rows.filter(r => r.unassigned).length;
   const counts = document.getElementById('queue-counts');
-  if (counts) counts.textContent = plural(rows.length, 'обращение', 'обращения', 'обращений') + (overdue ? ' · просрочено ' + overdue : '') + (unassigned ? ' · без ответственного ' + unassigned : '');
+  if (counts) counts.replaceChildren(plural(rows.length, 'обращение', 'обращения', 'обращений') + (overdue ? ' · просрочено ' + overdue : '') + (unassigned ? ' · без ответственного ' + unassigned : ''), helpBtn(S.tab === 'attention' ? 'attention' : 'queue'));
   const heads = ['Обращение', 'Статус', 'Ответственный', 'Возраст'].concat(EXTRA_COLS.filter(c => cols.has(c[0])).map(c => c[1]));
   const widths = [null, 176, 190, 92].concat(EXTRA_COLS.filter(c => cols.has(c[0])).map(c => c[2]));
   const tbl = h('table', { class: 'tbl queue' },
@@ -325,10 +328,10 @@ function cardContent(a, id) {
   const details = h('details', { class: 'card sect' }, h('summary', {}, 'Подробности'),
     h('div', { class: 'kv mt8' },
       kv('Автор', userLink(a.author, 'sm')), kv('Филиал', [a.branch, a.site_city ? 'объект: ' + a.site_city : null].filter(Boolean).join(' · ') || '—'), kv('Подразделение', a.department || '—'), kv('Категория', a.category || 'не определена'),
-      kv('Оценка автора', [a.author_urgency_label, a.author_scope_label].filter(Boolean).join(' · ') || 'не отвечал'), kv('Приоритет', a.priority_label + (a.priority_manual ? ' (изменён ответственным)' : '')),
+      kv(h('span', {}, 'Оценка автора', helpBtn('author_assessment')), [a.author_urgency_label, a.author_scope_label].filter(Boolean).join(' · ') || 'не отвечал'), kv(h('span', {}, 'Приоритет', helpBtn('priority')), a.priority_label + (a.priority_manual ? ' (изменён ответственным)' : '')),
       a.supports ? kv('«У меня так же»', String(a.supports)) : null, a.thanks ? kv('«Спасибо»', String(a.thanks)) : null,
       a.news_days !== null && a.news_days !== undefined ? kv('Последняя новость автору', a.news_days < 1 ? 'сегодня' : Math.floor(a.news_days) + ' дн назад') : null,
-      kv('Ответственный', a.responsible || 'не назначен'), kv('Первый ответ', (a.first_response_hours === null ? 'нет' : 'через ' + fmtHours(a.first_response_hours)) + ' · SLA ' + (a.sla || 48) + ' ч'),
+      kv('Ответственный', a.responsible || 'не назначен'), kv(h('span', {}, 'Первый ответ', helpBtn('first_response')), (a.first_response_hours === null ? 'нет' : 'через ' + fmtHours(a.first_response_hours)) + ' · срок ' + (a.sla || 48) + ' ч'),
       kv('Подано', fmtDate(a.created_at) + (a.input_mode === 'voice' ? ' · голосом' : '')),
       a.attachments.length ? kv('Вложения', h('span', {}, a.attachments.map(f => h('a', { href: '/api/attachments/' + f.id, target: '_blank' }, f.filename + ' ')))) : null));
   const full = a.brief ? h('details', { class: 'card sect' }, h('summary', {}, 'Показать полностью' + (a.input_mode === 'voice' ? ' (расшифровка голоса)' : '')), h('p', { class: 'pre' }, a.text), a.proposed_solution ? h('div', { class: 'small' }, h('b', {}, 'Предлагаемое решение: '), a.proposed_solution) : null) : null;
@@ -343,7 +346,7 @@ async function meetingsList() {
   const list = await API.get('/api/meetings' + (overdueOnly ? '?overdue=1' : ''));
   const st = s => s === 'sent' ? 'st-done' : s === 'review' ? 'st-review' : s === 'failed' ? 'st-rejected' : 'st-new';
   const tbl = h('table', { class: 'tbl' },
-    h('thead', {}, h('tr', {}, ['Дата', 'Совещание', 'Филиал', 'Ведущий', 'Итог', 'Статус', 'Поручения', 'Идеи'].map(t => h('th', {}, t)))),
+    h('thead', {}, h('tr', {}, ['Дата', 'Совещание', 'Филиал', 'Ведущий', 'Итог', 'Статус', 'Поручения', 'Идеи'].map(t => h('th', {}, t, t === 'Поручения' ? helpBtn('task') : t === 'Идеи' ? helpBtn('idea') : null)))),
     h('tbody', {}, list.map(m => h('tr', { onclick: () => { location.hash = '#/meetings/' + m.id; } },
       h('td', { class: 'small' }, fmtDate(m.created_at)), h('td', {}, h('b', {}, m.title), m.fallback ? h('div', {}, tag('tag-demo', m.demo ? 'демо-разбор без ИИ' : 'без ИИ')) : null),
       h('td', {}, m.branch || '—'), h('td', {}, m.creator || '—'), h('td', { class: 'small' }, m.summary_line || (m.error ? h('span', { class: 'muted' }, m.error) : '—')),
@@ -371,20 +374,20 @@ async function summary() {
   const attention = h('div', { class: 'card attention' }, attentionLine([[d.overdue, '#/queue?overdue=1', 'просрочено'], [d.unassigned, '#/queue?unassigned=1', 'без ответственного'], [l.decisions_over_threshold, '#/decisions', 'ждут решения'],
     [l.no_news, '#/queue?status=in_progress', 'без новостей'], [l.urgent_open, '#/queue?open=1&urgency=now', 'мешают работать'], [l.tasks_overdue, '#/meetings?overdue=1', 'поручения просрочены']]));
   const kpis = h('div', { class: 'kpis' },
-    h('div', { class: 'kpi' }, h('b', {}, String(d.open)), h('span', {}, 'открытых обращений')),
-    h('div', { class: 'kpi' }, h('b', {}, pct(d.considered_share)), h('span', {}, 'доля рассмотренных')),
-    h('div', { class: 'kpi' }, h('b', {}, fmtHours(d.avg_first_response_hours)), h('span', {}, 'среднее время первого ответа')),
-    h('div', { class: 'kpi' }, h('b', {}, String(d.done_period)), h('span', {}, 'реализовано за 30 дней')));
+    h('div', { class: 'kpi' }, h('b', {}, String(d.open)), h('span', {}, 'открытых обращений', helpBtn('kpi_open'))),
+    h('div', { class: 'kpi' }, h('b', {}, pct(d.considered_share)), h('span', {}, 'доля рассмотренных', helpBtn('kpi_considered'))),
+    h('div', { class: 'kpi' }, h('b', {}, fmtHours(d.avg_first_response_hours)), h('span', {}, 'среднее время первого ответа', helpBtn('kpi_first_response'))),
+    h('div', { class: 'kpi' }, h('b', {}, String(d.done_period)), h('span', {}, 'реализовано за 30 дней', helpBtn('kpi_done_period'))));
   const byType = h('div', { class: 'card' }, h('b', {}, 'По типам'), h('div', { class: 'row mt8' }, Object.entries(d.by_type).filter(([, n]) => n).map(([t, n]) => h('span', { class: 'badge tag-type' }, TYPES[t] + ': ' + n))),
     h('b', { class: 'mt16' }, 'По статусам'), h('div', { class: 'row mt8' }, Object.entries(d.by_status).filter(([, n]) => n).map(([s, n]) => h('span', { class: 'badge ' + STATUS[s][1] }, STATUS[s][0] + ': ' + n))));
-  const branches = h('div', { class: 'card' }, h('b', {}, 'Филиалы'), h('div', { class: 'hint' }, 'Количество обращений филиал не ранжирует — лига по качеству во вкладке «Лига».'),
+  const branches = h('div', { class: 'card' }, h('b', {}, 'Филиалы', helpBtn('by_branch')), h('div', { class: 'hint' }, 'Количество обращений филиал не ранжирует — лига по качеству во вкладке «Лига».'),
     h('table', { class: 'tbl mt8' }, h('thead', {}, h('tr', {}, ['Филиал', 'Всего', 'Открыто', 'Просрочено', 'Рассмотрено', 'Первый ответ', 'Реализовано', 'Главная тема'].map(t => h('th', {}, t)))),
       h('tbody', {}, d.by_branch.map(b => h('tr', { onclick: () => { S.filters = { branch_id: b.id }; S.tab = 'open'; location.hash = '#/queue'; } },
         h('td', {}, b.name), h('td', {}, b.total), h('td', {}, b.open), h('td', {}, b.overdue ? h('span', {}, h('span', { class: 'dot-overdue' }), String(b.overdue)) : ''),
         h('td', {}, pct(b.considered_share)), h('td', {}, fmtHours(b.avg_first_response_hours)), h('td', {}, b.done_total), h('td', { class: 'small' }, b.top_category || '—'))))));
   const clustersBox = h('div', { class: 'card' }, h('b', {}, 'Повторяющиеся темы'), h('div', { class: 'hint' }, 'Считаем…'));
   API.get('/api/panel/clusters').then(c => {
-    clustersBox.replaceChildren(h('div', { class: 'row' }, h('b', {}, 'Повторяющиеся темы'), aiMark(c.engine === 'embeddings', 'кластеры по смыслу (эмбеддинги ИИ), порог ' + c.threshold, 'по ключевым словам (без ИИ), порог ' + c.threshold)),
+    clustersBox.replaceChildren(h('div', { class: 'row' }, h('b', {}, 'Повторяющиеся темы', helpBtn('repeated_topics')), aiMark(c.engine === 'embeddings', 'похожие по смыслу (ИИ), порог ' + c.threshold, 'по ключевым словам (без ИИ), порог ' + c.threshold)),
       h('div', { class: 'hint' }, 'Группы из двух и более открытых обращений об одном и том же. Открытых всего: ' + c.open_total + '.'),
       c.clusters.length ? h('div', { class: 'mt8' }, c.clusters.map(k => h('div', { class: 'cluster' },
         h('div', { class: 'row' }, h('b', {}, plural(k.size, 'обращение', 'обращения', 'обращений')), k.category ? tag('tag-type', k.category) : null, k.supports ? h('span', { class: 'small muted' }, iconText('thumbs-up', String(k.supports))) : null, h('div', { class: 'spacer' }), h('span', { class: 'small muted' }, k.branches.join(' · '))),
@@ -414,16 +417,16 @@ function summaryBlockPanel(d) {
   const restBox = h('div', { class: 'hidden' }, rest.map(line));
   const moreBtn = rest.length ? h('button', { class: 'btn btn-sm btn-ghost', onclick: () => { restBox.classList.toggle('hidden'); moreBtn.replaceChildren(restBox.classList.contains('hidden') ? iconText('chevron-down', 'ещё ' + rest.length) : 'свернуть'); } }, iconText('chevron-down', 'ещё ' + rest.length)) : null;
   return h('div', { class: 'card summary-ai mt16' },
-    h('div', { class: 'row' }, h('div', { class: 'lbl' }, 'Сводка для директора'), aiMark(d.engine === 'openai', 'пересказ ИИ по фактам сервера', 'шаблон без ИИ'), h('div', { class: 'spacer' }), h('span', { class: 'small muted' }, fmtDate(d.at)), speakBtn, refreshBtn),
+    h('div', { class: 'row' }, h('div', { class: 'lbl' }, 'Сводка для директора'), helpBtn('summary'), aiMark(d.engine === 'openai', 'пересказ ИИ по фактам сервера', 'шаблон без ИИ'), h('div', { class: 'spacer' }), h('span', { class: 'small muted' }, fmtDate(d.at)), speakBtn, refreshBtn),
     lines.slice(0, 3).map(line), restBox, moreBtn);
 }
 
 async function leaguePanel() {
   const d = await API.get('/api/panel/league');
-  root.replaceChildren(h('div', { class: 'wrap wrap-wide' }, h('div', { class: 'h1' }, 'Лига филиалов'),
+  root.replaceChildren(h('div', { class: 'wrap wrap-wide' }, h('div', { class: 'h1' }, 'Лига филиалов', helpBtn('league')),
     h('div', { class: 'hint' }, 'Качество работы с обращениями, не их число: реализовано ' + Math.round(d.weights.done * 100) + ' % · рассмотрено ' + Math.round(d.weights.considered * 100) + ' % · скорость первого ответа ' + Math.round(d.weights.speed * 100) + ' % (веса — в настройках).'),
     h('div', { class: 'split mt16' },
-      h('div', { class: 'card' }, h('table', { class: 'tbl league' }, h('thead', {}, h('tr', {}, ['#', 'Филиал', 'Балл', 'Реализовано', 'Рассмотрено', 'Скорость', 'Открыто', 'Просрочено'].map(t => h('th', {}, t)))),
+      h('div', { class: 'card' }, h('table', { class: 'tbl league' }, h('thead', {}, h('tr', {}, ['#', 'Филиал', 'Балл', 'Реализовано', 'Рассмотрено', 'Скорость', 'Открыто', 'Просрочено'].map(t => h('th', {}, t, t === 'Балл' ? helpBtn('league_score') : t === 'Скорость' ? helpBtn('league_speed') : null)))),
         h('tbody', {}, d.items.map(b => h('tr', { onclick: () => { S.filters = { branch_id: b.id }; location.hash = '#/queue'; } }, h('td', {}, String(b.rank)), h('td', {}, h('b', {}, b.name), h('div', { class: 'small muted' }, b.total + ' обращений' + (b.enough ? '' : ' — мало данных'))), h('td', { class: 'score' }, h('b', {}, String(b.score))), h('td', {}, Math.round(b.done_share * 100) + ' %'), h('td', {}, Math.round(b.considered_share * 100) + ' %'), h('td', {}, Math.round(b.speed * 100) + ' %'), h('td', {}, String(b.open)), h('td', {}, b.overdue ? tag('tag-overdue', String(b.overdue)) : '0')))))),
       h('div', { class: 'card' }, h('b', {}, 'Топ сотрудников'), h('div', { class: 'list mt8' }, d.top.map((u, i) => h('div', { class: 'item', onclick: () => { location.href = '/app#/u/' + u.id; } }, h('div', { class: 'row' }, h('b', {}, (i + 1) + '.'), avatarEl(u), h('div', {}, h('b', {}, u.name), h('div', { class: 'small muted' }, [u.position, u.branch].filter(Boolean).join(' · '))), h('div', { class: 'spacer' }), h('span', { class: 'small row' }, iconText('star', String(u.points)), 'внедрено ' + u.implemented, iconText('heart', String(u.thanks)))))))))));
 }
@@ -432,13 +435,14 @@ async function adminScreen() {
   const d = await API.get('/api/admin/settings');
   const claims = await API.get('/api/admin/reward-claims');
   const st = d.settings;
-  const num = (key, label, val, unit, step) => { const i = h('input', { type: 'number', value: val === null || val === undefined ? '' : val, step: step || '1' }); i.dataset.key = key; return h('div', {}, h('label', { class: 'small muted' }, label), h('div', { class: 'field-unit' }, i, h('span', { class: 'unit' }, unit))); };
+  // каждая настройка — с подсказкой «?» из словаря терминов (пункт 1 очереди 12.11)
+  const num = (key, label, val, unit, step, help) => { const i = h('input', { type: 'number', value: val === null || val === undefined ? '' : val, step: step || '1' }); i.dataset.key = key; return h('div', {}, h('label', { class: 'small muted' }, label, help ? helpBtn(help) : null), h('div', { class: 'field-unit' }, i, h('span', { class: 'unit' }, unit))); };
   const pts = st.points || {};
-  const inputs = [num('director_wait_days', 'Предложение ждёт решения директора дольше', st.director_wait_days, 'дней — подсветка'), num('news_days', 'Автор без новостей дольше', st.news_days, 'дней — напоминание'),
-    num('points.accepted', 'Обращение принято к рассмотрению', pts.accepted, 'баллов автору'), num('points.done', 'Обращение реализовано', pts.done, 'баллов автору'), num('points.support', 'Коллега отметил «у меня так же»', pts.support, 'баллов автору'), num('points.support_cap', 'Не больше за поддержку одного обращения', pts.support_cap, 'баллов'),
-    num('league_weights.done', 'Лига: вес доли реализованных', (st.league_weights || {}).done, 'от 0 до 1', '0.1'), num('league_weights.considered', 'Лига: вес доли рассмотренных', (st.league_weights || {}).considered, 'от 0 до 1', '0.1'), num('league_weights.speed', 'Лига: вес скорости первого ответа', (st.league_weights || {}).speed, 'от 0 до 1', '0.1'),
-    num('similar_threshold.embeddings', 'Похожие обращения: сходство от', (st.similar_threshold || {}).embeddings, 'от 0 до 1', '0.05'), num('cluster_threshold.embeddings', 'Повторяющиеся темы: сходство от', (st.cluster_threshold || {}).embeddings, 'от 0 до 1', '0.05'),
-    num('invite_days', 'Личное приглашение действует', st.invite_days, 'дней')];
+  const inputs = [num('director_wait_days', 'Предложение ждёт решения директора дольше', st.director_wait_days, 'дней — подсветка', null, 'set_director_wait_days'), num('news_days', 'Автор без новостей дольше', st.news_days, 'дней — напоминание', null, 'set_news_days'),
+    num('points.accepted', 'Обращение принято к рассмотрению', pts.accepted, 'баллов автору', null, 'set_points_accepted'), num('points.done', 'Обращение реализовано', pts.done, 'баллов автору', null, 'set_points_done'), num('points.support', 'Коллега отметил «у меня так же»', pts.support, 'баллов автору', null, 'set_points_support'), num('points.support_cap', 'Не больше за поддержку одного обращения', pts.support_cap, 'баллов', null, 'set_points_support_cap'),
+    num('league_weights.done', 'Лига: вес доли реализованных', (st.league_weights || {}).done, 'от 0 до 1', '0.1', 'set_league_done'), num('league_weights.considered', 'Лига: вес доли рассмотренных', (st.league_weights || {}).considered, 'от 0 до 1', '0.1', 'set_league_considered'), num('league_weights.speed', 'Лига: вес скорости первого ответа', (st.league_weights || {}).speed, 'от 0 до 1', '0.1', 'set_league_speed'),
+    num('similar_threshold.embeddings', 'Похожие обращения: сходство от', (st.similar_threshold || {}).embeddings, 'от 0 до 1', '0.05', 'similar_threshold'), num('cluster_threshold.embeddings', 'Повторяющиеся темы: сходство от', (st.cluster_threshold || {}).embeddings, 'от 0 до 1', '0.05', 'cluster_threshold'),
+    num('invite_days', 'Личное приглашение действует', st.invite_days, 'дней', null, 'set_invite_days')];
   const saveBtn = h('button', { class: 'btn btn-sm btn-primary', onclick: async () => {
     const out = {};
     for (const box of inputs) { const i = box.querySelector('input'); if (i.value === '') continue; const v = Number(i.value); const [k, sub] = i.dataset.key.split('.'); if (sub) { out[k] = out[k] || { ...(st[k] || {}) }; out[k][sub] = v; } else out[k] = v; }
@@ -471,12 +475,12 @@ async function adminScreen() {
     staffSection(d, adminScreen),
     h('div', { class: 'split' },
       h('div', {},
-        h('div', { class: 'card' }, h('b', {}, 'Категории, ответственные, SLA'), h('div', { class: 'hint' }, 'Проблемы идут ответственному; предложения — ответственному за предложения, иначе в отдел развития.'),
-          h('table', { class: 'tbl cats mt8' }, h('colgroup', {}, [null, 200, 200, 150, 52].map(w => { const c = document.createElement('col'); if (w) c.style.width = w + 'px'; return c; })), h('thead', {}, h('tr', {}, ['Категория', 'Отвечает за проблемы', 'Отвечает за предложения', 'Первый ответ, часов', ''].map(t => h('th', {}, t)))), h('tbody', {}, catRows))),
+        h('div', { class: 'card' }, h('b', {}, 'Категории, ответственные, срок первого ответа', helpBtn('category')), h('div', { class: 'hint' }, 'Проблемы идут ответственному; предложения — ответственному за предложения, иначе в отдел развития.', helpBtn('dev_department')),
+          h('table', { class: 'tbl cats mt8' }, h('colgroup', {}, [null, 200, 200, 150, 52].map(w => { const c = document.createElement('col'); if (w) c.style.width = w + 'px'; return c; })), h('thead', {}, h('tr', {}, ['Категория', 'Отвечает за проблемы', 'Отвечает за предложения', 'Первый ответ, часов', ''].map(t => h('th', {}, t, t === 'Первый ответ, часов' ? helpBtn('first_response') : null)))), h('tbody', {}, catRows))),
         rewardsCard,
         h('div', { class: 'card' }, h('b', {}, 'Заявки на награды'), claims.length ? h('table', { class: 'tbl mt8' }, h('thead', {}, h('tr', {}, ['Кто', 'Награда', 'Статус', 'Когда', ''].map(t => h('th', {}, t)))), h('tbody', {}, claimRows)) : h('div', { class: 'muted small mt8' }, 'Заявок нет'))),
       h('div', {},
-        h('div', { class: 'card' }, h('b', {}, 'Настройки'), h('div', { class: 'grid2 mt8' }, inputs), h('div', { class: 'mt8' }, saveBtn), h('div', { class: 'hint mt8' }, 'Пороги похожести и кластеров — для режима ИИ; без ключа действуют пороги по ключевым словам.')),
+        h('div', { class: 'card' }, h('b', {}, 'Настройки'), h('div', { class: 'grid2 mt8' }, inputs), h('div', { class: 'mt8' }, saveBtn), h('div', { class: 'hint mt8' }, 'Пороги похожести и повторяющихся тем — для режима ИИ; без ключа действуют пороги по ключевым словам.')),
         bitrixCard,
         h('div', { class: 'card' }, h('div', { class: 'row' }, h('b', {}, 'Филиалы и QR'), h('div', { class: 'spacer' }), h('a', { href: '/api/admin/branches/posters.pdf', class: 'btn btn-sm btn-primary', target: '_blank', rel: 'noopener' }, iconText('printer', 'Все плакаты PDF'))),
           h('div', { class: 'list mt8' }, d.branches.map(b => h('div', { class: 'item branch-item noclick' }, h('div', { class: 'row' }, h('img', { src: b.qr_svg, alt: 'QR ' + b.name, class: 'qr-thumb' }), h('div', { class: 'spacer' }, h('b', {}, b.name), h('div', { class: 'small muted' }, b.kind_label)),
@@ -484,6 +488,30 @@ async function adminScreen() {
               h('button', { class: 'btn btn-sm', title: 'Скопировать ссылку на форму', onclick: async () => { try { await navigator.clipboard.writeText(b.form_url); toast('Ссылка скопирована: ' + b.form_url); } catch (e) { prompt('Скопируйте:', b.form_url); } } }, iconText('link', 'Скопировать ссылку')),
               h('a', { href: '/q/' + b.code, class: 'btn btn-sm btn-ghost', target: '_blank', rel: 'noopener', title: 'Открыть форму обращения' }, iconText('external-link', 'Открыть форму')))))))),
         h('div', { class: 'card' }, h('b', {}, 'Аватарки'), avatars.length ? h('div', { class: 'list mt8' }, avatars.map(u => h('div', { class: 'item' }, h('div', { class: 'row' }, avatarEl({ name: u.name, avatar: '/api/avatars/' + u.avatar }), h('span', {}, u.name), h('div', { class: 'spacer' }), h('button', { class: 'btn btn-sm btn-danger', onclick: async () => { await API.post('/api/admin/users/' + u.id + '/avatar/remove'); toast('Убрана'); adminScreen(); } }, 'Убрать'))))) : h('div', { class: 'muted small mt8' }, 'Пользовательских аватарок нет'))))));
+}
+
+// ---------- «Справка» (пункт 1 очереди 12.11): термины по разделам из единого словаря, поиск, переход по ссылке из подсказки «?» ----------
+
+async function helpScreen(termKey) {
+  const g = await loadGlossary();
+  const q = h('input', { type: 'search', class: 'search', placeholder: 'Найти термин', 'aria-label': 'Поиск по справке' });
+  const body = h('div', { id: 'help-body' });
+  const render = () => {
+    const needle = q.value.trim().toLowerCase();
+    const cards = g.sections.map(sec => {
+      const keys = sec.terms.filter(k => { const t = g.terms[k]; return !needle || (t.label + ' ' + t.hint + ' ' + (t.also || []).join(' ')).toLowerCase().includes(needle); });
+      if (!keys.length) return null;
+      return h('div', { class: 'card' }, h('div', { class: 'lbl' }, sec.title), h('div', { class: 'help-list mt8' }, keys.map(k => { const t = g.terms[k];
+        return h('div', { class: 'help-term' + (k === termKey ? ' hit' : ''), id: 'term-' + k }, h('b', {}, t.label, t.also && t.also.length ? h('span', { class: 'small muted' }, ' · иначе говорят: ' + t.also.join(', ')) : null), h('div', { class: 'small' }, t.hint)); })));
+    }).filter(Boolean);
+    body.replaceChildren(...(cards.length ? cards : [h('div', { class: 'card muted' }, 'Ничего не нашли — попробуйте другое слово')]));
+  };
+  q.addEventListener('input', render);
+  render();
+  root.replaceChildren(h('div', { class: 'wrap' }, h('div', { class: 'row' }, h('div', { class: 'h1' }, 'Справка'), h('div', { class: 'spacer' }), q),
+    h('p', { class: 'hint' }, 'Термины системы простым языком, по разделам. Те же слова использует ИИ в сводке и пересказах. Значок «?» рядом с цифрой, настройкой или полем показывает ту же подсказку на месте.'),
+    body));
+  if (termKey) { const el = document.getElementById('term-' + termKey); if (el) el.scrollIntoView({ block: 'center' }); }
 }
 
 async function notifications() {

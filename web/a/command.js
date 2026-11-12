@@ -13,8 +13,8 @@ function commandPanel(opts) {
   Voice.attach(mic, ta, { onText: () => parse() });
   run.addEventListener('click', parse);
   ta.addEventListener('keydown', ev => { if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); parse(); } });
-  if (opts.compact) box.append(h('div', { class: 'row' }, h('div', { class: 'spacer' }, ta), mic, run), result);
-  else box.append(h('div', { class: 'row' }, h('div', { class: 'lbl' }, 'Команда'), h('span', { class: 'hint' }, 'голосом или текстом: напоминания, новости по обращениям, «На решение», сводка')),
+  if (opts.compact) box.append(h('div', { class: 'row' }, h('div', { class: 'spacer' }, ta), mic, run, helpBtn('command')), result);
+  else box.append(h('div', { class: 'row' }, h('div', { class: 'lbl' }, 'Команда'), helpBtn('command'), h('span', { class: 'hint' }, 'голосом или текстом: напоминания, новости по обращениям, «На решение», сводка')),
     h('div', { class: 'row mt8' }, h('div', { class: 'spacer' }, ta), mic, run), result);
 
   async function parse() {
@@ -65,7 +65,7 @@ function commandPanel(opts) {
       return h('div', { class: 'cmd-rec' },
         h('div', { class: 'row' }, h('b', {}, rec.name), h('span', { class: 'small muted' }, [rec.position, rec.branch].filter(Boolean).join(' · ')), h('div', { class: 'spacer' }),
           h('span', { class: 'small muted' }, rec.items.length === 1 ? (rec.items[0].number || 'поручение') : plural(rec.items.length, rec.items[0].kind === 'task' ? 'поручение' : 'обращение', rec.items[0].kind === 'task' ? 'поручения' : 'обращения', rec.items[0].kind === 'task' ? 'поручений' : 'обращений'))),
-        h('div', { class: 'small' }, rec.items.map(i => h('div', { class: 'muted' }, (i.number ? i.number + ' — ' : '') + i.title + (i.kind === 'task' ? ' (срок был ' + i.due_label + ')' : i.news_days !== undefined && i.news_days !== null ? ' · без новостей ' + i.news_days + ' дн' : i.overdue ? ' · SLA прошёл' : '')))),
+        h('div', { class: 'small' }, rec.items.map(i => h('div', { class: 'muted' }, (i.number ? i.number + ' — ' : '') + i.title + (i.kind === 'task' ? ' (срок был ' + i.due_label + ')' : i.news_days !== undefined && i.news_days !== null ? ' · без новостей ' + i.news_days + ' дн' : i.overdue ? ' · срок первого ответа прошёл' : '')))),
         msg);
     });
     const send = h('button', { class: 'btn btn-sm btn-primary', disabled: p.empty }, iconText('send', 'Отправить'));

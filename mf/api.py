@@ -13,7 +13,7 @@ from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, Reque
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
-from . import ai, appeals, auth, commands, db, demo, director, meetings, posters, realtime, staff
+from . import ai, appeals, auth, commands, db, demo, director, glossary, meetings, posters, realtime, staff
 from .ai import llm, similar, stt
 from .integrations import bitrix
 from . import config
@@ -94,6 +94,12 @@ async def public_rules():
     cfg = appeals.points_cfg()
     rewards = db.q("SELECT title, description, cost_points FROM rewards WHERE active=1 ORDER BY id")
     return {"points": cfg, "rewards": rewards, "director_wait_days": appeals.director_wait_days()}
+
+
+@router.get("/public/glossary")
+async def public_glossary():
+    """Единый словарь терминов (пункт 1 очереди 12.11): подсказки «?» и страница «Справка» берут тексты отсюда, промпты ИИ — из той же структуры."""
+    return glossary.public()
 
 
 @router.get("/public/config")
@@ -257,6 +263,8 @@ async def me(request: Request):
     out = auth.public(user)
     out["unread"] = db.one("SELECT COUNT(*) AS n FROM notifications WHERE user_id=? AND read_at IS NULL", (user["id"],))["n"]
     out["points"] = appeals.balance(user["id"])
+    t = meetings.my_tasks_counts(user["id"])   # «Мои поручения» со счётчиком невыполненных (пункт 1 очереди 12.11)
+    out["tasks_open"], out["tasks_overdue"] = t["open"], t["overdue"]
     return out
 
 
