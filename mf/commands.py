@@ -85,12 +85,15 @@ def deadline_info(text: str | None, base: date | None = None) -> dict | None:
     if d is None:
         return {"text": text, "date": None, "time": tm, "label": None}
     dd = date.fromisoformat(d)
-    if dd == base:
+    weekday_said = any(s in t for s, _ in meetings.WEEKDAYS)
+    if weekday_said:   # как сказал директор: «до пятницы (13.11)», даже если пятница — завтра
+        label = "до " + WEEKDAY_GEN[dd.weekday()] + f" ({dd.strftime('%d.%m')})"
+    elif dd == base:
         label = "сегодня"
     elif dd == base + timedelta(days=1):
         label = "завтра"
     else:
-        label = "до " + (WEEKDAY_GEN[dd.weekday()] + f" ({dd.strftime('%d.%m')})" if any(s in t for s, _ in meetings.WEEKDAYS) else dd.strftime("%d.%m"))
+        label = "до " + dd.strftime("%d.%m")
     if tm:
         label += f" до {tm}" if dd == base or dd == base + timedelta(days=1) else f" {tm}"
     return {"text": text, "date": d, "time": tm, "label": label}

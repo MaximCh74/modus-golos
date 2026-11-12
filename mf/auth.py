@@ -9,6 +9,7 @@ from fastapi import HTTPException, Request
 from . import db
 
 COOKIE = "mf_sid"
+FRAME_COOKIE = "mf_frame"   # признак сессии внутри iframe Битрикс24 (партиционированная cookie): для таких запросов разрешаем встраивание
 ROLES = ("employee", "responsible", "director", "admin")
 STAFF = ("responsible", "director", "admin")
 ROLE_LABEL = {"employee": "Сотрудник", "responsible": "Ответственный", "director": "Директор", "admin": "Администратор"}
@@ -19,7 +20,13 @@ def user_by_id(user_id: int) -> dict | None:
 
 
 def current(request: Request) -> dict | None:
-    token = request.cookies.get(COOKIE)
+    """Сессия: заголовок Authorization: Bearer (внутри iframe Битрикс24 — cookie третьей стороны может не дойти), параметр ?s= (первое
+    открытие во фрейме и SSE, где заголовок не поставить), иначе обычная cookie."""
+    token = None
+    auth_header = request.headers.get("authorization", "")
+    if auth_header.lower().startswith("bearer "):
+        token = auth_header[7:].strip()
+    token = token or request.query_params.get("s") or request.cookies.get(COOKIE)
     if not token:
         return None
     return db.one("SELECT u.* FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token=? AND u.active=1", (token,))
@@ -45,7 +52,11 @@ def login(user_id: int) -> str:
 def set_cookie(response, token: str, cross_site: bool = False) -> None:
     """Сессионная cookie. cross_site=True — вход из iframe Битрикс24: браузер отдаёт cookie третьей стороне только с SameSite=None; Secure."""
     if cross_site:
-        response.set_cookie(COOKIE, token, httponly=True, samesite="none", secure=True, max_age=30 * 86400, path="/")
+        # CHIPS: Partitioned — cookie привязана к паре «наш сайт внутри портала», браузеры (Chrome, Firefox) отдают её во фрейме;
+        # Starlette не знает атрибут Partitioned, поэтому заголовок собирается вручную
+        age = 30 * 86400
+        response.headers.append("set-cookie", f"{COOKIE}={token}; Path=/; Max-Age={age}; HttpOnly; Secure; SameSite=None; Partitioned")
+        response.headers.append("set-cookie", f"{FRAME_COOKIE}=1; Path=/; Max-Age={age}; Secure; SameSite=None; Partitioned")
     else:
         response.set_cookie(COOKIE, token, httponly=True, samesite="lax", max_age=30 * 86400, path="/")
 

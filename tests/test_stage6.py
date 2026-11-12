@@ -63,8 +63,12 @@ def test_bitrix_oauth_login_notify_iframe_install(c, monkeypatch):
     monkeypatch.setattr(bitrix, "request_fn", fake)
     bitrix.tokens_path().unlink(missing_ok=True)
     assert bitrix.configured() and c.get("/api/public/config").json()["bitrix"] is True
-    r = c.get("/")
-    assert "https://*.bitrix24.kz" in r.headers["content-security-policy"] and "x-frame-options" not in r.headers
+    r = c.get("/")   # остальной сайт — по-прежнему запрет встраивания
+    assert "frame-ancestors 'none'" in r.headers["content-security-policy"] and r.headers["x-frame-options"] == "DENY"
+    r = c.get("/bitrix/login", follow_redirects=False)   # /bitrix/* — только портал из .env
+    assert "frame-ancestors 'self' https://modus-test.bitrix24.kz;" in r.headers["content-security-policy"] and "x-frame-options" not in r.headers
+    r = c.get("/", headers={"cookie": "mf_frame=1"})   # сессия из iframe — встраивание разрешено на любом пути
+    assert "https://modus-test.bitrix24.kz" in r.headers["content-security-policy"] and "x-frame-options" not in r.headers
     # снаружи: кнопка → авторизация на портале → code → токены → user.current → наш сотрудник
     r = c.get("/bitrix/login", params={"next": "/app"}, follow_redirects=False)
     assert r.status_code == 302 and r.headers["location"].startswith("https://modus-test.bitrix24.kz/oauth/authorize/?client_id=local.abc&state=")
@@ -86,9 +90,18 @@ def test_bitrix_oauth_login_notify_iframe_install(c, monkeypatch):
     calls.clear()
     appeals.notify(3, "Ерлан не сопоставлен", "/app")
     assert not [x for x in calls if x[0].endswith("im.notify.system.add")]
-    # внутри портала: POST с AUTH_ID → сотрудник опознан, cookie для iframe (SameSite=None; Secure)
+    # внутри портала: POST с AUTH_ID → сотрудник опознан → сессия по токену в адресе + партиционированная cookie
+    c.cookies.clear()
     r = c.post("/bitrix/app", data={"AUTH_ID": "at1", "REFRESH_ID": "rt1", "member_id": "m1", "PLACEMENT": "DEFAULT"}, follow_redirects=False)
-    assert r.status_code == 303 and r.headers["location"] == "/panel" and "samesite=none" in r.headers["set-cookie"].lower()
+    assert r.status_code == 303 and r.headers["location"].startswith("/bitrix/app?s=")
+    cookies = r.headers.get_list("set-cookie")
+    assert any("mf_sid=" in x and "SameSite=None" in x and "Partitioned" in x and "Secure" in x for x in cookies) and any("mf_frame=1" in x for x in cookies)
+    sid = r.headers["location"].split("s=")[1]
+    c.cookies.clear()
+    r = c.get(r.headers["location"])   # страница панели по токену, без cookie; встраивание разрешено порталу
+    assert r.status_code == 200 and "panel.js" in r.text and "https://modus-test.bitrix24.kz" in r.headers["content-security-policy"]
+    assert c.get("/api/me", headers={"Authorization": "Bearer " + sid}).json()["name"] == "Айгерим Нурланова"
+    assert c.get("/api/me", params={"s": sid}).status_code == 200 and c.get("/api/me").status_code == 401
     # redirect OAuth на «Путь обработчика» — тот же адрес с code и state
     state2 = c.get("/bitrix/login", follow_redirects=False).headers["location"].split("state=")[1]
     assert c.get("/bitrix/app", params={"code": "c0de", "state": state2}, follow_redirects=False).status_code == 302

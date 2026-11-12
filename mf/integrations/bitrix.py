@@ -24,8 +24,7 @@ from .. import config, db
 
 log = logging.getLogger("mf.bitrix")
 OAUTH_HOST = os.environ.get("BITRIX_OAUTH_HOST", "https://oauth.bitrix24.tech").rstrip("/")
-# откуда разрешаем показывать нашу систему в iframe (CSP frame-ancestors), когда интеграция настроена
-FRAME_ANCESTORS = "https://*.bitrix24.kz https://*.bitrix24.ru https://*.bitrix24.com https://*.bitrix24.eu https://*.bitrix24.by"
+# встраивание в iframe разрешается только порталу из .env: frame-ancestors https://<BITRIX_PORTAL> (mf/main.py)
 SCOPES_NEEDED = ("user", "im", "task")   # user (или user_brief) — user.current; im — im.notify.*; task — tasks.task.add (при BITRIX_TASKS=1)
 TIMEOUT = 12.0
 

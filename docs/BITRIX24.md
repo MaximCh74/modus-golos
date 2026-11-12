@@ -12,7 +12,7 @@
 | Методы и скоупы | сверены по apidocs.bitrix24.ru (ссылки в тексте) |
 | Код интеграции (`mf/integrations/bitrix.py`, маршруты `/bitrix/*` в `mf/main.py`) | написан по документации, покрыт тестами с подменённым HTTP (`tests/test_stage6.py`); **на живом портале не проверен** — ждёт тестовый портал |
 | Без настроек в `.env` | интеграция выключена: кнопок «Войти через Битрикс24» нет, уведомления не дублируются, `/bitrix/*` отвечает 404. Ничего не имитируется |
-| Проверено на живом портале | **пока ничего** — портала нет. После проверки здесь появятся скрины: пункт в левом меню, вход, уведомление в чате |
+| Проверено на живом портале | **12.11.2026, портал `b24-oocxsn.bitrix24.kz`, локальное приложение id 2**: пункт «Модус Голос» в меню есть, установка прошла (по словам владельца). Первое открытие во фрейме упёрлось в наши заголовки (X-Frame-Options / frame-ancestors 'none') — исправлено: на `/bitrix/*` и для сессий из фрейма `frame-ancestors 'self' https://<портал из .env>`, X-Frame-Options снят; сессия во фрейме — по нашему токену (`?s=` в адресе, заголовок `Authorization: Bearer`), cookie — `SameSite=None; Secure; Partitioned`. Скрины входа и уведомления — после проверки владельцем |
 
 ## 1. Что сделать владельцу: тестовый портал (10–15 минут)
 
@@ -38,7 +38,7 @@
 5. **Положить секреты в `.env`** на ноутбуке с системой (файл в `.gitignore`, в чат не писать):
 
    ```
-   BITRIX_PORTAL=modus-test.bitrix24.kz
+   BITRIX_PORTAL=b24-oocxsn.bitrix24.kz
    BITRIX_CLIENT_ID=local.xxxxxxxx.xxxxxxxx
    BITRIX_CLIENT_SECRET=…
    BITRIX_TASKS=1        # по желанию: поручения → задачи Битрикса
@@ -96,10 +96,12 @@
   `tasks.task.add` при отправке совещания (если `BITRIX_TASKS=1`). Токены портала — `var/bitrix_tokens.json` (папка данных, не база:
   база уходит в демо-снапшот в git).
 - Маршруты (`mf/main.py`): `GET /bitrix/login` → авторизация на портале; `GET /bitrix/callback` и `GET /bitrix/app?code=…` → токены →
-  `user.current` → сессия; `POST /bitrix/app` (iframe, `AUTH_ID`) → сессия с cookie `SameSite=None; Secure` (иначе браузер не отдаёт
-  cookie внутри чужого сайта); `POST /bitrix/install` → токены портала + страница с `BX24.installFinish()` (на этом маршруте CSP
-  разрешает `https://api.bitrix24.com`). С настроенной интеграцией CSP получает `frame-ancestors https://*.bitrix24.kz …` вместо
-  `'none'`, `X-Frame-Options` снимается.
+  `user.current` → сессия; `POST /bitrix/app` (iframe, `AUTH_ID`) → сотрудник опознан → 303 на `/bitrix/app?s=<наш токен сессии>`:
+  страница приложения или панели открывается по этому адресу, API получает токен заголовком `Authorization: Bearer`, SSE — параметром
+  `?s=`; параллельно ставится cookie `SameSite=None; Secure; Partitioned` (CHIPS) — для переходов внутри фрейма; `POST /bitrix/install` →
+  токены портала + страница с `BX24.installFinish()` (на этом маршруте CSP разрешает `https://api.bitrix24.com`). Встраивание:
+  `frame-ancestors 'self' https://<BITRIX_PORTAL>` только на `/bitrix/*` и для запросов с cookie сессии из фрейма (`mf_frame`), там же
+  снимается `X-Frame-Options`; остальной сайт — `'none'` + `DENY`.
 - Фронт: `/login` и стартовая показывают «Войти через Битрикс24», только если `/api/public/config` вернул `bitrix: true`; «Войти как…»
   остаётся запасным демо-входом. Администратор видит статус интеграции и может вписать почту / ID Битрикса сотруднику
   (Панель → Администрирование → Сотрудники).

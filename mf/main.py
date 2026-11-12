@@ -25,7 +25,10 @@ CSP_BASE = ("default-src 'self'; script-src 'self'; style-src 'self'; img-src 's
             "base-uri 'self'; form-action 'self'")
 CSP = CSP_BASE.format(frame="'none'")
 # страница установки приложения Битрикс24 грузит их JS SDK (BX24.installFinish) — только на этом маршруте
-CSP_BITRIX_INSTALL = CSP_BASE.format(frame="'self' " + bitrix.FRAME_ANCESTORS).replace("script-src 'self'", "script-src 'self' https://api.bitrix24.com")
+
+
+def csp_bitrix_install() -> str:
+    return CSP_BASE.format(frame=f"'self' https://{bitrix.portal()}").replace("script-src 'self'", "script-src 'self' https://api.bitrix24.com")
 SECURITY_HEADERS = {
     "Content-Security-Policy": CSP,
     "X-Content-Type-Options": "nosniff",
@@ -36,13 +39,17 @@ SECURITY_HEADERS = {
 }
 
 
-def security_headers() -> dict:
-    """С настроенным Битрикс24 система открывается в iframe портала: frame-ancestors вместо 'none', X-Frame-Options снимается
-    (он не умеет список источников; современные браузеры и так предпочитают CSP)."""
+def security_headers(scope) -> dict:
+    """Встраивание разрешено только порталу из .env (frame-ancestors https://<портал>) и только для /bitrix/* и запросов с сессией
+    из iframe (cookie mf_frame, выставляется при входе через портал): X-Frame-Options на них снимается. Остальной сайт — запрет."""
     if not bitrix.configured():
         return SECURITY_HEADERS
+    path = scope.get("path", "")
+    cookie = b"".join(v for k, v in scope.get("headers", []) if k == b"cookie").decode("latin-1")
+    if not (path.startswith("/bitrix/") or f"{auth.FRAME_COOKIE}=1" in cookie):
+        return SECURITY_HEADERS
     h = {k: v for k, v in SECURITY_HEADERS.items() if k != "X-Frame-Options"}
-    h["Content-Security-Policy"] = CSP_BASE.format(frame="'self' " + bitrix.FRAME_ANCESTORS)
+    h["Content-Security-Policy"] = CSP_BASE.format(frame=f"'self' https://{bitrix.portal()}")
     h["Cross-Origin-Opener-Policy"] = "unsafe-none"
     return h
 PAGES = {"/": "index.html", "/login": "login.html", "/app": "app.html", "/panel": "panel.html"}
@@ -62,7 +69,7 @@ class Headers:
         async def send_wrapped(message):
             if message["type"] == "http.response.start":
                 headers = MutableHeaders(scope=message)
-                for k, v in security_headers().items():
+                for k, v in security_headers(scope).items():
                     if k not in headers:
                         headers.append(k, v)
                 if path.startswith("/a/") or not path.startswith("/api/"):
@@ -220,7 +227,9 @@ async def bitrix_callback(request: Request, code: str = "", state: str = ""):
 
 @app.api_route("/bitrix/app", methods=["GET", "POST"])
 async def bitrix_app(request: Request):
-    """Внутри портала (iframe): Битрикс открывает этот адрес POST-ом с AUTH_ID и т. д. → сотрудник опознаётся автоматически."""
+    """Внутри портала (iframe): Битрикс открывает этот адрес POST-ом с AUTH_ID → сотрудник опознаётся → сессия по нашему токену
+    (в адресе ?s= и заголовке Authorization, cookie — партиционированная, как запасной путь) → та же SPA (приложение или панель),
+    но по адресу /bitrix/app, где встраивание разрешено порталу."""
     _bitrix_required()
     form = await _form(request) if request.method == "POST" else {}
     if request.method == "GET" and request.query_params.get("code") and request.query_params.get("state"):
@@ -229,7 +238,7 @@ async def bitrix_app(request: Request):
     if not form.get("AUTH_ID"):
         user = auth.current(request)
         if user:
-            return RedirectResponse(_home_for(user), status_code=302)
+            return page("panel.html" if user["role"] != "employee" else "app.html")
         return HTMLResponse("<!doctype html><meta charset='utf-8'><link rel='stylesheet' href='/a/style.css'><div class='wrap'><div class='card card-info'>"
                             "Откройте «Модус Голос» из левого меню Битрикс24 — вход произойдёт автоматически.</div></div>")
     try:
@@ -238,9 +247,15 @@ async def bitrix_app(request: Request):
         raise HTTPException(502, f"Битрикс24: {e}")
     if not user:
         return HTMLResponse(_not_mapped_page(), status_code=403)
+    if not bitrix.load_tokens():   # первое открытие: токены портала для уведомлений, если установка до нас не дошла
+        try:
+            bitrix.install_from_form(form)
+        except bitrix.BitrixError:
+            pass
     auth.logout(request.cookies.get(auth.COOKIE))
-    resp = RedirectResponse(_home_for(user), status_code=303)
-    auth.set_cookie(resp, auth.login(user["id"]), cross_site=True)
+    token = auth.login(user["id"])
+    resp = RedirectResponse(f"/bitrix/app?s={token}", status_code=303)
+    auth.set_cookie(resp, token, cross_site=True)
     return resp
 
 
@@ -258,7 +273,7 @@ async def bitrix_install(request: Request):
         user = await _run(bitrix.login_from_app, form)
     except bitrix.BitrixError:
         user = None
-    resp = HTMLResponse(bitrix.INSTALL_PAGE, headers={"Content-Security-Policy": CSP_BITRIX_INSTALL})
+    resp = HTMLResponse(bitrix.INSTALL_PAGE, headers={"Content-Security-Policy": csp_bitrix_install()})
     if user:
         auth.set_cookie(resp, auth.login(user["id"]), cross_site=True)
     return resp
