@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Сборка подписанных APK для Android (TWA через Bubblewrap): «Модус Голос» (~/MODUS_ANDROID/app) и «Директор» (~/MODUS_ANDROID/boss).
 # Пароли ключа подписи спрашиваются при запуске без отображения, живут только в переменных окружения этого процесса и нигде не
-# сохраняются (ни в файлы, ни в журналы). Готовые APK копируются в demo/android/ (modus-golos.apk, modus-golos-director.apk).
+# сохраняются (ни в файлы, ни в журналы); перед сборкой пароли проверяются keytool, а в выводе Bubblewrap они маскируются (при ошибке
+# он печатает команду apksigner с паролями). Готовые APK копируются в demo/android/ (modus-golos.apk, modus-golos-director.apk).
 #   tools/build_apk.sh            — собрать оба приложения
 #   tools/build_apk.sh app|boss   — только одно
 # Пути можно переопределить переменными MODUS_ANDROID, BUBBLEWRAP, JAVA_HOME, ANDROID_HOME. Подробности — docs/ANDROID.md.
@@ -37,13 +38,21 @@ read -rs -p "Пароль ключа modusgolos (Enter — тот же, что �
 [ -n "$KEY_PASS" ] || KEY_PASS="$KS_PASS"
 export BUBBLEWRAP_KEYSTORE_PASSWORD="$KS_PASS" BUBBLEWRAP_KEY_PASSWORD="$KEY_PASS"
 unset KS_PASS KEY_PASS
+# проверка паролей до сборки (keytool читает их из переменных окружения — в командной строке и выводе их нет)
+"$JAVA_HOME/bin/keytool" -list -keystore "$ANDROID_DIR/modus-golos.keystore" -alias modusgolos -storepass:env BUBBLEWRAP_KEYSTORE_PASSWORD >/dev/null 2>&1 \
+  || fail "пароль хранилища не подходит к $ANDROID_DIR/modus-golos.keystore (это пароль из отчёта сессии 12.11, не ваш обычный)"
+"$JAVA_HOME/bin/keytool" -certreq -keystore "$ANDROID_DIR/modus-golos.keystore" -alias modusgolos -storepass:env BUBBLEWRAP_KEYSTORE_PASSWORD \
+  -keypass:env BUBBLEWRAP_KEY_PASSWORD -file /dev/null >/dev/null 2>&1 || fail "пароль ключа modusgolos не подходит"   # certreq трогает закрытый ключ, хранилище не меняет
+echo "Пароли подходят."
+# вывод Bubblewrap фильтруем: при ошибке он печатает команду apksigner вместе с паролями
+mask() { sed -E 's/(pass:")[^"]*(")/\1***\2/g; s/(pass:)[^ "]+/\1***/g'; }
 
 mkdir -p "$OUT"
 for t in $TARGETS; do
   case "$t" in app) name="modus-golos.apk" ;; boss) name="modus-golos-director.apk" ;; esac
   echo
   echo "== $t → demo/android/$name"
-  ( cd "$ANDROID_DIR/$t" && "$BW" build --skipPwaValidation )
+  ( cd "$ANDROID_DIR/$t" && "$BW" build --skipPwaValidation 2>&1 | mask )
   [ -f "$ANDROID_DIR/$t/app-release-signed.apk" ] || fail "сборка $t не дала app-release-signed.apk"
   cp "$ANDROID_DIR/$t/app-release-signed.apk" "$OUT/$name"
   ver=$(grep -E '"appVersion(Name|Code)"' "$ANDROID_DIR/$t/twa-manifest.json" | tr -d ' ",' | paste -sd' ' -)
