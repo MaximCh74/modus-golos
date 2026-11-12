@@ -473,7 +473,12 @@ def boss_greeting(facts: dict) -> str:
 # ---------- озвучка (OpenAI TTS тем же ключом) ----------
 
 TTS_MODEL = os.environ.get("MF_TTS_MODEL", "gpt-4o-mini-tts")
-TTS_VOICE = os.environ.get("MF_TTS_VOICE", "alloy")
+# Голос помощника — выбор владельца 13.11 по образцам (MODUS_голоса_помощника_12.11, «вторая девушка» = 02_женский_marin, скорость 1.1):
+# marin с тёплой инструкцией тона, как в образце. Переопределяется MF_TTS_VOICE / MF_TTS_INSTRUCTIONS.
+TTS_VOICE = os.environ.get("MF_TTS_VOICE", "marin")
+TTS_INSTRUCTIONS = os.environ.get("MF_TTS_INSTRUCTIONS") or (
+    "Говори естественно и тепло, как живой помощник руководителя: спокойно, дружелюбно, с живыми паузами между фразами, "
+    "без дикторской и роботной интонации. Русский язык, числа произноси чётко.")
 # Скорость озвучки (замечание владельца 12.11: «слишком медленно» → +10 %). У gpt-4o-mini-tts параметр speed не действует —
 # ускоряем готовый mp3 через ffmpeg atempo (высота голоса сохраняется).
 TTS_SPEED = float(os.environ.get("MF_TTS_SPEED", "1.1") or 1.0)
@@ -494,7 +499,7 @@ def faster(mp3: bytes, speed: float = TTS_SPEED) -> bytes:
 
 
 def speak(text: str) -> bytes:
-    """Текст → mp3. Деловой спокойный тон; кэширует вызывающий код (один и тот же текст — один вызов)."""
+    """Текст → mp3 голосом помощника (TTS_VOICE, тёплый тон TTS_INSTRUCTIONS); кэширует вызывающий код (один и тот же текст — один вызов)."""
     if not available():
         raise LLMError("OPENAI_API_KEY не задан")
     from . import budget
@@ -504,6 +509,6 @@ def speak(text: str) -> bytes:
         raise LLMError(str(e)) from e
     kwargs = {"model": TTS_MODEL, "voice": TTS_VOICE, "input": text[:4000], "response_format": "mp3"}
     if TTS_MODEL.startswith("gpt-4o"):
-        kwargs["instructions"] = "Деловой, спокойный тон, русский язык, без спешки. Это короткая сводка для директора компании."
+        kwargs["instructions"] = TTS_INSTRUCTIONS
     r = _client().audio.speech.create(**kwargs)
     return faster(r.content)
