@@ -25,7 +25,7 @@ DEPARTMENTS = ["Продажи", "Закупки", "Проектирование
                "Руководство", "Проектный офис", "Отдел развития", "Производство"]   # id 1..12
 DEV_DEPARTMENT = 11
 USERS = [  # id, name, role, branch, dept, manager, position
-    (1, "Виктор Орлов", "director", "OMSK", 9, None, "Директор"),
+    (1, "Сергей Михайлович", "director", "OMSK", 9, None, "Директор"),   # демо-директор: имя и отчество, без фамилии; логин sergey
     (2, "Олег Савельев", "responsible", "OMSK", 9, 1, "Руководитель направления"),
     (3, "Ерлан Жумабеков", "responsible", "PVL", 5, 2, "IT-специалист"),
     (4, "Айгерим Нурланова", "responsible", "AST", 1, 2, "Руководитель продаж"),
@@ -187,6 +187,20 @@ CUSTDEV_APPEALS = [
      [(4, 25, "status_changed", st("new", "review", "Нужен бюджет на доработку 1С — выносим директору"))],
      {"director_request": "Бюджет на доработку конфигурации 1С, ориентировочно 2–3 недели подрядчика", "director_requested_hours_ago": 9 * 24}),
 ]
+# Этап 8: решённые обращения последних недель — по одному на город, чтобы «решено за 7 дней» и «решено за месяц» у каждого города
+# были больше нуля, а «Что изменили» имела свежие записи. (type, category, author, priority, hours_ago_created, hours_ago_done, text, resolution)
+DONE_APPEALS = [
+    ("suggestion", 6, 23, "medium", 14 * 24, 2 * 24, "Предлагаю единый шаблон протокола совещания: решение, ответственный, срок — чтобы итоги не терялись в чатах.",
+     "Шаблон протокола утверждён и разослан руководителям подразделений; с ноября протоколы ведутся по нему"),
+    ("problem", 7, 21, "high", 9 * 24, 26, "В офисе Самары после обновления перестали печататься накладные с сетевого принтера, отгрузки задерживаются.",
+     "Переустановлен драйвер и очередь печати, печать накладных восстановлена; добавлена инструкция на случай повторения"),
+    ("suggestion", 13, 18, "medium", 20 * 24, 4 * 24, "Предлагаю вести историю изменений состава оборудования по проекту в одном листе, чтобы было видно, какие строки пересмотрены.",
+     "В шаблон проекта добавлен лист «История изменений», проектировщики заполняют его при каждой правке состава"),
+    ("problem", 5, 17, "medium", 12 * 24, 3 * 24, "Счета поставщиков из Тюмени иногда теряются при пересылке в бухгалтерию, оплата задерживается.",
+     "Заведена общая папка для счетов и правило: счёт регистрируется в день получения; бухгалтерия подтверждает приём"),
+    ("problem", 16, 27, "medium", 7 * 24, 5 * 24, "В цехе над сборочным столом не хватает освещения, в вечернюю смену трудно читать маркировку.",
+     "Установлены два дополнительных светильника над сборочным столом"),
+]
 SUPPORTS = {"A-003": [22], "A-007": [17, 20], "A-012": [20, 22, 23], "A-021": [18, 27], "A-023": [21], "A-027": [12, 18]}
 # Оценка автора (этап 4) — синтетические ответы у части обращений; 20 обращений датасета сохраняют свои приоритеты
 AUTHOR_ANSWERS = {"A-001": ("workaround", None), "A-003": ("now", "department"), "A-007": ("now", "department"), "A-009": ("now", "department"),
@@ -206,6 +220,53 @@ SETTINGS = {
 def ensure() -> None:
     if not db.one("SELECT 1 FROM users LIMIT 1"):
         run()
+
+
+def add_done_appeals(now=None) -> list[str]:
+    """Решённые обращения последних недель (этап 8 §2): для seed и для обновления живой демо-базы без пересева
+    (tools/stage8_demo_update.py). Номера — следующие свободные. Возвращает номера."""
+    now = now or db.now()
+    c = db.conn()
+    cats = {r["id"]: r["responsible_user_id"] for r in db.q("SELECT id, responsible_user_id FROM categories")}
+    users = {r["id"]: r for r in db.q("SELECT * FROM users")}
+    out = []
+    for typ, cat, author, prio, h_created, h_done, text, resolution in DONE_APPEALS:
+        row = db.one("SELECT number FROM appeals ORDER BY id DESC LIMIT 1")
+        number = f"A-{int(row['number'].split('-')[1]) + 1:03d}" if row else "A-001"
+        created = now - timedelta(hours=h_created)
+        done_at = now - timedelta(hours=h_done)
+        review_at = created + timedelta(hours=5)
+        work_at = created + timedelta(hours=28)
+        resp = cats[cat]
+        au = users[author]
+        aid = db.ex("""INSERT INTO appeals(number, type, category_id, branch_id, department_id, text, priority, status, responsible_id, is_anonymous, source,
+                       tracking_token, resolution_text, created_at, updated_at, first_response_at, closed_at, last_news_at)
+                       VALUES(?,?,?,?,?,?,?,'done',?,0,'app',?,?,?,?,?,?,?)""",
+                    (number, typ, cat, au["branch_id"], au["department_id"], text, prio, resp, secrets.token_urlsafe(24), resolution,
+                     db.iso(created), db.iso(done_at), db.iso(review_at), db.iso(done_at), db.iso(done_at)))
+        c.execute("INSERT INTO appeal_authors(appeal_id, user_id) VALUES(?,?)", (aid, author))
+
+        def ev(kind, payload, at, actor=None):
+            c.execute("INSERT INTO appeal_events(appeal_id, actor_id, kind, payload, created_at) VALUES(?,?,?,?,?)", (aid, actor, kind, json.dumps(payload, ensure_ascii=False), db.iso(at)))
+
+        def pts(reason, amount, at):
+            c.execute("INSERT INTO points_ledger(user_id, appeal_id, reason, amount, created_at) VALUES(?,?,?,?,?)", (author, aid, reason, amount, db.iso(at)))
+            ev("points_awarded", {"user_id": author, "amount": amount, "reason": reason}, at)
+            c.execute("INSERT INTO notifications(user_id, text, link, created_at, read_at) VALUES(?,?,?,?,?)", (author, f"+{amount} баллов за {number}", "/app#/points", db.iso(at), db.iso(at)))
+        ev("created", {"source": "app", "type": typ, "anonymous": False, "synthetic": "stage8"}, created, author)
+        ev("assigned", {"responsible_id": resp, "responsible": users[resp]["name"], "auto": True}, created)
+        ev("status_changed", {"from": "new", "to": "review"}, review_at, resp); pts("accepted", 10, review_at)
+        ev("status_changed", {"from": "review", "to": "in_progress", "text": "Взяли в работу"}, work_at, resp)
+        ev("status_changed", {"from": "in_progress", "to": "done", "text": resolution}, done_at, resp); pts("done", 50, done_at)
+        c.execute("INSERT INTO notifications(user_id, text, link, created_at, read_at) VALUES(?,?,?,?,?)", (author, f"{number}: статус «Реализовано» — {resolution[:80]}", f"/app#/appeal/{aid}", db.iso(done_at), db.iso(done_at)))
+        out.append(number)
+    c.commit()
+    return out
+
+
+def rename_director() -> None:
+    """Этап 8 §1: демо-директор — «Сергей Михайлович» (имя и отчество, без фамилии), внутренний логин sergey. Для seed и живой базы."""
+    db.ex("UPDATE users SET name='Сергей Михайлович', login='sergey' WHERE id=1")
 
 
 def run(force: bool = False) -> None:
@@ -296,6 +357,9 @@ def run(force: bool = False) -> None:
         db.ex("INSERT INTO rewards(title, description, cost_points, active) VALUES(?,?,?,1)", (title, descr, cost))
     for k, v in SETTINGS.items():
         db.set_setting(k, v)
+    c.commit()
+    rename_director()
+    add_done_appeals(now)
     db.ex("INSERT INTO meta(key, value) VALUES('seeded_at', ?)", (db.now_iso(),))
     c.commit()
 

@@ -112,7 +112,7 @@ def test_rejected_stage(c):
 def test_director_summary_template_and_lines(c):
     login(c, 1)
     d = c.get("/api/panel/director-summary").json()
-    assert d["engine"] == "template" and d["sentences"][0]["text"].endswith(", Виктор.")
+    assert d["engine"] == "template" and d["sentences"][0]["text"].endswith(", Сергей Михайлович.")
     f = d["facts"]
     assert f["period_days"] == 7 and f["decisions_pending"] >= 2 and f["decision_max_days"] >= 12
     assert any("решения" in s["text"] and s["href"] == "/panel#/decisions" for s in d["sentences"])

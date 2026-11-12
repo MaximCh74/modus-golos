@@ -59,7 +59,8 @@ def facts(days: int = 7) -> dict:
 def greeting(user: dict) -> str:
     hour = (db.now() + timedelta(hours=int(db.setting("tz_offset_hours", 5) or 5))).hour   # Казахстан/Омск: UTC+5…+6
     word = "Доброе утро" if 5 <= hour < 12 else "Добрый день" if hour < 18 else "Добрый вечер"
-    return f"{word}, {user['name'].split()[0]}."
+    from . import auth
+    return f"{word}, {auth.display_name(user)}."
 
 
 def _plural(n: int, forms: tuple[str, str, str]) -> str:

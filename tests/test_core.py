@@ -4,7 +4,7 @@ import os  # noqa: F401 — папка данных и окружение зад
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
-from mf import db  # noqa: E402
+from mf import seed, db  # noqa: E402
 from mf.main import app  # noqa: E402
 
 
@@ -25,7 +25,7 @@ def number_id(number):
 
 
 def test_seed_matches_dataset(c):
-    assert c.get("/api/health").json()["appeals"] == 28   # 20 датасета + 8 синтетических по кастдеву
+    assert c.get("/api/health").json()["appeals"] == len(seed.APPEALS) + len(seed.CUSTDEV_APPEALS) + len(seed.DONE_APPEALS)   # 20 датасета + 8 синтетических по кастдеву
     a17 = db.one("SELECT * FROM appeals WHERE number='A-017'")
     assert a17["status"] == "rejected" and "помещения" in a17["resolution_text"]
     assert db.one("SELECT COUNT(*) AS n FROM categories")["n"] == 19   # 18 датасета + «1С и автоматизация»
@@ -33,17 +33,18 @@ def test_seed_matches_dataset(c):
 
 
 def test_qr_anonymous_and_tracking(c):
+    next_number = f"A-{int(db.one('SELECT number FROM appeals ORDER BY id DESC LIMIT 1')['number'].split('-')[1]) + 1:03d}"   # следующий свободный номер
     # текст без ключевых слов: ни ИИ (без ключа), ни словарь категорию не дают → очередь администратора «Без ответственного»
     r = c.post("/api/public/appeals", data={"type": "problem", "text": "Нужна помощь, непонятно к кому обращаться", "branch_code": "PVL"})
     assert r.status_code == 200, r.text
     j = r.json()
-    assert j["number"] == "A-029" and j["logged_in"] is False   # после 20 обращений датасета и 8 синтетических по кастдеву
+    assert j["number"] == next_number and j["logged_in"] is False   # после 20 обращений датасета и 8 синтетических по кастдеву
     t = c.get(f"/api/public/track/{j['tracking_token']}").json()
     assert t["status"] == "new" and t["author"] is None and t["is_anonymous"] == 1 and t["unassigned"] is True
     assert c.get("/api/public/track/nope").status_code == 404
     login(c, 15)   # администратор: очередь «Без ответственного», автор не раскрывается
     q = c.get("/api/panel/appeals", params={"unassigned": 1}).json()
-    assert any(x["number"] == "A-029" for x in q)
+    assert any(x["number"] == next_number for x in q)
     card = c.get(f"/api/appeals/{j['id']}").json()
     assert card["author"] is None and card["is_anonymous"] == 1
 

@@ -15,6 +15,11 @@ STAFF = ("responsible", "director", "admin")
 ROLE_LABEL = {"employee": "Сотрудник", "responsible": "Ответственный", "director": "Директор", "admin": "Администратор"}
 
 
+def display_name(user: dict) -> str:
+    """Как система обращается к человеку: к директору — по имени и отчеству, как он записан («Сергей Михайлович»), к остальным — по имени."""
+    return user["name"] if user.get("role") == "director" else user["name"].split()[0]
+
+
 def user_by_id(user_id: int) -> dict | None:
     return db.one("SELECT * FROM users WHERE id=? AND active=1", (user_id,))
 

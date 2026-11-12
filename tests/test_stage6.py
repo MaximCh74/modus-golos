@@ -142,7 +142,7 @@ def test_command_rude_phrase_city_filter_and_confirmation(c):
     assert got == expected and expected   # фильтр по городу: только обращения филиала Омск
     for rec in plan["recipients"]:
         m = rec["message"]
-        assert m.startswith("Виктор просит сегодня до 18:00 сообщить о ходе работ по обращени"), m
+        assert m.startswith("Сергей Михайлович просит сегодня до 18:00 сообщить о ходе работ по обращени"), m
         assert "бездельник" not in m.lower() and "срочно" not in m.lower() and "заставь" not in m.lower() and "!" not in m
     assert notes_count() == n0   # экран подтверждения: без [Отправить] ничего не ушло
     r2 = c.post(f"/api/director/command/{r['plan_id']}/send", json={}).json()
@@ -150,7 +150,7 @@ def test_command_rude_phrase_city_filter_and_confirmation(c):
     assert r2["reply"].startswith("Отправил запрос новостей") and notes_count() == n0 + r2["users"]
     rec = plan["recipients"][0]
     ev = [e for e in c.get(f"/api/appeals/{rec['items'][0]['id']}").json()["events"] if e["kind"] == "director_requested_news"]
-    assert ev and ev[-1]["payload"]["deadline"] == "сегодня до 18:00" and ev[-1]["actor"] == "Виктор Орлов"
+    assert ev and ev[-1]["payload"]["deadline"] == "сегодня до 18:00" and ev[-1]["actor"] == "Сергей Михайлович"
     assert c.post(f"/api/director/command/{r['plan_id']}/send", json={}).status_code == 409   # повторно тот же план не уходит
     assert c.get(f"/api/director/command/{r['plan_id']}/audio").status_code == 503             # без ключа — голос браузера
     login(c, rec["user_id"])
@@ -196,7 +196,7 @@ def test_command_overdue_tasks_open_decision_briefing(c):
     plan = r["plan"]
     assert r["command"]["intent"] == "remind_overdue_tasks" and plan["counts"]["tasks"] >= 1
     erlan = next(x for x in plan["recipients"] if x["user_id"] == 3)
-    assert "сообщить о статусе поручени" in erlan["message"] and "срок был 01.11" in erlan["message"] and erlan["message"].startswith("Виктор просит сегодня")
+    assert "сообщить о статусе поручени" in erlan["message"] and "срок был 01.11" in erlan["message"] and erlan["message"].startswith("Сергей Михайлович просит сегодня")
     r2 = c.post(f"/api/director/command/{r['plan_id']}/send", json={}).json()
     assert r2["tasks"] >= 1 and r2["reply"].startswith("Отправил напоминания")
     # «На решение» с выбранной идеей: только открыть, ничего не отправляется и не решается
@@ -251,7 +251,7 @@ def test_command_demo_phrase_without_key(c):
     r = c.post("/api/director/command/parse", json={"text": "Пусть Омск до шести вечера расскажет, что по обращениям в работе"}).json()
     cmd = r["command"]
     assert cmd["intent"] == "request_progress" and cmd["filters"]["branch"] == "Омск" and cmd["deadline"]["time"] == "18:00" and cmd["deadline"]["label"] == "сегодня до 18:00"
-    assert r["plan"]["recipients"] and r["plan"]["recipients"][0]["message"].startswith("Виктор просит сегодня до 18:00 сообщить о ходе работ по обращени")
+    assert r["plan"]["recipients"] and r["plan"]["recipients"][0]["message"].startswith("Сергей Михайлович просит сегодня до 18:00 сообщить о ходе работ по обращени")
     from mf import commands
     assert commands.parse_time("к часу") == "13:00" and commands.parse_time("до пяти") == "17:00" and commands.parse_time("к девяти утра") == "09:00" and commands.parse_time("до 18 ноября") is None
 
@@ -279,3 +279,21 @@ def test_design_changes_pages_and_public_changes(c):
     assert rows and all({"number", "type_label", "text", "resolution_text", "closed_at", "thanks"} <= set(r) for r in rows)
     assert all("author" not in r for r in rows)   # без входа авторов не показываем
     assert any(r["number"] == "A-004" for r in rows)
+
+
+# ---------- этап 8: демо-директор «Сергей Михайлович», решённые обращения в демо-данных ----------
+
+def test_director_name_login_and_solved_data(c):
+    from mf import demo
+    d = db.one("SELECT name, login, role FROM users WHERE id=1")
+    assert d == {"name": "Сергей Михайлович", "login": "sergey", "role": "director"}
+    login(c, 1)
+    s = c.get("/api/panel/director-summary?engine=template").json()
+    assert s["sentences"][0]["text"].endswith(", Сергей Михайлович.") and s["facts"]["done"] >= 4
+    m = c.get("/api/public/map").json()
+    assert all(b["done_month"] > 0 for b in m["branches"]), [(b["city"], b["done_month"]) for b in m["branches"]]
+    ch = c.get("/api/public/changes").json()
+    assert len(ch) >= 7
+    st = demo.is_demo_state()
+    names = {x["name"]: x["ok"] for x in st["checks"]}
+    assert names["решено за 7 дней > 0"] and names["у каждого города решено за месяц > 0"]

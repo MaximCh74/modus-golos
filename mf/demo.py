@@ -122,4 +122,11 @@ def is_demo_state() -> dict:
     checks.append({"name": "следующий номер предсказуем", "ok": True, "detail": nxt})
     meet = db.one("SELECT COUNT(*) AS n FROM meetings WHERE status='sent'")["n"]
     checks.append({"name": "есть разобранная планёрка для показа", "ok": meet >= 1, "detail": f"{meet} шт."})
+    # этап 8 §2: собственник не должен увидеть «решено 0»
+    week = db.iso(db.now() - timedelta(days=7)); month = db.iso(db.now() - timedelta(days=30))
+    d7 = db.one("SELECT COUNT(*) AS n FROM appeals WHERE status IN ('done','closed') AND type != 'praise' AND closed_at >= ?", (week,))["n"]
+    checks.append({"name": "решено за 7 дней > 0", "ok": d7 > 0, "detail": f"{d7}"})
+    per_city = db.q("""SELECT b.city, COUNT(a.id) AS n FROM branches b LEFT JOIN appeals a ON a.branch_id=b.id AND a.status IN ('done','closed') AND a.type != 'praise' AND a.closed_at >= ?
+                       WHERE b.kind != 'field' GROUP BY b.id ORDER BY b.id""", (month,))
+    checks.append({"name": "у каждого города решено за месяц > 0", "ok": all(r["n"] > 0 for r in per_city), "detail": ", ".join(f"{r['city']} {r['n']}" for r in per_city)})
     return {"ok": all(c["ok"] for c in checks), "checks": checks, "next_number": nxt}

@@ -175,7 +175,9 @@ def _fits(f: dict, branch_id, department_id, user_id) -> bool:
 
 
 def _first(user: dict) -> str:
-    return user["name"].split()[0]
+    """От чьего имени сообщение: директор — по имени и отчеству («Сергей Михайлович просит…»), остальные — по имени."""
+    from . import auth
+    return auth.display_name(user)
 
 
 def _message(intent: str, user: dict, items: list[dict], deadline: dict | None, note: str | None) -> str:
