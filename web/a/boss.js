@@ -108,8 +108,8 @@
       h('div', { class: 'row' }, h('b', {}, task ? 'Поручение' : i.number), i.overdue || task ? h('span', { class: 'dot-overdue', title: 'просрочено' }) : null, h('div', { class: 'spacer' }),
         h('span', { class: 'small muted' }, task ? 'срок был ' + i.due_label : (i.age_days !== undefined ? i.age_days + ' дн' : ''))),
       h('div', { class: 'small one-line' }, i.text),
-      h('div', { class: 'small muted one-line' }, task ? (i.assignee || 'без исполнителя') + (i.meeting_title ? ' · «' + i.meeting_title + '»' : '')
-        : [i.status, i.responsible ? 'отвечает ' + i.responsible : 'без ответственного'].filter(Boolean).join(' · ')),
+      task ? h('div', { class: 'small muted one-line' }, (i.assignee || 'без исполнителя') + (i.meeting_title ? ' · «' + i.meeting_title + '»' : ''))
+        : h('div', { class: 'row small boss-st' }, i.status_code ? badge(i.status_code) : null, h('span', { class: 'muted one-line' }, i.responsible ? 'отвечает ' + i.responsible : 'без ответственного')),   // статус — та же цветная метка, что в очереди
       showResult && i.resolution ? h('div', { class: 'small boss-res one-line' }, i.resolution) : null);
   }
 
@@ -127,7 +127,7 @@
     const b = a.brief && !a.brief.unclear ? a.brief : null;
     const news = (a.events || []).filter(e => ['progress', 'comment', 'status_changed', 'discussed_at_meeting', 'director_decided'].includes(e.kind)).slice(-1)[0];
     sheet(a.number, h('div', { class: 'boss-card' }, backBtn(back),
-      h('div', { class: 'row' }, tag(a.stage.code === 'rejected' ? 'st-rejected' : a.stage.code === 'done' ? 'st-done' : 'st-review', a.stage.label), a.overdue ? h('span', { class: 'dot-overdue', title: 'просрочено' }) : null,
+      h('div', { class: 'row' }, badge(a.status), a.overdue ? h('span', { class: 'dot-overdue', title: 'просрочено' }) : null,
         h('span', { class: 'small muted' }, [a.type_label, a.category, a.branch].filter(Boolean).join(' · '))),
       h('p', { class: 'boss-answer' }, b ? b.gist : a.text),
       b ? h('details', { class: 'small' }, h('summary', {}, 'Полный текст'), h('p', { class: 'pre' }, a.text)) : null,

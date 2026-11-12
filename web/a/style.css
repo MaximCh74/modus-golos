@@ -15,9 +15,14 @@
   --ok-bg: #f1faf4; --ok-line: #bfe3cc; --ok-tag-bg: #e3f4ea; --ok-tag-fg: #1f6f3f;
   --bad-bg: #faf3f3; --bad-line: #e3c9c9;
   --warn-bg: #fff8ea; --warn-line: #f0d9a8; --warn-tag-bg: #fdebd3; --warn-tag-fg: #8a4b00; --warn-dash: #d99a2b;
-  --st-new-bg: #e8f0fb; --st-new-fg: #2f5f9e; --st-review-bg: #fff1dc; --st-review-fg: #9a5b00; --st-clarify-bg: #fff6c7; --st-clarify-fg: #7a5200; --st-clarify-dot: #c98a00;
-  --st-work-bg: #ebe8fb; --st-work-fg: #4c3e9c; --st-closed-bg: #e9ecf1; --st-closed-fg: #4a5260; --st-rejected-bg: #ececec; --st-rejected-fg: #555b66;
-  --tag-unassigned-bg: #f1e9fb; --tag-unassigned-fg: #5b3f8e; --badge-fg: #2f4f7a;
+  /* статусы (схема владельца 13.11, везде одинаково; фиолетового нет): новое — серый, на рассмотрении — светло-синий от фирменного,
+     ожидает уточнения — мягкий янтарный, в работе — фирменный тёмно-синий с белым, реализовано/принято — зелёный, закрыто — приглушённый
+     зелёный, отклонено — бледно-розовый с тёмным текстом и «×» (красного текста нет) */
+  --st-new-bg: #e6e9ee; --st-new-fg: #3f4652; --st-review-bg: #e1eaf4; --st-review-fg: #12385c; --st-clarify-bg: #fdf0d2; --st-clarify-fg: #6e4a00; --st-clarify-dot: #c98a00;
+  --st-work-bg: var(--navy); --st-work-fg: var(--white); --st-done-bg: #dcf1e3; --st-done-fg: #17603a; --st-closed-bg: #e3eee7; --st-closed-fg: #4d6857;
+  --st-rejected-bg: #fbe8ea; --st-rejected-fg: #4a2b30;
+  --tag-neutral-bg: #eceff3; --tag-neutral-fg: #3f4652;   /* служебные метки (аноним, ИИ, флаг) — нейтральный серый, не статус */
+  --tag-unassigned-bg: #ffffff; --tag-unassigned-fg: #3f4652; --badge-fg: #2f4f7a;
   /* сетка 8px */
   --s1: 8px; --s2: 16px; --s3: 24px; --s4: 32px; --s5: 40px; --s6: 48px; --s8: 64px;
   /* поверхности */
@@ -117,18 +122,18 @@ input[type=file] { font: inherit; font-size: 14px; }
 .st-review { background: var(--st-review-bg); color: var(--st-review-fg); }
 .st-clarify { background: var(--st-clarify-bg); color: var(--st-clarify-fg); }
 .st-work { background: var(--st-work-bg); color: var(--st-work-fg); }
-.st-done { background: var(--ok-tag-bg); color: var(--ok-tag-fg); }
+.st-done { background: var(--st-done-bg); color: var(--st-done-fg); }
 .st-closed { background: var(--st-closed-bg); color: var(--st-closed-fg); }
 .st-rejected { background: var(--st-rejected-bg); color: var(--st-rejected-fg); }
 .tag-overdue { background: var(--warn-tag-bg); color: var(--warn-tag-fg); }
-.tag-unassigned { background: var(--tag-unassigned-bg); color: var(--tag-unassigned-fg); }
-.tag-anon { background: var(--st-closed-bg); color: var(--st-closed-fg); }
+.tag-unassigned { background: var(--tag-unassigned-bg); color: var(--tag-unassigned-fg); box-shadow: inset 0 0 0 1px var(--muted-2); }   /* контурная, без фиолетового */
+.tag-anon { background: var(--tag-neutral-bg); color: var(--tag-neutral-fg); }
 .tag-type { background: var(--bg-soft); color: var(--ink); font-weight: var(--w-body); }
 .tag-prio-high { background: var(--warn-tag-bg); color: var(--warn-tag-fg); }
 .tag-prio-medium { background: var(--bg-soft); color: var(--ink); }
 .tag-prio-low { background: var(--bg-soft); color: var(--muted); }
 .st-rejected::before, .tag-overdue::before { content: ''; display: inline-block; width: 11px; height: 11px; margin: 0 4px -1px 0; background-repeat: no-repeat; background-size: contain; }
-.st-rejected::before { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23555b66' stroke-width='2.5' stroke-linecap='round'%3E%3Cpath d='M18 6 6 18'/%3E%3Cpath d='m6 6 12 12'/%3E%3C/svg%3E"); }
+.st-rejected::before { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%234a2b30' stroke-width='2.5' stroke-linecap='round'%3E%3Cpath d='M18 6 6 18'/%3E%3Cpath d='m6 6 12 12'/%3E%3C/svg%3E"); }
 .tag-overdue::before { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238a4b00' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z'/%3E%3Cpath d='M12 9v4'/%3E%3Cpath d='M12 17h.01'/%3E%3C/svg%3E"); }
 
 .muted { color: var(--muted); }
@@ -226,10 +231,10 @@ input[type=file] { font: inherit; font-size: 14px; }
 .actions .inline { display: flex; gap: 6px; flex-wrap: wrap; }
 
 /* режим совещания */
-.tag-demo { background: var(--st-review-bg); color: var(--st-review-fg); border: 1px dashed var(--warn-dash); }
-.tag-ai { background: var(--st-closed-bg); color: var(--st-closed-fg); }
-.tag-flag { background: var(--st-closed-bg); color: var(--st-closed-fg); }
-.tag-director { background: var(--st-work-bg); color: var(--st-work-fg); font-weight: var(--w-body); }
+.tag-demo { background: var(--st-clarify-bg); color: var(--st-clarify-fg); border: 1px dashed var(--warn-dash); }
+.tag-ai { background: var(--tag-neutral-bg); color: var(--tag-neutral-fg); }
+.tag-flag { background: var(--tag-neutral-bg); color: var(--tag-neutral-fg); }
+.tag-director { background: var(--st-review-bg); color: var(--st-review-fg); font-weight: var(--w-body); }
 .rec { text-align: center; }
 .rec-dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: var(--red); animation: blink 1s infinite; }
 @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: .2; } }
@@ -637,6 +642,8 @@ select { appearance: none; -webkit-appearance: none; padding-right: 34px; backgr
 .boss-item { display: block; padding: 10px 0; border-bottom: 1px solid var(--line-soft); color: var(--ink); text-decoration: none; }
 .boss-item:last-child { border-bottom: 0; }
 .boss-item b { color: var(--navy); }
+.boss-st { gap: 6px; flex-wrap: nowrap; min-width: 0; margin-top: 2px; }
+.boss-st .one-line { min-width: 0; }
 .boss-item.late { padding-left: 10px; border-left: 3px solid var(--warn-dash); }
 .boss-item.done { opacity: .6; }
 .boss-item-btn { width: 100%; text-align: left; background: none; border: 0; border-bottom: 1px solid var(--line-soft); border-radius: 0; font: inherit; cursor: pointer; display: flex; flex-direction: column; gap: 2px; }

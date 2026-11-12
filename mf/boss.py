@@ -60,7 +60,7 @@ def _rows() -> list[dict]:
 
 
 def _brief_item(a: dict) -> dict:
-    return {"id": a["id"], "number": a["number"], "text": appeals.line(a, 80), "status": a["status_label"], "branch": a.get("branch"),
+    return {"id": a["id"], "number": a["number"], "text": appeals.line(a, 80), "status": a["status_label"], "status_code": a["status"], "branch": a.get("branch"),
             "responsible": a.get("responsible"), "age_days": int(a["age_hours"] // 24), "overdue": a["overdue"], "type": a["type_label"]}
 
 
