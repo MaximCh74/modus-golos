@@ -132,10 +132,75 @@ def _resolve(raw: dict, ctx: dict, user: dict) -> dict:
     return out
 
 
+# ---------- отсылки к «На решение»: «самое давнее», «которая 12 дней», «первая», «A-027» (замечание владельца 13.11) ----------
+# После сводки директор говорит «самая дальняя, которая 12 дней…» — это про самое давнее обращение на решении, а не про рассылку.
+# Распознаём до ИИ: уверенно → открыть его с «Принять / Отклонить»; неуверенно → короткий вопрос «Вы про A-027 (ждёт решения 12 дней)?».
+REF_OLDEST = re.compile(r"сам(?:ое|ая|ый|ую|ой)\s+(?:давн|стар|дальн|долг|перв|ранн)|\bдавн(?:ее|яя|ий|юю|ей)\b|\bстар(?:ое|ая|ейш)|\bдальн(?:ее|яя|юю)\b|\bперв(?:ое|ая|ую|ый|ой)\b", re.I)
+REF_WORDS = re.compile(r"\bкотор|\bжд[её]т|\bвиси|\bлежи|на\s+решени|\b(?:та|ту|эта|эту|это|тот|той)\b", re.I)
+ACTION = re.compile(r"\b(?:напомн|запрос|попрос|разошл|отправ|сообщ|прочита|прочти)", re.I)
+APPEAL_NUM = re.compile(r"\b[aа]\s*-?\s*0*(\d{1,4})\b", re.I)
+DAYS = re.compile(r"(\d{1,3})\s*(?:-?\s*)?(?:дн|день|дня|дней|сут)", re.I)
+NUM_WORDS = {"один": 1, "одна": 1, "одно": 1, "два": 2, "две": 2, "три": 3, "четыре": 4, "пять": 5, "шесть": 6, "семь": 7, "восемь": 8, "девять": 9,
+             "десять": 10, "одиннадцать": 11, "двенадцать": 12, "тринадцать": 13, "четырнадцать": 14, "пятнадцать": 15, "шестнадцать": 16,
+             "семнадцать": 17, "восемнадцать": 18, "девятнадцать": 19, "двадцать": 20, "тридцать": 30}
+
+
+def _days_in(text: str) -> int | None:
+    m = DAYS.search(text)
+    if m:
+        return int(m.group(1))
+    words = re.findall(r"[а-яё]+", text.lower())
+    for i, w in enumerate(words):
+        if w.startswith(("дн", "день", "дня", "дней", "сут")) and i:
+            n = NUM_WORDS.get(words[i - 1])
+            if n and i > 1 and words[i - 2] in ("двадцать", "тридцать") and n < 10:
+                n += NUM_WORDS[words[i - 2]]
+            if n:
+                return n
+    return None
+
+
+def decision_ref(text: str, user: dict) -> dict | None:
+    """Отсылка к обращению на решении → {"item": pending, "sure": bool, "why": str} или None (обычная команда)."""
+    t = " ".join((text or "").split())
+    if not t:
+        return None
+    pending = meetings.director_ideas(user)["pending"]
+    if not pending:
+        return None
+    m = APPEAL_NUM.search(t)
+    if m:
+        num = f"A-{int(m.group(1)):03d}"
+        it = next((p for p in pending if p.get("number") == num), None)
+        if it:
+            return {"item": it, "sure": True, "why": "номер"}
+    if ACTION.search(t):   # «напомни…», «запроси…» — это другие команды, отсылкой не считаем
+        return None
+    oldest = pending[0]   # список отсортирован: дольше всех ждёт — первым
+    days = _days_in(t)
+    if days is not None and (REF_WORDS.search(t) or REF_OLDEST.search(t)):
+        exact = [p for p in pending if p.get("wait_days") is not None and int(p["wait_days"]) == days]
+        if len(exact) == 1:
+            return {"item": exact[0], "sure": True, "why": "дни"}
+        near = min(pending, key=lambda p: abs((p.get("wait_days") or 0) - days))
+        return {"item": near, "sure": False, "why": "дни примерно"}
+    if REF_OLDEST.search(t):
+        return {"item": oldest, "sure": True, "why": "самое давнее"}
+    if REF_WORDS.search(t) and re.search(r"решени|давн|ждёт|ждет", t, re.I):
+        return {"item": oldest, "sure": False, "why": "неясно"}
+    return None
+
+
 def parse(text: str, user: dict) -> dict:
     text = " ".join((text or "").split())
     if len(text) < 2:
         raise HTTPException(422, "Скажите или напишите команду")
+    ref = decision_ref(text, user)
+    if ref:
+        it = ref["item"]
+        return {"text": text, "intent": "open_decision", "filters": _resolve({}, {"cities": [], "departments": [], "people": []}, user), "deadline": None,
+                "note": None, "idea": None, "engine": "rules", "ref": {"source": it.get("source"), "id": it.get("id"), "appeal_id": it.get("appeal_id"),
+                                                                       "number": it.get("number"), "sure": ref["sure"], "why": ref["why"]}}
     ctx = _context()
     raw, engine = None, "keywords"
     if llm.available():
@@ -280,9 +345,29 @@ STOP = {"прими", "примите", "принять", "открой", "от�
         "отклони", "предложение", "предложения", "давай", "мне", "нужно", "хочу"}
 
 
+def _wait_label(it: dict) -> str:
+    w = it.get("wait_days")
+    if w is None:
+        return "ждёт решения"
+    d = int(w)
+    return "ждёт решения " + ("меньше дня" if d < 1 else director._plural(d, ("день", "дня", "дней")))
+
+
 def _plan_open_decision(cmd: dict, user: dict) -> dict:
     q = meetings.director_ideas(user)
     pending = q["pending"]
+    ref = cmd.get("ref")
+    if ref:   # отсылка распознана правилами: само обращение (или идея) с «Принять / Отклонить» прямо в ответе
+        it = next((p for p in pending if (ref.get("appeal_id") and p.get("appeal_id") == ref["appeal_id"]) or (not ref.get("appeal_id") and p.get("id") == ref.get("id"))), None)
+        if it:
+            name = it.get("number") or "идея с совещания"
+            item = {"source": it["source"], "id": it.get("id"), "appeal_id": it.get("appeal_id"), "number": it.get("number"),
+                    "text": appeals.short(it["text"], 120), "wait_days": it.get("wait_days")}
+            if not ref.get("sure"):
+                return {"kind": "clarify", "intent": "open_decision", "title": f"Вы про {name} ({_wait_label(it)})? Открыть?", "item": item,
+                        "decision": it, "href": "#/decisions", "pending": len(pending), "empty": False, "message": None}
+            return {"kind": "open", "intent": "open_decision", "title": f"{name} — {_wait_label(it)}", "item": item, "decision": it,
+                    "href": "#/decisions", "pending": len(pending), "empty": False, "message": None}
     words = [w for w in re.findall(r"[a-zа-яё0-9-]+", (cmd["idea"] or cmd["text"]).lower().replace("ё", "е")) if w not in STOP and len(w) > 2]
     best, best_score = None, 0
     for it in pending:
@@ -337,7 +422,7 @@ def execute(pid: str, user: dict, messages: dict | None = None) -> dict:
     if kind == "briefing":
         p["sent"] = {"reply": plan["message"], "users": 0, "items": 0}
         return {"ok": True, "kind": kind, **p["sent"]}
-    if kind == "open":
+    if kind in ("open", "clarify"):
         p["sent"] = {"reply": "Открываю «На решение»." if not plan["item"] else f"Открываю «На решение»: {plan['item']['text']}", "users": 0, "items": 0, "href": plan["href"], "item": plan["item"]}
         return {"ok": True, "kind": kind, **p["sent"]}
     if plan.get("empty"):

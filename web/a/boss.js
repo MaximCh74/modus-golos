@@ -214,6 +214,14 @@
       sheet('Сводка', h('div', {}, q, p.sentences.map(s => h('p', { class: 'boss-answer small' }, s.text)), h('div', { class: 'row mt8' }, speak)), { mark: aiMark(p.engine === 'openai', 'пересказ ИИ по фактам', 'шаблон без ИИ') });
       return;
     }
+    if (p.decision && (p.kind === 'open' || p.kind === 'clarify')) {   // отсылка к «На решение» (13.11): строка решения с «Принять / Отклонить»
+      const d = { ...p.decision, wait_days: Math.floor(p.decision.wait_days || 0) };
+      const showRow = () => { API.post('/api/director/command/' + r.plan_id + '/send', {}).catch(() => null); sheet('На решение', h('div', { class: 'boss-list' }, decisionRow(d))); };
+      if (p.kind === 'open') { showRow(); return; }
+      sheet('Уточните', h('div', {}, q, h('p', { class: 'boss-answer' }, p.title), h('div', { class: 'small muted' }, p.item.text),
+        h('div', { class: 'row mt8' }, h('button', { type: 'button', class: 'btn btn-primary btn-sm', onclick: showRow }, 'Да, открыть'), h('button', { type: 'button', class: 'btn btn-sm', onclick: closeSheet }, 'Нет'))));
+      return;
+    }
     if (p.kind === 'open') {
       sheet('На решение', h('div', {}, q, h('p', { class: 'boss-answer' }, p.title), h('div', { class: 'row mt8' }, h('button', { type: 'button', class: 'btn btn-primary btn-sm', onclick: async () => { try { await API.post('/api/director/command/' + r.plan_id + '/send', {}); } catch (e) { /* уже */ } closeSheet(); openList('decisions'); } }, 'Открыть'), h('button', { type: 'button', class: 'btn btn-sm', onclick: closeSheet }, 'Отмена'))));
       return;

@@ -458,6 +458,11 @@ def _cleanup() -> None:
 
 
 def ask(text: str, user: dict, period: str | None = None) -> dict:
+    if commands.decision_ref(text, user):   # «самое давнее на решении», «которая 12 дней», «A-027» — открыть его с «Принять / Отклонить» (13.11)
+        cmd = commands.parse(text, user)
+        plan = commands.build_plan(cmd, user)
+        pid = commands.remember(plan, cmd, user)
+        return {"kind": "command", "plan_id": pid, "command": cmd, "plan": plan, "engine": "rules", "answer": plan["title"], "needs_confirmation": False}
     p = parse(text, user)
     period = p["period"] or _period(period)
     if p["kind"] == "command":

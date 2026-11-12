@@ -55,3 +55,51 @@ def test_no_old_name_anywhere():
     root = pathlib.Path(__file__).resolve().parent.parent
     for f in list((root / "web").rglob("*.js")) + list((root / "web").glob("*.html")) + list((root / "mf").rglob("*.py")):
         assert "Что изменили" not in f.read_text(encoding="utf-8"), f.name
+
+
+# ---------- команда: «самая дальняя, которая 12 дней…» — это самое давнее на решении, а не рассылка (фраза владельца 13.11) ----------
+
+OWNER_PHRASE = "самая дальняя, которая 12 дней…"
+
+
+def _pending(c):
+    return c.get("/api/director/ideas").json()["pending"]
+
+
+def test_owner_phrase_opens_oldest_decision(c):
+    login(c, 1)
+    oldest = _pending(c)[0]
+    assert oldest["number"] == "A-027" and int(oldest["wait_days"]) == 12
+    r = c.post("/api/director/command/parse", json={"text": OWNER_PHRASE}).json()
+    p = r["plan"]
+    assert r["command"]["intent"] == "open_decision" and p["kind"] == "open" and p["item"]["number"] == "A-027"
+    assert p["decision"]["appeal_id"] == oldest["appeal_id"] and "recipients" not in p   # никакой рассылки сотрудникам
+    assert p["title"] == "A-027 — ждёт решения 12 дней"
+    s = c.post(f"/api/director/command/{r['plan_id']}/send", json={}).json()
+    assert s["ok"] and s["users"] == 0   # «открыть» ничего не отправляет
+    b = c.post("/api/boss/ask", json={"text": OWNER_PHRASE}).json()   # то же в «Директоре в кармане»
+    assert b["kind"] == "command" and b["plan"]["kind"] == "open" and b["plan"]["item"]["number"] == "A-027"
+
+
+@pytest.mark.parametrize("text, number, kind", [
+    ("самое давнее на решении", "A-027", "open"), ("открой самую старую", "A-027", "open"), ("первая, которая ждёт", "A-027", "open"),
+    ("A-028", "A-028", "open"), ("а-28 на решении", "A-028", "open"), ("та, которая двенадцать дней", "A-027", "open"),
+    ("та, которая 11 дней ждёт", "A-027", "clarify"), ("а та, что ждёт решения?", "A-027", "clarify"),
+])
+def test_decision_references(c, text, number, kind):
+    login(c, 1)
+    p = c.post("/api/director/command/parse", json={"text": text}).json()["plan"]
+    assert p["kind"] == kind and p["item"]["number"] == number, (text, p.get("kind"), p.get("title"))
+    if kind == "clarify":
+        assert p["title"].startswith(f"Вы про {number} (ждёт решения") and p["title"].endswith("? Открыть?")
+
+
+@pytest.mark.parametrize("text, intent", [
+    ("Запроси новости по обращениям в работе в Омске до 18:00", "request_progress"),
+    ("Напомни об обращениях без ответа дольше 3 дней", "remind_no_response"),
+    ("Напомни про просроченные поручения", "remind_overdue_tasks"),
+])
+def test_other_commands_not_hijacked(c, text, intent):
+    login(c, 1)
+    r = c.post("/api/director/command/parse", json={"text": text}).json()
+    assert r["command"]["intent"] == intent and r["plan"]["kind"] != "clarify"

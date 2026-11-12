@@ -40,6 +40,21 @@ function commandPanel(opts) {
         h('div', { class: 'row mt8' }, h('button', { class: 'btn btn-sm', onclick: cancel }, 'Отмена'))));
       return;
     }
+    if (p.decision && (p.kind === 'open' || p.kind === 'clarify')) {   // отсылка к «На решение» (замечание 13.11): само обращение с «Принять / Отклонить»
+      const showCard = () => {
+        API.post('/api/director/command/' + r.plan_id + '/send', {}).catch(() => null);
+        const done = () => { result.replaceChildren(h('div', { class: 'hint' }, 'Готово. Можно дать следующую команду.')); ta.value = ''; };
+        const card = p.decision.source === 'appeal' ? appealDecisionCard(p.decision, done) : ideaCard(p.decision, done);
+        result.replaceChildren(h('div', { class: 'cmd-decision' }, h('div', { class: 'row small muted' }, h('span', {}, p.kind === 'clarify' ? 'Открыл:' : 'На решение:'), h('div', { class: 'spacer' }),
+          h('a', { href: opts.decisionsHref || '#/decisions', class: 'small' }, 'весь список «На решение»')), card,
+          h('div', { class: 'row mt8' }, h('button', { class: 'btn btn-sm', onclick: cancel }, 'Закрыть'))));
+      };
+      if (p.kind === 'open') { showCard(); return; }
+      result.replaceChildren(h('div', { class: 'card card-info' }, h('div', { class: 'row' }, h('b', {}, p.title)),
+        h('div', { class: 'small mt8' }, p.item.text),
+        h('div', { class: 'row mt8' }, h('button', { class: 'btn btn-sm btn-primary', onclick: showCard }, iconText('arrow-right', 'Да, открыть')), h('button', { class: 'btn btn-sm', onclick: edit }, 'Нет'))));
+      return;
+    }
     if (p.kind === 'open') {
       const go = async () => { try { const s = await API.post('/api/director/command/' + r.plan_id + '/send', {}); location.hash = opts.decisionsHref || s.href; } catch (e) { toast(e.message, 'bad'); } };
       result.replaceChildren(h('div', { class: 'card card-info' }, h('div', { class: 'row' }, h('b', {}, p.title), engine),
