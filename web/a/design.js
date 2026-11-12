@@ -18,6 +18,20 @@
   const buttons = h('div', { class: 'ds-section' }, h('div', { class: 'h2' }, 'Кнопки'), h('p', { class: 'hint' }, 'Красная — одно главное действие на экране. Контурная — вторичное. Нейтральная — служебное. Все: hover, focus (рамка), active, disabled; высота от 44px.'),
     h('div', { class: 'ds-row' }, h('button', { class: 'btn btn-primary' }, iconText('pencil', 'Подать обращение')), h('button', { class: 'btn btn-outline' }, iconText('user', 'Войти')), h('button', { class: 'btn' }, 'Нейтральная'), h('button', { class: 'btn btn-ghost' }, 'Прозрачная'),
       h('button', { class: 'btn btn-sm' }, 'Маленькая'), h('button', { class: 'btn btn-ok btn-sm' }, 'Принять'), h('button', { class: 'btn btn-danger btn-sm' }, 'Отклонить'), h('button', { class: 'btn btn-primary', disabled: true }, 'Недоступна'), h('button', { class: 'btn btn-round', title: 'Команда голосом' }, icon('mic'))));
+  // пункт 3 очереди 12.11: главная кнопка нового стиля — три варианта угла и доли красного (выбирает Марк), потом раскатка везде
+  const VARIANTS = [['1', 'Мягкий', '135°, красный 20 %', '135deg', '20%'], ['2', 'Заметный', '120°, красный 28 %', '120deg', '28%'], ['3', 'Пологий', '155°, красный 24 %', '155deg', '24%']];
+  const variants = h('div', { class: 'ds-section', id: 'ds-main-button' }, h('div', { class: 'h2' }, 'Главная кнопка — новый стиль (вариант 2 «Акцентный»)'),
+    h('p', { class: 'hint' }, 'Тёмно-синяя основа, красный бренда мягко появляется в правом нижнем углу; текст и иконка белые и всегда на синей части; тонкий светлый блик по верхнему краю, мягкая тень. Три варианта отличаются углом градиента и долей красного. Состояния: обычное, наведение (красная зона плавно растёт за 200 мс), нажатие (темнее, тень меньше), фокус (видимая рамка), недоступна (плоский серый).'),
+    h('div', { class: 'ds-variants' }, VARIANTS.map(([n, name, params, angle, red]) => {
+      const box = h('div', { class: 'ds-variant', 'data-variant': n });
+      box.style.setProperty('--btn-main-angle', angle); box.style.setProperty('--btn-main-red', red);
+      const mk = (cls, label, ic) => h('button', { type: 'button', class: 'btn btn-main ' + cls }, ic ? iconText(ic, label) : label);
+      box.append(h('div', { class: 'ds-name' }, 'Вариант ' + n + ' · ' + name), h('div', { class: 'ds-params' }, params),
+        h('div', { class: 'ds-phone' }, mk('btn-big', 'Отправить', 'send')),
+        h('div', { class: 'ds-states' }, mk('', 'Подать обращение', 'pencil'), mk('btn-sm', 'Выполнить'), h('small', {}, 'обычная · маленькая')),
+        h('div', { class: 'ds-states' }, mk('is-hover', 'Наведение'), mk('is-active', 'Нажатие'), mk('is-focus', 'Фокус'), mk('is-disabled', 'Недоступна'), h('small', {}, 'состояния — статически, для сравнения')));
+      return box;
+    })));
   const cards = h('div', { class: 'ds-section' }, h('div', { class: 'h2' }, 'Поверхности'), h('p', { class: 'hint' }, 'Скругления: карточки 16–20px, кнопки и поля 12px, чипы 999px. Тени две: обычная карточка (shadow-1) и всплывающая (shadow-2).'),
     h('div', { class: 'grid2' }, h('div', { class: 'card' }, h('b', {}, 'Карточка'), h('div', { class: 'small muted' }, 'рамка 1px, без тени')), h('div', { class: 'card card-elevated' }, h('b', {}, 'Всплывающая'), h('div', { class: 'small muted' }, 'тень shadow-2, без рамки')),
       h('div', { class: 'card card-info' }, h('b', {}, 'Информация')), h('div', { class: 'card card-ok' }, h('b', {}, 'Сделано')), h('div', { class: 'card card-warn' }, h('b', {}, 'Внимание')), h('div', { class: 'card card-bad' }, h('b', {}, 'Отклонено'))),
@@ -38,5 +52,5 @@
   const motion = h('div', { class: 'ds-section' }, h('div', { class: 'h2' }, 'Движение и состояния'), h('p', { class: 'hint' }, '150–250 мс, ease-out; появление карточек — подъём и проявление; prefers-reduced-motion выключает анимации. Загрузка — скелетоны:'),
     h('div', { class: 'row' }, (() => { const k = h('div', { class: 'skeleton' }); k.style.width = '220px'; k.style.height = '56px'; return k; })(), (() => { const k = h('div', { class: 'skeleton' }); k.style.width = '120px'; k.style.height = '56px'; return k; })()));
   root.replaceChildren(siteHeader(null, {}), h('main', { class: 'home' }, h('span', { class: 'dash' }), h('h1', { class: 'display' }, 'Дизайн-система'), h('p', { class: 'lead' }, 'Токены и компоненты «Модус Голос». Бренд зафиксирован: тёмно-синий, красный, белый, два серых, Montserrat, логотип заказчика. Иконки — Lucide.'),
-    swatches, type, buttons, cards, chips, tracker, inputs, map, motion));
+    swatches, type, variants, buttons, cards, chips, tracker, inputs, map, motion));
 })();

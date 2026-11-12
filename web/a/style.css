@@ -33,6 +33,15 @@
   --fs-display: 44px; --fs-h1: 30px; --fs-h2: 20px; --fs-body: 16px; --fs-small: 14px; --fs-micro: 12px;
   --w-body: 500; --w-bold: 700;
   --brand: var(--red); --brand-dark: var(--red-dark); --card: var(--white);
+  /* главная кнопка нового стиля (пункт 3 очереди 12.11, вариант 2 «Акцентный»): тёмно-синяя основа, красный бренда мягко в правом нижнем
+     углу — угол и доля красного задаются двумя токенами (три варианта на /design), все цвета градиента — через токены */
+  --navy-deep: #041a2f; --btn-main-angle: 135deg; --btn-main-red: 24%;
+  --btn-main: linear-gradient(var(--btn-main-angle), var(--navy) 0%, var(--navy) calc(100% - var(--btn-main-red)), var(--red) 100%);
+  --btn-main-hover: linear-gradient(var(--btn-main-angle), var(--navy) 0%, var(--navy) calc(100% - var(--btn-main-red) - 12%), var(--red) 100%);
+  --btn-main-active: linear-gradient(var(--btn-main-angle), var(--navy-deep) 0%, var(--navy-deep) calc(100% - var(--btn-main-red)), var(--red-dark) 100%);
+  --btn-main-top: rgba(255, 255, 255, .22); --btn-main-shadow: 0 6px 16px rgba(8, 39, 66, .22); --btn-main-shadow-active: 0 2px 6px rgba(8, 39, 66, .18);
+  --btn-main-focus: 0 0 0 3px var(--white), 0 0 0 6px var(--navy);
+  --btn-disabled-bg: #c9d0da; --btn-disabled-fg: #ffffff;
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; font-family: 'Montserrat', 'Segoe UI', system-ui, -apple-system, sans-serif; background: var(--bg-soft); color: var(--ink); font-size: var(--fs-body); line-height: 1.55; font-weight: var(--w-body); font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; }
@@ -498,6 +507,28 @@ select { appearance: none; -webkit-appearance: none; padding-right: 34px; backgr
 .staff-drawer .h1.num { margin: 0; font-size: 22px; }
 .tbl.queue td { overflow: visible; }
 .tbl.queue td.q-main, .tbl.queue td.q-resp { overflow: hidden; }
+
+/* главная кнопка нового стиля (пункт 3): .btn-main — до выбора Марка живёт рядом с .btn-primary; текст и иконка всегда на синей части
+   (красный только в правом нижнем углу); hover — красная зона плавно растёт (слой ::before, 200 мс); active — темнее, тень меньше;
+   disabled — плоский серый без градиента; focus — видимая двойная рамка. .is-hover/.is-active — те же состояния статически для /design */
+.btn-main { position: relative; isolation: isolate; overflow: hidden; border: 0; color: var(--white); background: var(--btn-main); box-shadow: inset 0 1px 0 var(--btn-main-top), var(--btn-main-shadow); transition: box-shadow 200ms var(--ease), transform var(--t-fast) var(--ease); }
+.btn-main::before { content: ''; position: absolute; inset: 0; background: var(--btn-main-hover); opacity: 0; transition: opacity 200ms var(--ease); z-index: -1; }
+.btn-main:hover, .btn-main.is-hover { background: var(--btn-main); }
+.btn-main:hover::before, .btn-main.is-hover::before { opacity: 1; }
+.btn-main:active, .btn-main.is-active { background: var(--btn-main-active); box-shadow: inset 0 1px 0 transparent, var(--btn-main-shadow-active); transform: translateY(1px); }
+.btn-main:active::before, .btn-main.is-active::before { opacity: 0; }
+.btn-main:focus-visible, .btn-main.is-focus { outline: none; box-shadow: inset 0 1px 0 var(--btn-main-top), var(--btn-main-focus); }
+.btn-main:disabled, .btn-main.is-disabled { background: var(--btn-disabled-bg); color: var(--btn-disabled-fg); box-shadow: none; opacity: 1; cursor: default; transform: none; }
+.btn-main:disabled::before, .btn-main.is-disabled::before { display: none; }
+.btn-main > * { position: relative; }
+.ds-variants { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s2); margin-top: var(--s2); }
+.ds-variant { background: var(--white); border: 1px solid var(--line-soft); border-radius: var(--radius); padding: var(--s2); display: flex; flex-direction: column; gap: 10px; }
+.ds-variant .ds-name { font-weight: var(--w-bold); color: var(--navy); }
+.ds-variant .ds-params { font-size: 12px; color: var(--muted); }
+.ds-variant .ds-phone { background: var(--bg-soft); border-radius: var(--radius); padding: 14px; }
+.ds-variant .ds-states { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.ds-variant .ds-states small { width: 100%; color: var(--muted); font-size: 11px; }
+@media (max-width: 900px) { .ds-variants { grid-template-columns: 1fr; } }
 
 /* подсказки «?» и «Справка» (пункт 1 очереди 12.11): кнопка со знаком вопроса, поповер с одной-двумя фразами; «Мои поручения» со счётчиком */
 .help-wrap { position: relative; display: inline-flex; vertical-align: middle; margin-left: 4px; }
