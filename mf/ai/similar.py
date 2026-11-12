@@ -57,6 +57,8 @@ def keyword_score(a: str, b: str, cats: list[dict]) -> float:
 
 def embed(texts: list[str]) -> list[list[float]]:
     from openai import OpenAI
+    from . import budget
+    budget.spend("embeddings")   # потолок суток → исключение → вызывающий код честно переходит на ключевые слова
     r = OpenAI(timeout=30).embeddings.create(model=EMBED_MODEL, input=[t[:4000] for t in texts])
     return [d.embedding for d in r.data]
 

@@ -306,3 +306,94 @@ def test_F19_avatar_rejects_decompression_bomb(c):
     assert len(buf.getvalue()) < 3 * 1024 * 1024
     login(c, 6)
     assert c.post("/api/me/avatar", files={"file": ("bomb.png", buf.getvalue(), "image/png")}).status_code == 415
+
+
+# ---------- F-06: лимиты частоты по настоящему адресу, без доверия X-Forwarded-For ----------
+
+def test_F06_spoofed_forwarded_for_does_not_bypass_limits(c):
+    anon(c)
+    codes = [c.post("/api/public/appeals", headers={"X-Forwarded-For": f"203.0.113.{100 + i}"},
+                    data={"type": "problem", "text": f"Спам номер {i} про парковку", "branch_code": "PVL"}).status_code for i in range(12)]
+    assert codes.count(429) >= 1
+
+
+def test_F06_staff_search_similar_and_login_are_limited(c):
+    anon(c)
+    assert 429 in [c.get("/api/public/staff", params={"q": "ан"}).status_code for _ in range(65)]
+    assert 429 in [c.post("/api/public/similar", json={"text": "проблема с номенклатурой и спецификациями"}).status_code for _ in range(35)]
+    assert 429 in [c.post("/api/auth/login-as", json={"user_id": 6}).status_code for _ in range(35)]
+
+
+def test_F06_limits_use_real_client_address():
+    """Разные настоящие адреса (их ставит uvicorn за туннелем) — разные счётчики."""
+    with TestClient(app, client=("198.51.100.1", 1)) as a, TestClient(app, client=("198.51.100.2", 1)) as b:
+        for _ in range(10):
+            assert a.post("/api/public/appeals", data={"type": "problem", "text": "Сломан принтер на складе", "branch_code": "PVL"}).status_code == 200
+        assert a.post("/api/public/appeals", data={"type": "problem", "text": "Сломан принтер на складе", "branch_code": "PVL"}).status_code == 429
+        assert b.post("/api/public/appeals", data={"type": "problem", "text": "Сломан принтер на складе", "branch_code": "PVL"}).status_code == 200
+
+
+# ---------- F-07: потолки голоса, расшифровок и вызовов ИИ ----------
+
+def test_F07_public_voice_capped_at_10mb(c):
+    anon(c)
+    big = b"\x1a\x45\xdf\xa3" + os.urandom(11 * 1024 * 1024)
+    assert c.post("/api/public/stt", files={"audio": ("v.webm", big, "audio/webm")}).status_code == 413
+
+
+def test_F07_voice_recognition_limited_in_time(monkeypatch):
+    from mf.ai import stt
+    seen = {}
+
+    class FakeModel:
+        def transcribe(self, path, **kw):
+            seen.update(kw)
+            Info = type("Info", (), {"language": "ru", "duration": 1.0})
+            return iter([]), Info()
+    monkeypatch.setattr(stt, "_load", lambda: FakeModel())
+    monkeypatch.setenv("MF_STT", "faster-whisper")
+    p = Path(db.config.AUDIO_DIR) / "t.webm"
+    p.write_bytes(b"0" * 2000)
+    try:
+        stt.transcribe(p, "ru", 200)
+    finally:
+        p.unlink(missing_ok=True)
+    assert seen["clip_timestamps"] == "0,200"
+
+
+def test_F07_meeting_transcript_capped_and_long_lines_chunked(c):
+    from mf.ai import llm
+    login(c, 3)
+    text = "Обсудили поставки и номенклатуру, решили сверить спецификации к пятнице. " * 1000   # 74 тыс. знаков одной строкой
+    r = c.post("/api/meetings", data={"title": "длинная"}, files={"transcript": (None, text.encode("utf-8"))})
+    assert r.status_code == 413
+    assert len(llm._chunks(text)) >= 6 and max(len(x) for x in llm._chunks(text)) <= llm.CHUNK_CHARS + 2   # строка без переводов режется
+
+
+def test_F07_daily_ai_budget_stops_paid_calls(monkeypatch):
+    from mf.ai import budget, llm
+    db.set_setting("ai_daily_limit", 3)
+    db.set_setting(budget._key(), {"calls": 3, "by_kind": {"chat": 3}})
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test-not-real")
+    monkeypatch.setattr(llm, "_client", lambda: object())   # до сети не дойдёт: потолок проверяется раньше вызова
+    try:
+        with pytest.raises(llm.LLMError, match="лимит"):
+            llm.chat_json("s", "u", lambda d: None)
+        with pytest.raises(llm.LLMError, match="лимит"):
+            llm.speak("текст")
+    finally:
+        db.set_setting("ai_daily_limit", budget.DEFAULT_LIMIT)
+        db.set_setting(budget._key(), {"calls": 0, "by_kind": {}})
+
+
+def test_F07_summary_refresh_throttled(c, monkeypatch):
+    from mf import director
+    calls = []
+    real = director.facts
+    monkeypatch.setattr(director, "facts", lambda *a, **k: calls.append(1) or real(*a, **k))
+    login(c, 1)
+    c.get("/api/panel/director-summary?refresh=1")
+    n = len(calls)
+    c.get("/api/panel/director-summary?refresh=1")
+    c.get("/api/panel/director-summary?refresh=1")
+    assert len(calls) == n   # повторные «обновить» в течение минуты берут готовую сводку

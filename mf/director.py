@@ -159,7 +159,10 @@ def summary(user: dict, refresh: bool = False, force_template: bool = False) -> 
     if force_template:
         f = facts()
         return {"sentences": template(f, user), "engine": "template", "facts": f, "at": db.now_iso(), "version": v, "lines": _lines(f)}
-    if cached and not refresh and cached.get("version") == v and (db.now() - db.parse(cached["at"])).total_seconds() < CACHE_TTL:
+    age = (db.now() - db.parse(cached["at"])).total_seconds() if cached and cached.get("at") else None
+    if cached and not refresh and cached.get("version") == v and age < CACHE_TTL:
+        return cached
+    if cached and refresh and age is not None and age < 60:   # F-07: «обновить» не чаще раза в минуту — каждое обновление это вызов ИИ
         return cached
     f = facts()
     ai = ai_sentences(f, user)

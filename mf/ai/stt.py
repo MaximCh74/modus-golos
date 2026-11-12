@@ -122,14 +122,15 @@ def name_hints() -> tuple[str, str]:
     return hot, prompt
 
 
-def _local(path: Path, language: str | None) -> dict:
+def _local(path: Path, language: str | None, max_seconds: int | None = None) -> dict:
     model = _load()
     t0 = time.time()
     hot, prompt = name_hints()
     try:
         segments, info = model.transcribe(str(path), language=language, beam_size=5, vad_filter=True,
                                           vad_parameters={"min_silence_duration_ms": 500},
-                                          hotwords=hot or None, initial_prompt=prompt or None)
+                                          hotwords=hot or None, initial_prompt=prompt or None,
+                                          clip_timestamps=f"0,{int(max_seconds)}" if max_seconds else "0")   # F-07: голосовой ввод — не длиннее
         lines = []
         for s in segments:
             txt = s.text.strip()
@@ -146,41 +147,57 @@ def _local(path: Path, language: str | None) -> dict:
 VIDEO_EXT = {".mp4", ".mov", ".mkv", ".avi", ".webm"}
 
 
-def extract_audio(path: Path) -> Path:
-    """Запись видеозвонка → m4a (ffmpeg, без видео): для whisper-1 (лимит 25 МБ) и на случай, если декодер не возьмёт контейнер."""
+def extract_audio(path: Path, max_seconds: int | None = None) -> Path:
+    """Запись видеозвонка → m4a (ffmpeg, без видео): для whisper-1 (лимит 25 МБ) и на случай, если декодер не возьмёт контейнер.
+    max_seconds — обрезать (голосовой ввод: не платим за лишние минуты)."""
     import subprocess
     out = path.with_suffix(".extracted.m4a")
-    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(path), "-vn", "-ac", "1", "-ar", "16000", "-b:a", "48k", str(out)], check=True, timeout=600)
+    cmd = ["ffmpeg", "-y", "-loglevel", "error", "-i", str(path), "-vn", "-ac", "1", "-ar", "16000", "-b:a", "48k"]
+    if max_seconds:
+        cmd += ["-t", str(int(max_seconds))]
+    try:
+        subprocess.run(cmd + [str(out)], check=True, timeout=600)
+    except Exception:
+        out.unlink(missing_ok=True)   # F-16: недоделанный файл не остаётся
+        raise
     return out
 
 
-def _openai(path: Path, language: str | None) -> dict:
+def _openai(path: Path, language: str | None, max_seconds: int | None = None) -> dict:
     if not os.environ.get("OPENAI_API_KEY"):
         raise STTError("OPENAI_API_KEY не задан — облачный STT недоступен")
     from openai import OpenAI
+    from . import budget
+    try:
+        budget.spend("stt")
+    except budget.Exhausted as e:
+        raise STTError(str(e)) from e
     t0 = time.time()
     tmp = None
-    if path.suffix.lower() in VIDEO_EXT or path.stat().st_size > 24 * 1024 * 1024:
-        try:
-            tmp = extract_audio(path)
-            path = tmp
-        except Exception as e:   # noqa: BLE001
-            raise STTError(f"не удалось извлечь звук: {e}") from e
-    _, prompt = name_hints()
-    with open(path, "rb") as f:
-        kwargs = {"model": "whisper-1", "file": f, "response_format": "verbose_json", "prompt": prompt}   # та же подсказка имён
-        if language:
-            kwargs["language"] = language
-        r = OpenAI().audio.transcriptions.create(**kwargs)
+    try:
+        if max_seconds or path.suffix.lower() in VIDEO_EXT or path.stat().st_size > 24 * 1024 * 1024:
+            try:
+                tmp = extract_audio(path, max_seconds)
+                path = tmp
+            except Exception as e:   # noqa: BLE001
+                raise STTError(f"не удалось извлечь звук: {type(e).__name__}") from e
+        _, prompt = name_hints()
+        with open(path, "rb") as f:
+            kwargs = {"model": "whisper-1", "file": f, "response_format": "verbose_json", "prompt": prompt}   # та же подсказка имён
+            if language:
+                kwargs["language"] = language
+            r = OpenAI().audio.transcriptions.create(**kwargs)
+    finally:
+        if tmp:
+            tmp.unlink(missing_ok=True)   # F-16: и при ошибке облака извлечённая дорожка не остаётся
     text = "\n".join(s.text.strip() if hasattr(s, "text") else s["text"].strip() for s in (getattr(r, "segments", None) or [])) or r.text
-    if tmp:
-        tmp.unlink(missing_ok=True)
     return {"text": text, "language": getattr(r, "language", None) or language, "duration": round(float(getattr(r, "duration", 0) or 0), 1),
             "engine": "openai:whisper-1", "seconds": round(time.time() - t0, 1)}
 
 
-def transcribe(path: str | Path, language: str | None = None) -> dict:
-    """Локально, при сбое — облако (если есть ключ). MODE=off → STTError (остаётся текстовая расшифровка)."""
+def transcribe(path: str | Path, language: str | None = None, max_seconds: int | None = None) -> dict:
+    """Локально, при сбое — облако (если есть ключ). MODE=off → STTError (остаётся текстовая расшифровка).
+    max_seconds — распознать только начало записи (голосовой ввод в формах: 3 минуты в интерфейсе)."""
     path = Path(path)
     if not path.is_file() or path.stat().st_size < 1000:
         raise STTError("Аудио пустое или слишком короткое")
@@ -189,11 +206,11 @@ def transcribe(path: str | Path, language: str | None = None) -> dict:
     if m == "off":
         raise STTError("STT выключен (MF_STT=off) — вставьте текстовую расшифровку")
     if m == "openai":
-        return _openai(path, language)
+        return _openai(path, language, max_seconds)
     try:
-        return _local(path, language)
+        return _local(path, language, max_seconds)
     except STTError as e:
         if os.environ.get("OPENAI_API_KEY"):
             log.warning("локальный STT недоступен (%s) — пробуем OpenAI whisper-1", e)
-            return _openai(path, language)
+            return _openai(path, language, max_seconds)
         raise

@@ -37,7 +37,12 @@ def chat_json(system: str, user: str, validate, *, max_tokens: int = 2000) -> di
     if LLM_MODEL.startswith("gpt-4"):
         kwargs["temperature"] = 0.2
     last = None
+    from . import budget
     for attempt in range(2):
+        try:
+            budget.spend("chat")
+        except budget.Exhausted as e:
+            raise LLMError(str(e)) from e
         try:
             resp = client.chat.completions.create(messages=messages, **kwargs)
             content = resp.choices[0].message.content or ""
@@ -196,11 +201,31 @@ def _validate_meeting(d: dict) -> None:
             raise ValueError("linked_appeal без number")
 
 
+def _lines(text: str) -> list[str]:
+    """Строки расшифровки; строка длиннее куска (текст без переводов строк) режется по предложениям, а слишком длинное предложение — по длине."""
+    import re
+    out = []
+    for para in text.split("\n"):
+        if len(para) <= CHUNK_CHARS:
+            out.append(para)
+            continue
+        cur = ""
+        for sent in re.split(r"(?<=[.!?…])\s+", para):
+            while len(sent) > CHUNK_CHARS:
+                out.append(sent[:CHUNK_CHARS]); sent = sent[CHUNK_CHARS:]
+            if len(cur) + len(sent) + 1 > CHUNK_CHARS and cur:
+                out.append(cur); cur = ""
+            cur = (cur + " " + sent).strip()
+        if cur:
+            out.append(cur)
+    return out
+
+
 def _chunks(text: str) -> list[str]:
     if len(text) <= CHUNK_CHARS:
         return [text]
     out, cur = [], ""
-    for para in text.split("\n"):
+    for para in _lines(text):
         if len(cur) + len(para) > CHUNK_CHARS and cur:
             out.append(cur)
             cur = ""
@@ -345,6 +370,11 @@ def speak(text: str) -> bytes:
     """Текст → mp3. Деловой спокойный тон; кэширует вызывающий код (один и тот же текст — один вызов)."""
     if not available():
         raise LLMError("OPENAI_API_KEY не задан")
+    from . import budget
+    try:
+        budget.spend("tts")
+    except budget.Exhausted as e:
+        raise LLMError(str(e)) from e
     kwargs = {"model": TTS_MODEL, "voice": TTS_VOICE, "input": text[:4000], "response_format": "mp3"}
     if TTS_MODEL.startswith("gpt-4o"):
         kwargs["instructions"] = "Деловой, спокойный тон, русский язык, без спешки. Это короткая сводка для директора компании."

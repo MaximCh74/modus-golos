@@ -49,13 +49,18 @@ class RateLimit:
 
 qr_limit = RateLimit(10, 600)
 stt_limit = RateLimit(20, 600)
+similar_limit = RateLimit(30, 600, "Слишком много запросов подряд — попробуйте через несколько минут")   # F-06: «похожие» без входа
+staff_limit = RateLimit(60, 600, "Слишком много запросов подряд — попробуйте через несколько минут")     # F-06: поиск адресата без входа
+ai_user_limit = RateLimit(60, 600, "Слишком много запросов к ИИ подряд — подождите несколько минут")      # F-07: ИИ для вошедших, на человека
+meeting_limit = RateLimit(10, 3600, "Слишком много совещаний подряд — не больше 10 в час")                # F-07: разбор совещаний, на человека
 invite_limit = RateLimit(30, 600)   # страница приглашения: токены случайные 256 бит, лимит — гигиена
 login_limit = RateLimit(30, 600, "Слишком много входов подряд — попробуйте через несколько минут")   # F-03: демо-вход
 
 
 def client_ip(request: Request) -> str:
-    fwd = request.headers.get("x-forwarded-for", "")
-    return fwd.split(",")[0].strip() or (request.client.host if request.client else "?")
+    """Адрес клиента для лимитов (F-06). X-Forwarded-For сам не читаем — его первый адрес задаёт клиент. За туннелем uvicorn
+    (--proxy-headers, доверяет 127.0.0.1) уже подставил в request.client последний адрес, который дописал Cloudflare, — настоящий."""
+    return request.client.host if request.client else "?"
 
 
 def base_url(request: Request) -> str:
@@ -331,7 +336,7 @@ async def staff_search(request: Request, q: str = ""):
 @router.get("/public/staff")
 async def public_staff_search(request: Request, q: str = ""):
     """То же для QR-формы без входа: только по запросу от двух символов, не больше восьми совпадений."""
-    qr_limit.check(client_ip(request)) if len(q.strip()) < 2 else None
+    staff_limit.check(client_ip(request))   # F-06: раньше условие было перевёрнуто — лимит не срабатывал на настоящих запросах
     return appeals.staff_search(q)
 
 
@@ -575,6 +580,7 @@ async def panel_progress(appeal_id: int, body: Text, request: Request):
 async def panel_rebrief(appeal_id: int, request: Request):
     """«Пересказать заново» — с учётом ответов автора на уточнения."""
     user = auth.require(request, *appeals.STAFF)
+    ai_user_limit.check(f"u:{user['id']}")
     a = _manage(appeal_id, user)
     events = appeals.events_of(appeal_id)
     qa, q = [], None
@@ -636,6 +642,10 @@ AUDIO_EXT = {"audio/webm": ".webm", "video/webm": ".webm", "audio/ogg": ".ogg", 
              "audio/wav": ".wav", "audio/x-wav": ".wav", "audio/x-m4a": ".m4a", "audio/aac": ".aac", "audio/flac": ".flac", "audio/3gpp": ".3gp",
              "video/quicktime": ".mov", "video/x-matroska": ".mkv", "video/x-msvideo": ".avi"}   # записи видеозвонков: берём звуковую дорожку
 MAX_AUDIO = 300 * 1024 * 1024   # видеозвонок на час — сотни мегабайт; удаляется сразу после расшифровки
+DEMO_MAX_AUDIO = 30 * 1024 * 1024   # F-07: демо-вход снаружи — короткие записи (30–40 с весят доли мегабайта)
+VOICE_MAX_AUDIO = 10 * 1024 * 1024   # F-07: голосовой ввод в формах (интерфейс пишет до 3 минут — это 1–3 МБ)
+VOICE_MAX_SECONDS = 200              # распознаём не дольше 3 минут 20 секунд, сколько бы ни прислали
+MAX_TRANSCRIPT = 60000               # F-07: текстовая расшифровка совещания — около часа речи; длиннее — разбить
 
 
 @router.post("/meetings")
@@ -643,11 +653,15 @@ async def create_meeting(request: Request, background: BackgroundTasks, title: s
                          duration_sec: str = Form(""), audio: UploadFile | None = File(None)):
     """Аудио (MediaRecorder / файл) или текстовая расшифровка → processing; обработка в фоне, фронт опрашивает GET /meetings/{id}."""
     user = auth.require(request, *appeals.STAFF)
+    meeting_limit.check(f"u:{user['id']}")
     audio_path = None
+    cap = DEMO_MAX_AUDIO if user.get("demo_restricted") else MAX_AUDIO
+    if not (audio and audio.filename) and len(transcript) > MAX_TRANSCRIPT:
+        raise HTTPException(413, f"Расшифровка длиннее {MAX_TRANSCRIPT // 1000} тыс. знаков — разбейте совещание на части")
     if audio and audio.filename:
-        data = await audio.read(MAX_AUDIO + 1)
-        if len(data) > MAX_AUDIO:
-            raise HTTPException(413, "Запись больше 300 МБ — разбейте на части")
+        data = await audio.read(cap + 1)
+        if len(data) > cap:
+            raise HTTPException(413, f"Запись больше {cap // (1024 * 1024)} МБ — разбейте на части")
         if len(data) < 1000:
             raise HTTPException(422, "Запись пустая — попробуйте ещё раз")
         mime = (audio.content_type or "").split(";")[0].strip()
@@ -781,6 +795,7 @@ async def command_help(request: Request):
 async def command_parse(body: CommandText, request: Request):
     """Разбор + план для экрана подтверждения. НИЧЕГО не отправляет: план лежит в памяти под случайным id до [Отправить]."""
     user = auth.require(request, "director", "admin")
+    ai_user_limit.check(f"u:{user['id']}")
     import asyncio
     cmd = await asyncio.to_thread(commands.parse, body.text, user)
     plan = await asyncio.to_thread(commands.build_plan, cmd, user)
@@ -830,6 +845,7 @@ async def boss_ask(body: AskBody, request: Request):
     """Вопрос или команда голосом/текстом (голос → /api/stt → текст). Вопрос: факты считает сервер, ИИ пересказывает, числа сверяются.
     Команда: план в памяти, ничего не отправляется до POST /api/director/command/{plan_id}/send."""
     user = auth.require(request, "director")
+    ai_user_limit.check(f"u:{user['id']}")
     import asyncio
     return await asyncio.to_thread(boss.ask, body.text, user, body.period)
 
@@ -853,12 +869,13 @@ async def boss_answer_audio(answer_id: str, request: Request):
 # ---------- этап 3: голос, черновик ИИ, похожие обращения, кластеры ----------
 
 async def _transcribe_upload(audio: UploadFile | None, language: str | None) -> dict:
-    """Аудио → текст тем же адаптером, что и совещания; файл живёт только на время расшифровки."""
+    """Голосовой ввод в формах → текст тем же адаптером, что и совещания; файл живёт только на время расшифровки.
+    Потолки (F-07): до 10 МБ и не дольше 200 секунд распознавания."""
     if not audio or not audio.filename:
         raise HTTPException(422, "Нет аудио")
-    data = await audio.read(MAX_AUDIO + 1)
-    if len(data) > MAX_AUDIO:
-        raise HTTPException(413, "Запись больше 300 МБ")
+    data = await audio.read(VOICE_MAX_AUDIO + 1)
+    if len(data) > VOICE_MAX_AUDIO:
+        raise HTTPException(413, "Голосовая запись больше 10 МБ — запишите короче (до 3 минут)")
     if len(data) < 1000:
         raise HTTPException(422, "Запись пустая — попробуйте ещё раз")
     mime = (audio.content_type or "").split(";")[0].strip()
@@ -867,7 +884,7 @@ async def _transcribe_upload(audio: UploadFile | None, language: str | None) -> 
     path.write_bytes(data)
     import asyncio
     try:
-        r = await asyncio.to_thread(stt.transcribe, path, (language or "").strip() or None)
+        r = await asyncio.to_thread(stt.transcribe, path, (language or "").strip() or None, VOICE_MAX_SECONDS)
     except stt.STTError as e:
         raise HTTPException(503, f"Распознавание речи недоступно: {e}")
     finally:
@@ -877,7 +894,8 @@ async def _transcribe_upload(audio: UploadFile | None, language: str | None) -> 
 
 @router.post("/stt")
 async def stt_app(request: Request, audio: UploadFile | None = File(None), language: str = Form("")):
-    auth.require(request)
+    user = auth.require(request)
+    ai_user_limit.check(f"u:{user['id']}")
     return await _transcribe_upload(audio, language)
 
 
@@ -896,7 +914,7 @@ class Draft(BaseModel):
 @router.post("/ai/draft")
 async def ai_draft(body: Draft, request: Request):
     """Черновик ИИ по схеме «Структурирование обращения» (ТЗ §7); без ключа — словарь: категория есть, сути и вопроса нет."""
-    auth.require(request)
+    ai_user_limit.check(f"u:{auth.require(request)['id']}")
     text = (body.text or "").strip()
     if len(text) < 5:
         raise HTTPException(422, "Напишите хотя бы несколько слов")
@@ -910,7 +928,7 @@ class SimilarQ(BaseModel):
 
 @router.post("/ai/similar")
 async def ai_similar(body: SimilarQ, request: Request):
-    auth.require(request)
+    ai_user_limit.check(f"u:{auth.require(request)['id']}")
     import asyncio
     return await asyncio.to_thread(similar.similar, body.text, body.exclude_id)
 
@@ -918,6 +936,7 @@ async def ai_similar(body: SimilarQ, request: Request):
 @router.post("/public/similar")
 async def public_similar(body: SimilarQ, request: Request):
     """«Похоже, об этом уже сообщали» в QR-форме: номер и короткий текст, без авторов; максимум два."""
+    similar_limit.check(client_ip(request))
     import asyncio
     r = await asyncio.to_thread(similar.similar, body.text, None, 2)
     for i in r["items"]:
@@ -1025,13 +1044,15 @@ async def decide_claim(claim_id: int, body: ClaimDecision, request: Request):
     return {"ok": True}
 
 
-SETTING_KEYS = ("points", "director_wait_days", "news_days", "similar_threshold", "cluster_threshold", "league_weights", "dev_department_head_id", "tz_offset_hours", "invite_days")
+SETTING_KEYS = ("points", "director_wait_days", "news_days", "similar_threshold", "cluster_threshold", "league_weights", "dev_department_head_id", "tz_offset_hours", "invite_days",
+                "ai_daily_limit")
 
 
 @router.get("/admin/settings")
 async def admin_settings(request: Request):
     auth.require(request, "admin", "director")
-    return {"settings": {k: db.setting(k) for k in SETTING_KEYS},
+    from .ai import budget
+    return {"settings": {**{k: db.setting(k) for k in SETTING_KEYS}, "ai_daily_limit": budget.limit()}, "ai_usage": budget.usage(),
             "categories": db.q("""SELECT c.id, c.name, c.responsible_user_id, c.suggestion_responsible_user_id, c.sla_first_response_hours AS sla,
                                   u.name AS responsible, s.name AS suggestion_responsible, (SELECT COUNT(*) FROM appeals a WHERE a.category_id=c.id) AS appeals
                                   FROM categories c LEFT JOIN users u ON u.id=c.responsible_user_id LEFT JOIN users s ON s.id=c.suggestion_responsible_user_id ORDER BY c.id"""),

@@ -24,6 +24,7 @@ STATUSES = {"processing": "Обрабатывается", "review": "На про
 STAGES = {"stt": "Расшифровываем…", "analysis": "Разбираем…"}
 TASK_STATUSES = {"draft": "Черновик", "assigned": "Назначено", "in_progress": "В работе", "done": "Выполнено"}
 DECISIONS = {"pending": "На решении", "accepted": "Принято", "rejected": "Отклонено"}
+MAX_ANALYZE = 100000   # F-07: больше ~1,5 часа речи в один разбор не отправляем (≈ 9 вызовов ИИ)
 FLAGS = {"no_due": "нет срока", "no_assignee": "нет ответственного", "unknown_appeal": "обращение не найдено", "no_category": "категория не определена"}
 
 # ---------- сроки из речи ----------
@@ -208,7 +209,11 @@ def process(mid: int) -> None:
                 db.ex("UPDATE meetings SET audio_path=NULL WHERE id=?", (mid,))
         if not transcript or len(transcript.strip()) < 10:
             raise ValueError("Расшифровка пустая — запись не распознана. Попробуйте ещё раз или вставьте текст.")
-        analyze(mid, transcript)
+        if len(transcript) > MAX_ANALYZE:   # F-07: потолок вызовов ИИ на одно совещание; расшифровка хранится целиком
+            analyze(mid, transcript[:MAX_ANALYZE])
+            db.ex("UPDATE meetings SET error=? WHERE id=?", (f"Разобраны первые {MAX_ANALYZE // 1000} тыс. знаков расшифровки — для длинных совещаний загрузите части отдельно", mid))
+        else:
+            analyze(mid, transcript)
     except Exception as e:   # noqa: BLE001
         log.exception("совещание %s", mid)
         _fail(mid, f"{e}")
