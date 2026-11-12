@@ -664,10 +664,40 @@ select { appearance: none; -webkit-appearance: none; padding-right: 34px; backgr
   .kv-row { grid-template-columns: 1fr; gap: 0; }
   .toolbar .search { max-width: none; }
 }
+/* меню панели за кнопкой (телефон) и очередь карточками — замечание владельца 12.11 */
+.nav-toggle { display: none; }
+.nav-panel { display: none; }
+.qcards { display: flex; flex-direction: column; gap: 8px; }
+.qcard { display: flex; flex-direction: column; gap: 6px; width: 100%; text-align: left; background: var(--white); border: 1px solid var(--line-soft); border-radius: var(--radius); padding: 12px 14px; font: inherit; color: var(--ink); cursor: pointer; }
+.qcard.sel { border-color: var(--tint-line); background: var(--tint); }
+.qcard.flash { animation: flash 1.5s ease-out; }
+.qcard:focus-visible { outline: none; box-shadow: var(--focus); }
+.qcard .num { color: var(--navy); }
+.qcard .tic { color: var(--muted-2); }
+.qcard-text { font-size: 14px; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.qcard .row { gap: 8px; flex-wrap: nowrap; min-width: 0; }
 @media (max-width: 480px) {
-  .topbar { gap: 8px; padding: 8px 12px; }
+  .topbar { gap: 6px; padding: 8px 12px; position: sticky; flex-wrap: nowrap; }
   .topbar .brand span { display: none; }
   .topbar .btn-sm { padding: 6px 8px; }
+  .topbar .nav, .topbar .top-app, .topbar .top-user { display: none; }
+  .nav-toggle { display: inline-flex; }
+  .nav-panel.open { display: flex; flex-direction: column; position: absolute; top: 100%; left: 0; right: 0; background: var(--white); border-bottom: 1px solid var(--line-soft); box-shadow: var(--shadow-2); padding: 6px 12px 12px; z-index: 20; }
+  .nav-panel a { padding: 12px 10px; border-radius: var(--radius-sm); text-decoration: none; color: var(--ink); font-weight: var(--w-bold); font-size: 15px; }
+  .nav-panel a.active { background: var(--tint); color: var(--navy); }
+  .nav-panel .nav-sep { height: 1px; background: var(--line-soft); margin: 6px 0; }
+  .toolbar .view-btn { display: none; }
+  .cmd-row { flex-wrap: wrap; }
+  .cmd-row > .spacer { flex: 1 1 100%; }   /* поле команды — на всю ширину, кнопки строкой ниже */
+  /* таблицы (сводка, совещания, лига, администрирование) — строки карточками, без горизонтальной прокрутки */
+  .tbl, .tbl tbody, .tbl tr, .tbl td { display: block; width: auto !important; min-width: 0 !important; }
+  .tbl thead, .tbl colgroup { display: none; }
+  .tbl tr { padding: 10px 0; border-bottom: 1px solid var(--line-soft); }
+  .tbl tr:last-child { border-bottom: 0; }
+  .tbl td, .tbl.queue td { border: 0; padding: 2px 0; white-space: normal; overflow: visible; text-overflow: clip; }
+  .tbl td:first-child { font-weight: var(--w-bold); color: var(--navy); }
+  .tbl td[data-label]:not([data-label=""])::before { content: attr(data-label) ': '; color: var(--muted); font-size: 12px; font-weight: var(--w-regular, 400); }
+  .tbl td:empty { display: none; }
   .tracker .step { font-size: 10px; padding: 22px 1px 0; }
   .grid2 .btn-big { padding: 14px 10px; font-size: 16px; }
   .stats { grid-template-columns: repeat(2, 1fr); }

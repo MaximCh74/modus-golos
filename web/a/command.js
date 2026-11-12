@@ -13,9 +13,9 @@ function commandPanel(opts) {
   Voice.attach(mic, ta, { onText: () => parse() });
   run.addEventListener('click', parse);
   ta.addEventListener('keydown', ev => { if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); parse(); } });
-  if (opts.compact) box.append(h('div', { class: 'row' }, h('div', { class: 'spacer' }, ta), mic, run, helpBtn('command')), result);
+  if (opts.compact) box.append(h('div', { class: 'row cmd-row' }, h('div', { class: 'spacer' }, ta), mic, run, helpBtn('command')), result);
   else box.append(h('div', { class: 'row' }, h('div', { class: 'lbl' }, 'Команда'), helpBtn('command'), h('span', { class: 'hint' }, 'голосом или текстом: напоминания, новости по обращениям, «На решение», сводка')),
-    h('div', { class: 'row mt8' }, h('div', { class: 'spacer' }, ta), mic, run), result);
+    h('div', { class: 'row mt8 cmd-row' }, h('div', { class: 'spacer' }, ta), mic, run), result);
 
   async function parse() {
     const text = ta.value.trim();

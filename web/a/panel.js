@@ -44,15 +44,37 @@ function renderTop() {
   if (ME.role !== 'responsible') nav.push(['#/decisions', 'На решение']);
   nav.push(['#/league', 'Лига']);
   if (ME.role === 'admin' || ME.role === 'director') nav.push(['#/admin', 'Администрирование']);
+  const isActive = href => hash.startsWith(href) || (href === '#/queue' && hash.startsWith('#/appeal'));
+  // телефон (до 480 px, замечание владельца 12.11): разделы, «Приложение» и пользователь — за кнопкой меню, шапка в одну строку
+  const panel = h('div', { class: 'nav-panel', id: 'nav-panel', role: 'menu' },
+    nav.map(([href, label]) => h('a', { href, role: 'menuitem', class: isActive(href) ? 'active' : '', onclick: () => toggleNav(false) }, label)),
+    h('div', { class: 'nav-sep' }), h('a', { href: '/app', role: 'menuitem' }, 'Приложение'),
+    h('a', { href: '/login', role: 'menuitem', class: 'muted' }, ME.name + ' · ' + ME.role_label));
+  const toggle = h('button', { type: 'button', class: 'btn btn-sm nav-toggle', 'aria-label': 'Меню', 'aria-expanded': 'false', 'aria-controls': 'nav-panel',
+    onclick: ev => { ev.stopPropagation(); toggleNav(!panel.classList.contains('open')); } }, icon('menu'));
+  function toggleNav(open) { panel.classList.toggle('open', open); toggle.setAttribute('aria-expanded', open ? 'true' : 'false'); }
   top.replaceChildren(
     h('a', { href: '#/queue', class: 'brand' }, h('img', { src: '/a/img/logo.svg', alt: 'Модус Трейд' }), h('span', {}, 'Модус Голос', h('small', {}, 'Панель'))),
-    h('div', { class: 'nav' }, nav.map(([href, label]) => h('a', { href, class: hash.startsWith(href) || (href === '#/queue' && hash.startsWith('#/appeal')) ? 'active' : '' }, label))),
+    h('div', { class: 'nav' }, nav.map(([href, label]) => h('a', { href, class: isActive(href) ? 'active' : '' }, label))),
     h('div', { class: 'spacer' }),
     h('a', { href: '#/help', class: 'btn btn-sm' + (hash.startsWith('#/help') ? ' on' : ''), title: 'Справка: термины простым языком', 'aria-label': 'Справка' }, icon('help-circle')),
     h('a', { href: '#/notifications', class: 'btn btn-sm bell', title: 'Уведомления' }, icon('bell'), ME.unread ? h('span', { class: 'n' }, String(ME.unread)) : null),
-    h('a', { href: '/app', class: 'btn btn-sm' }, 'Приложение'),
-    h('a', { href: '/login', class: 'btn btn-sm', title: ME.name + ' · ' + ME.role_label }, h('span', {}, ME.name), h('span', { class: 'role-lbl' }, ' · ' + ME.role_label)));
+    h('a', { href: '/app', class: 'btn btn-sm top-app' }, 'Приложение'),
+    h('a', { href: '/login', class: 'btn btn-sm top-user', title: ME.name + ' · ' + ME.role_label }, h('span', {}, ME.name), h('span', { class: 'role-lbl' }, ' · ' + ME.role_label)),
+    toggle, panel);
 }
+document.addEventListener('click', ev => { const p = document.getElementById('nav-panel'); if (p && p.classList.contains('open') && !ev.target.closest('#nav-panel')) { p.classList.remove('open'); const t = document.querySelector('.nav-toggle'); if (t) t.setAttribute('aria-expanded', 'false'); } });
+const PHONE = window.matchMedia('(max-width: 480px)');   // очередь карточками, меню за кнопкой
+PHONE.addEventListener('change', () => { if (S.view === 'queue') loadQueue(); });
+// таблицы на телефоне — строки карточками (CSS); подпись каждой ячейке — из заголовка её колонки (data-label), чтобы числа не теряли смысл
+function labelTables(scope) {
+  for (const t of (scope || document).querySelectorAll('table.tbl')) {
+    const heads = [...t.querySelectorAll('thead th')].map(th => th.textContent.trim());
+    if (!heads.length) continue;
+    for (const tr of t.querySelectorAll('tbody tr')) [...tr.children].forEach((td, i) => { if (!td.hasAttribute('data-label')) td.setAttribute('data-label', i ? (heads[i] || '') : ''); });
+  }
+}
+new MutationObserver(muts => { if (muts.some(m => m.addedNodes.length)) labelTables(document.getElementById('root')); }).observe(document.getElementById('root'), { childList: true, subtree: true });
 
 async function route() {
   const hash = location.hash || '#/queue';
@@ -126,7 +148,7 @@ async function queue() {
   const tabs = h('div', { class: 'tabs q' }, QUEUE_TABS.map(([code, label]) => h('a', { href: '#', class: S.tab === code ? 'active' : '', onclick: ev => { ev.preventDefault(); S.tab = code; delete S.filters.closed; delete S.filters.mine; delete S.filters.attention; delete S.filters.open; if (code !== 'closed' && S.filters.status && CLOSED_STATUSES.includes(S.filters.status)) delete S.filters.status; queue(); } }, label)));
   const active = FILTER_KEYS.filter(k => S.filters[k]);
   const filtersBtn = h('button', { class: 'btn btn-sm' + (active.length ? ' on' : ''), onclick: () => filtersDrawer() }, iconText('filter', 'Фильтры' + (active.length ? ' · ' + active.length : '')));
-  const viewBtn = h('button', { class: 'btn btn-sm', onclick: () => viewMenu(viewBtn) }, iconText('sliders', 'Вид'));
+  const viewBtn = h('button', { class: 'btn btn-sm view-btn', onclick: () => viewMenu(viewBtn) }, iconText('sliders', 'Вид'));
   const toolbar = h('div', { class: 'toolbar' }, q, tabs, h('div', { class: 'spacer' }), filtersBtn, viewBtn);
   const chips = h('div', { class: 'chips chips-active' }, active.map(k => h('button', { type: 'button', class: 'chip', title: 'Убрать фильтр', onclick: () => { delete S.filters[k]; queue(); } }, filterLabel(k), ' ', icon('x', { size: 12 }))),
     active.length > 1 ? h('button', { type: 'button', class: 'btn btn-sm btn-ghost', onclick: () => { for (const k of active) delete S.filters[k]; queue(); } }, 'Сбросить всё') : null);
@@ -220,6 +242,16 @@ function queueRow(r, cols) {
   return h('tr', { class: S.selected === r.id ? 'sel' : '', onclick: () => { location.hash = '#/appeal/' + r.id; } }, ...tds);
 }
 
+function queueCard(r) {
+  const tIcon = r.type === 'problem' ? 'alert-circle' : r.type === 'suggestion' ? 'lightbulb' : 'heart';
+  return h('button', { type: 'button', class: 'qcard' + (S.selected === r.id ? ' sel' : ''), onclick: () => { location.hash = '#/appeal/' + r.id; } },
+    h('div', { class: 'row' }, icon(tIcon, { size: 14, cls: 'tic', title: r.type_label }), h('b', { class: 'num' }, r.number),
+      r.priority === 'high' ? h('span', { class: 'mini', title: 'Высокий приоритет' }, icon('alert', { size: 11 })) : null,
+      h('div', { class: 'spacer' }), r.overdue ? h('span', { class: 'dot-overdue', title: 'Просрочено' }) : null, h('span', { class: 'small muted' }, fmtHours(r.age_hours))),
+    h('div', { class: 'qcard-text' }, r.brief_line || r.text || ''),
+    h('div', { class: 'row small' }, badge(r.status), h('span', { class: 'muted one-line' }, r.responsible ? shortName(r.responsible) : 'без ответственного')));
+}
+
 async function loadQueue(flashId) {
   const rows = await API.get('/api/panel/appeals?' + queueParams().toString());
   S.rows = rows;
@@ -236,7 +268,10 @@ async function loadQueue(flashId) {
     h('thead', {}, h('tr', {}, heads.map(t => h('th', {}, t)))),
     h('tbody', {}, rows.map(r => { const tr = queueRow(r, cols); if (flashId === r.id) tr.classList.add('flash'); return tr; })));
   const empty = { attention: 'Ничего не требует внимания — посмотрите «Все открытые».', open: 'Открытых обращений нет.', mine: 'На вас сейчас ничего не назначено.', closed: 'Закрытых обращений нет.' };
-  table.replaceChildren(h('div', { class: 'card' }, rows.length ? tbl : h('div', { class: 'muted' }, empty[S.tab] || 'Ничего не найдено')));
+  if (!rows.length) { table.replaceChildren(h('div', { class: 'card' }, h('div', { class: 'muted' }, empty[S.tab] || 'Ничего не найдено'))); return; }
+  // телефон: карточки вместо таблицы — номер, «Коротко», статус, ответственный, возраст (замечание владельца 12.11)
+  if (PHONE.matches) { table.replaceChildren(h('div', { class: 'qcards' }, rows.map(r => { const c = queueCard(r); if (flashId === r.id) c.classList.add('flash'); return c; }))); return; }
+  table.replaceChildren(h('div', { class: 'card' }, tbl));
 }
 
 // ---------- карточка (этап 9: одна главная кнопка по статусу, остальное в «…», подробности и история свёрнуты) ----------
