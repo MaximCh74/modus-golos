@@ -56,6 +56,11 @@ function commandPanel(opts) {
         h('div', { class: 'row mt8' }, speak, h('button', { class: 'btn btn-sm', onclick: cancel }, 'Отмена'))));
       return;
     }
+    if (p.empty) {   // отправлять некому — ответ словами, без карточки команды и неактивной «Отправить» (замечание владельца 12.11)
+      result.replaceChildren(h('div', { class: 'card card-info' }, h('div', { class: 'row' }, h('b', {}, p.title), engine),
+        h('div', { class: 'row mt8' }, h('button', { class: 'btn btn-sm', onclick: cancel }, 'Понятно'))));
+      return;
+    }
     // kind === 'send': список «кто — что», текст сообщения (можно поправить), кнопки
     const edits = {};
     const rows = p.recipients.map(rec => {

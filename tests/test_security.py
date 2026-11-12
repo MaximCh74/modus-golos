@@ -451,14 +451,12 @@ def test_F12_boss_rejects_no_overdue_lie(c, monkeypatch):
 def test_F12_boss_rejects_numbers_taken_from_appeal_numbers(c, monkeypatch):
     from mf import boss
     from mf.ai import llm
-    f = _overdue_facts()
-    digits = {int(x) for x in re.findall(r"\d+", json.dumps(f["by_responsible"], ensure_ascii=False))} - llm.numeric_values(f)
-    assert digits, "в фактах есть номера обращений"
-    wrong = max(digits)
+    f = {**_overdue_facts(), "examples": ["A-022", "A-023 в Павлодаре — 15 позиций"]}   # цифры внутри строк — не факты
+    assert {22, 23, 15}.isdisjoint(llm.numeric_values(f))
     monkeypatch.setattr(llm, "available", lambda: True)
-    monkeypatch.setattr(llm, "boss_answer", lambda q, what, facts: f"Просрочено {wrong} обращений.")
+    monkeypatch.setattr(llm, "boss_answer", lambda q, what, facts: "Просрочено 15 обращений.")
     assert boss.ai_answer("Кто просрочил?", "who_overdue", f) is None
-    ok = f"Просрочено {f['overdue_appeals']} обращений, например A-007."
+    ok = f"Просрочено {f['overdue_appeals']} обращений, например A-022."
     monkeypatch.setattr(llm, "boss_answer", lambda q, what, facts: ok)
     assert boss.ai_answer("Кто просрочил?", "who_overdue", f) == ok   # номер обращения в ответе — можно
 

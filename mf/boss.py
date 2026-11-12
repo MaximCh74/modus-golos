@@ -181,22 +181,67 @@ def parse(text: str, user: dict) -> dict:
     if raw is None:
         raw = fallback.parse_boss(text, ctx)
     kind = raw.get("kind") if raw.get("kind") in ("question", "command", "unknown") else "unknown"
-    q = raw.get("question") if raw.get("question") in QUESTIONS else None
-    if kind == "question" and not q:
+    # замечание владельца 12.11: команда — только при явном глаголе действия; иначе это вопрос, даже если модель решила иначе
+    if fallback.is_action(text):
+        kind = "command"
+    elif kind == "command":
+        kind = "question"
+    raw_parts = [x for x in (raw.get("parts") or []) if isinstance(x, dict) and x.get("question") in QUESTIONS]
+    if kind != "command" and not raw_parts:
+        raw_parts = fallback.boss_parts(text, ctx)   # модель не разложила — разложим ключевыми словами
+        if raw_parts and kind == "unknown":
+            kind = "question"
+    parts = _clean_parts([_resolve_part(x, text, ctx) for x in raw_parts], text) if kind == "question" else []
+    if kind == "question" and not parts:
         kind = "unknown"
-    out = {"text": text, "kind": kind, "question": q if kind == "question" else None, "city": None, "city_id": None, "department": None,
-           "department_id": None, "number": None, "period": raw.get("period") if raw.get("period") in PERIODS else None, "engine": engine}
-    if raw.get("city"):
-        st = _stem(str(raw["city"]))
-        b = next((x for x in ctx["cities"] if _stem(x["city"]) == st or _stem(x["name"]) == st), None)
+    first = parts[0] if parts else {"question": None, "city": None, "city_id": None, "department": None, "department_id": None, "number": None}
+    return {"text": text, "kind": kind, **first, "period": raw.get("period") if raw.get("period") in PERIODS else None, "engine": engine, "parts": parts}
+
+
+TOPIC_WORDS = re.compile(r"тем[аыу]|о ч[её]м пишут|что болит|повторя|чаще всего")
+NEW_WORDS = re.compile(r"нового|как дела|что происходит|сводк|итог|обстановк|в целом|сколько|пришл|поступ")
+
+
+def _clean_parts(parts: list[dict], text: str) -> list[dict]:
+    """Части от модели → по смыслу вопроса: город или отдел, приписанные к «кто просрочил» / «что нового», — отдельной частью
+    (иначе «в Павлодаре просрочено 7», хотя 7 — по всей компании); «темы» и «что нового» в составном вопросе — только если о них
+    спросили словами; повторы — один раз; не больше трёх частей."""
+    t = (text or "").lower().replace("ё", "е")
+    out = []
+    for p in parts:
+        if p["question"] in ("city", "department") or not (p["city_id"] or p["department_id"]):
+            out.append(p)
+            continue
+        out.append({**p, "city": None, "city_id": None, "department": None, "department_id": None})   # сама часть — по всей компании
+        if p["city_id"]:
+            out.append({"question": "city", "city": p["city"], "city_id": p["city_id"], "department": None, "department_id": None, "number": None})
+        if p["department_id"]:
+            out.append({"question": "department", "city": None, "city_id": None, "department": p["department"], "department_id": p["department_id"], "number": None})
+    if len(out) > 1:
+        kept = [p for p in out if not (p["question"] == "main_topics" and not TOPIC_WORDS.search(t)) and not (p["question"] == "whats_new" and not NEW_WORDS.search(t))]
+        out = kept or out[:1]
+    res, seen = [], set()
+    for p in out:
+        key = (p["question"], p["city_id"], p["department_id"], p["number"])
+        if key not in seen:
+            seen.add(key)
+            res.append(p)
+    return res[:3]
+
+
+def _resolve_part(x: dict, text: str, ctx: dict) -> dict:
+    out = {"question": x["question"], "city": None, "city_id": None, "department": None, "department_id": None, "number": None}
+    if x.get("city"):
+        st = _stem(str(x["city"]))
+        b = next((c for c in ctx["cities"] if _stem(c["city"]) == st or _stem(c["name"]) == st), None)
         if b:
             out["city"], out["city_id"] = b["city"], b["id"]
-    if raw.get("department"):
-        st = _stem(str(raw["department"]))
-        d = next((x for x in ctx["departments"] if _stem(x["name"]) == st), None)
+    if x.get("department"):
+        st = _stem(str(x["department"]))
+        d = next((d for d in ctx["departments"] if _stem(d["name"]) == st), None)
         if d:
             out["department"], out["department_id"] = d["name"], d["id"]
-    m = re.search(r"(?<![а-яa-z])[aа]-?\s?(\d{1,4})\b", str(raw.get("number") or text).lower())
+    m = re.search(r"(?<![а-яa-z])[aа]-?\s?(\d{1,4})\b", str(x.get("number") or (text if x["question"] == "appeal" else "")).lower())
     if m:
         out["number"] = f"A-{int(m.group(1)):03d}"
     return out
@@ -233,8 +278,9 @@ def facts_for(p: dict, period: str) -> dict:
         tby: dict[str, int] = {}
         for t in tasks:
             tby[t["assignee"] or "без исполнителя"] = tby.get(t["assignee"] or "без исполнителя", 0) + 1
-        return {"overdue_appeals": len(over), "by_responsible": [{"name": k, "count": len(v), "numbers": v[:4]} for k, v in sorted(by.items(), key=lambda kv: -len(kv[1]))[:5]],
-                "overdue_tasks": len(tasks), "tasks_by_assignee": [{"name": k, "count": n} for k, n in sorted(tby.items(), key=lambda kv: -kv[1])[:5]],
+        return {"total_overdue": len(over) + len(tasks),   # = плитка «просрочено» на главном экране
+                "overdue_appeals": len(over), "by_responsible": [{"name": k, "count": len(v)} for k, v in sorted(by.items(), key=lambda kv: -len(kv[1]))[:3]],
+                "overdue_tasks": len(tasks), "tasks_by_assignee": [{"name": k, "count": n} for k, n in sorted(tby.items(), key=lambda kv: -kv[1])[:3]],
                 "link": "/panel#/queue?overdue=1", "link_label": "Просроченные в очереди"}
     if q == "main_topics":
         topics = []
@@ -320,13 +366,15 @@ def template_answer(q: str, f: dict) -> str:
         return s
     if q == "who_overdue":
         if not f["overdue_appeals"] and not f["overdue_tasks"]:
-            return "Просрочек нет — все обращения получили первый ответ вовремя, поручения в сроке."
-        parts = []
+            return "Просрочек нет: обращения получили первый ответ вовремя, поручения с совещаний в сроке."
+        kinds = [x for x in (_pl(f["overdue_appeals"], ("обращение", "обращения", "обращений")) + " без первого ответа в срок" if f["overdue_appeals"] else None,
+                             _pl(f["overdue_tasks"], ("поручение", "поручения", "поручений")) + " с совещаний" if f["overdue_tasks"] else None) if x]
+        s = f"Всего просрочено {f['total_overdue']}: " + " и ".join(kinds) + "."
         if f["overdue_appeals"]:
-            parts.append(f"По первому ответу просрочено {_pl(f['overdue_appeals'], ('обращение', 'обращения', 'обращений'))}: " + ", ".join(f"{x['name']} — {x['count']}" for x in f["by_responsible"]))
+            s += " Обращения: " + ", ".join(f"{x['name']} — {x['count']}" for x in f["by_responsible"][:3]) + "."
         if f["overdue_tasks"]:
-            parts.append(f"Просрочено {_pl(f['overdue_tasks'], ('поручение', 'поручения', 'поручений'))} с совещаний: " + ", ".join(f"{x['name']} — {x['count']}" for x in f["tasks_by_assignee"]))
-        return ". ".join(parts) + "."
+            s += " Поручения: " + ", ".join(f"{x['name']} — {x['count']}" for x in f["tasks_by_assignee"][:3]) + "."
+        return s
     if q == "main_topics":
         parts = []
         if f["repeated"]:
@@ -417,21 +465,62 @@ def ask(text: str, user: dict, period: str | None = None) -> dict:
         if not cmd["intent"]:
             return _unknown(text, p)
         plan = commands.build_plan(cmd, user)
+        if plan["kind"] == "send" and plan.get("empty"):   # отправлять некому — без карточки команды, просто ответ словами
+            return _answer_out(user, {"kind": "answer", "answer": plan["title"], "engine": p["engine"], "parse_engine": p["engine"], "parts": []})
         pid = commands.remember(plan, cmd, user)
         return {"kind": "command", "plan_id": pid, "command": cmd, "plan": plan, "engine": p["engine"],
                 "answer": plan["title"], "needs_confirmation": plan["kind"] in ("send",)}
     if p["kind"] != "question":
         return _unknown(text, p)
-    f = facts_for(p, period)
-    ai = ai_answer(text, p["question"], f)
-    answer = ai or template_answer(p["question"], f)
+    parts = []
+    for part in p["parts"]:
+        f = facts_for(part, period)
+        # составной вопрос: модели — только своя часть, иначе она отвечает и за соседние
+        q_text = text if len(p["parts"]) == 1 else QUESTIONS[part["question"]] + "".join(f": {v}" for v in (part["city"], part["department"], part["number"]) if v)
+        ai = ai_answer(q_text, part["question"], f)
+        parts.append({"question": part["question"], "question_label": QUESTIONS[part["question"]], "answer": ai or template_answer(part["question"], f),
+                      "engine": "openai" if ai else "template", "facts": f, "link": f.get("link"), "link_label": f.get("link_label"),
+                      "list": part_list(part, f, period)})
+    first = parts[0]
+    engines = {x["engine"] for x in parts}
+    return _answer_out(user, {"kind": "question", "question": first["question"],
+                              "question_label": first["question_label"] if len(parts) == 1 else "Ответ на вопрос",
+                              "period": period, "answer": " ".join(x["answer"] for x in parts),
+                              "engine": engines.pop() if len(engines) == 1 else "mixed", "parse_engine": p["engine"],
+                              "facts": first["facts"], "link": first["link"], "link_label": first["link_label"], "parts": parts})
+
+
+def _answer_out(user: dict, out: dict) -> dict:
+    """Ответ словами (вопрос или «отправлять некому»): id для озвучки, хранится полчаса за этим пользователем."""
     _cleanup()
     aid = secrets.token_urlsafe(10)
-    out = {"kind": "question", "id": aid, "question": p["question"], "question_label": QUESTIONS[p["question"]], "period": period, "answer": answer,
-           "engine": "openai" if ai else "template", "parse_engine": p["engine"], "facts": f, "link": f.get("link"), "link_label": f.get("link_label"),
-           "audio": llm.available()}
-    _ANSWERS[aid] = {"user_id": user["id"], "text": answer, "at": time.time()}
-    return out
+    _ANSWERS[aid] = {"user_id": user["id"], "text": out["answer"], "at": time.time()}
+    return {**out, "id": aid, "audio": llm.available()}
+
+
+def part_list(p: dict, f: dict, period: str) -> dict | None:
+    """Список для просмотра ВНУТРИ /boss (замечание владельца 12.11: ссылки в панель на телефоне неудобны): номер, «Коротко» одной
+    строкой, статус, ответственный; нажатие — карточка в /boss."""
+    q = p["question"]
+    rows = _rows()
+    open_rows = [r for r in rows if r["status"] in appeals.OPEN]
+    order = lambda r: (not r["overdue"], -r["age_hours"])   # noqa: E731 — просроченные и самые старые сверху
+    if q == "who_overdue":
+        items = [{"kind": "appeal", **_brief_item(a)} for a in sorted([r for r in open_rows if r["overdue"]], key=order)] + [{"kind": "task", **t} for t in _overdue_tasks()]
+        return {"title": "Просрочено", "items": items[:30]}
+    if q == "city" and p.get("city_id"):
+        return {"title": f"Открытые · {p['city']}", "items": [_brief_item(a) for a in sorted([r for r in open_rows if r["branch_id"] == p["city_id"]], key=order)][:30]}
+    if q == "department" and p.get("department_id"):
+        return {"title": f"Открытые · {p['department']}", "items": [_brief_item(a) for a in sorted([r for r in open_rows if r["department_id"] == p["department_id"]], key=order)][:30]}
+    if q == "appeal" and not f.get("not_found"):
+        a = next((r for r in rows if r["number"] == p["number"]), None)
+        return {"title": p["number"], "items": [_brief_item(a)]} if a else None
+    if q == "my_decisions":
+        return {"title": "Ждут вашего решения", "items": [{"kind": "decision", **d} for d in _decisions()]}
+    if q == "whats_new":
+        since = period_since(period)
+        return {"title": "Пришло · " + PERIODS[period], "items": [_brief_item(a) for a in sorted([r for r in rows if r["created_at"] >= since], key=lambda r: r["created_at"], reverse=True)][:30]}
+    return None
 
 
 def _unknown(text: str, p: dict) -> dict:

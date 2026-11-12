@@ -263,9 +263,12 @@ def build_plan(cmd: dict, user: dict) -> dict:
     n_items = sum(len(r["items"]) for r in recs)
     is_tasks = intent == "remind_overdue_tasks"
     what = "запрос новостей" if intent == "request_progress" else "напоминание"
-    if not recs:
-        title = "Некому отправлять: " + ("нет просроченных поручений" if is_tasks else "нет обращений без ответа" if intent == "remind_no_response" else "нет обращений «В работе»") + \
-                (" по выбранному фильтру" if (f["branch_id"] or f["department_id"] or f["person_id"] or f["stale_only"] or f["overdue_only"]) else "")
+    if not recs:   # замечание владельца 12.11: без служебного «Некому отправлять» — просто словами, что напоминать не о чем
+        where = ", ".join(x for x in (f["branch"] and "в городе " + f["branch"], f["department"] and "в отделе «" + f["department"] + "»", f["person"] and "у " + f["person"]) if x)
+        where = (" " + where) if where else ""
+        title = ("Напоминать не о чем: просроченных поручений с совещаний" + where + " нет." if is_tasks
+                 else "Напоминать не о чем: обращений без первого ответа" + where + " нет." if intent == "remind_no_response"
+                 else "Запрашивать новости не о чем: обращений «В работе»" + where + (" без новостей дольше порога" if f["stale_only"] else "") + " нет.")
     else:
         title = f"Отправить {what} {_dat(n_users, 'сотруднику', 'сотрудникам')} по {_dat(n_items, 'поручению' if is_tasks else 'обращению', 'поручениям' if is_tasks else 'обращениям')}"
     scope = ", ".join(x for x in (f["branch"], f["department"], f["person"], "без новостей дольше порога" if f["stale_only"] else None, "только просроченные по SLA" if f["overdue_only"] else None) if x)

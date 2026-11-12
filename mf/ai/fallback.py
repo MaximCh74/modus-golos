@@ -191,17 +191,82 @@ def parse_command(text: str, ctx: dict) -> dict:
 
 # ---------- «Директор в кармане» без ключа (пункт 2 очереди 12.11): вопрос → тип из белого списка по ключевым словам ----------
 
-def parse_boss(text: str, ctx: dict) -> dict:
-    """→ {kind, question, city, department, number, period} — та же форма, что у llm.parse_boss."""
+ACTION = re.compile(r"(?<![а-яa-z])(напомни(?:те)?|попроси(?:те)?|запроси(?:те)?|отправь(?:те)?|разошли(?:те)?|поторопи(?:те)?|открой(?:те)?"
+                    r"|прочитай(?:те)?|прочти(?:те)?|озвучь(?:те)?)(?![а-яa-z])"
+                    r"|(?<![а-яa-z])пусть\s+(?:[а-яa-z-]+\s+){0,3}(?:отчита\w*|сообщ\w*|ответ\w*|доложа\w*|напиш\w*)", re.IGNORECASE)
+
+
+def is_action(text: str) -> bool:
+    """Команда — только при явном глаголе действия к людям или к системе: «напомни», «попроси», «отправь», «пусть отчитаются»,
+    «открой», «прочитай». Вопросы «кто / что / сколько / как дела», «скажи», «расскажи» — только ответ (замечание владельца 12.11)."""
+    return bool(ACTION.search((text or "").lower().replace("ё", "е")))
+
+
+def _find_name(name: str, t: str) -> int:
+    """Позиция упоминания города или отдела: начало слова и первые 5 букв («Производство» ≠ «происходит», «Самара» ≠ «самое»); -1 — нет."""
+    stem = _norm(name).strip()[:5]
+    if len(stem) < 3:
+        return -1
+    m = re.search(r"(?<![а-яa-z0-9])" + re.escape(stem), t)
+    return m.start() if m else -1
+
+
+def boss_parts(text: str, ctx: dict) -> list[dict]:
+    """Составной вопрос → части по порядку упоминания: просрочки, решения, темы, обращение, город(а), отдел, «что нового» (если больше ничего)."""
     t = _norm(text)
-    city = next((c["city"] for c in ctx.get("cities", []) if _norm(c["city"])[1:5] in t), None)
-    department = next((d["name"] for d in ctx.get("departments", []) if len(d["name"]) > 2 and _norm(d["name"])[1:5] in t), None)
+    found: list[tuple[int, dict]] = []
+
+    def add(pos, q, **kw):
+        found.append((pos, {"question": q, "city": kw.get("city"), "department": kw.get("department"), "number": kw.get("number")}))
+    m = re.search(r"(?<![а-яa-z])[aа]-?\s?(\d{1,4})\b", t)
+    if m:
+        add(m.start(), "appeal", number=f"A-{int(m.group(1)):03d}")
+    m = re.search(r"просроч|просрач|не отвеч|тянет|тянут|опазд|опозда|по задачам|поручени", t)
+    if m:
+        add(m.start(), "who_overdue")
+    m = re.search(r"решени|на решение|ждут меня|ждет меня|предложени", t)
+    if m:
+        add(m.start(), "my_decisions")
+    m = re.search(r"тем[аы]|о чем пишут|что болит|повторя|чаще всего", t)
+    if m:
+        add(m.start(), "main_topics")
+    for c in ctx.get("cities", []):
+        i = _find_name(c["city"], t)
+        if i >= 0:
+            add(i, "city", city=c["city"])
+    for d in ctx.get("departments", []):
+        i = _find_name(d["name"], t)
+        if i >= 0 and re.search(r"отдел|подразделен|как дела|что у|что по", t):
+            add(i, "department", department=d["name"])
+    if not found and re.search(r"что нового|нового|как дела|что происходит|сводк|итог|обстановк|в целом|что у нас|сколько|пришл|поступил|решили|решено", t):
+        add(0, "whats_new")
+    if not found and re.search(r"(?<![а-яa-z])город|филиал", t):
+        add(0, "city")
+    if not found and re.search(r"отдел|подразделен", t):
+        add(0, "department")
+    out, seen = [], set()
+    for _, p in sorted(found, key=lambda x: x[0]):
+        key = (p["question"], p["city"], p["department"], p["number"])
+        if key not in seen:
+            seen.add(key)
+            out.append(p)
+    return out[:3]
+
+
+def parse_boss(text: str, ctx: dict) -> dict:
+    """→ {kind, question, city, department, number, period, parts} — та же форма, что у llm.parse_boss."""
+    t = _norm(text)
+    city = next((c["city"] for c in ctx.get("cities", []) if _find_name(c["city"], t) >= 0), None)
+    department = next((d["name"] for d in ctx.get("departments", []) if _find_name(d["name"], t) >= 0), None)
     m = re.search(r"(?<![а-яa-z])[aа]-?\s?(\d{1,4})\b", t)   # «A-027», «а 27» — латиница и кириллица, как пишет STT
     number = f"A-{int(m.group(1)):03d}" if m else None
     period = "today" if re.search(r"сегодня|за день|с утра", t) else "week" if re.search(r"недел", t) else None
-    # команды — те же слова, что в parse_command: сделать что-то, а не узнать
-    if re.search(r"напомн|поторопи|запроси|попроси|отправ|открой|прими|отклони|прочитай|прочти|озвуч", t):
-        return {"kind": "command", "question": None, "city": city, "department": department, "number": number, "period": period}
+    # команда — только явный глагол действия (is_action); иначе это вопрос, даже если в нём есть «просрочил» или «напоминание»
+    if is_action(text):
+        return {"kind": "command", "question": None, "city": city, "department": department, "number": number, "period": period, "parts": []}
+    parts = boss_parts(text, ctx)
+    if parts:
+        return {"kind": "question", **parts[0], "period": period, "parts": parts}
     q = None
     if number and re.search(r"обращен|номер|[aа]-?\s?\d", t):
         q = "appeal"
@@ -221,4 +286,5 @@ def parse_boss(text: str, ctx: dict) -> dict:
         q = "city"   # город не из списка → сервер ответит «не понял, какой город» и перечислит известные
     elif department or re.search(r"отдел|подразделен", t):
         q = "department"
-    return {"kind": "question" if q else "unknown", "question": q, "city": city, "department": department, "number": number, "period": period}
+    return {"kind": "question" if q else "unknown", "question": q, "city": city, "department": department, "number": number, "period": period,
+            "parts": [{"question": q, "city": city, "department": department, "number": number}] if q else []}

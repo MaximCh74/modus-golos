@@ -118,19 +118,28 @@ def numbers_in_answer(text: str) -> set[int]:
 
 
 NEG = r"(?:\bнет\b|\bни одн\w*|\bничего\b|\bне было\b|\bотсутству\w*|\bникто\b|\bникого\b)"
-NONZERO_GROUPS = (("просроч", ("overdue_appeals", "overdue_tasks", "tasks_overdue", "overdue")),
-                  ("решени", ("count", "decisions_pending")))
+APPEAL_KEYS = ("overdue_appeals", "overdue")
+TASK_KEYS = ("overdue_tasks", "tasks_overdue")
+DECISION_KEYS = ("count", "decisions_pending")
+
+
+def _nonzero(facts: dict, keys) -> bool:
+    return any((facts.get(k) is True) or (isinstance(facts.get(k), (int, float)) and not isinstance(facts.get(k), bool) and facts.get(k) > 0) for k in keys)
 
 
 def negates_nonzero(text: str, facts: dict) -> str | None:
-    """Ответ говорит «просрочек нет» / «решения ничего не ждёт», а в фактах это число больше нуля → название группы, иначе None."""
+    """Фраза говорит «просрочек нет» / «решения ничего не ждёт», а в фактах это число больше нуля → название группы, иначе None.
+    Каждая фраза проверяется отдельно и про своё: «просроченных поручений нет» сверяется с поручениями, «обращений» — с обращениями."""
     import re
-    t = (text or "").lower().replace("ё", "е")
-    for stem, keys in NONZERO_GROUPS:
-        vals = [facts[k] for k in keys if k in facts]
-        nonzero = any((v is True) or (isinstance(v, (int, float)) and not isinstance(v, bool) and v > 0) for v in vals)
-        if nonzero and re.search(rf"{NEG}[^.!?]{{0,30}}{stem}|{stem}\w*[^.!?]{{0,25}}{NEG}", t):
-            return stem
+    for sent in re.split(r"[.!?;]+", (text or "").lower().replace("ё", "е")):
+        if not re.search(NEG, sent):
+            continue
+        if "просроч" in sent:
+            keys = TASK_KEYS if "поручен" in sent and "обращен" not in sent else APPEAL_KEYS if "обращен" in sent and "поручен" not in sent else APPEAL_KEYS + TASK_KEYS
+            if _nonzero(facts, keys):
+                return "просроч"
+        if "решени" in sent and _nonzero(facts, DECISION_KEYS):
+            return "решени"
     return None
 
 
@@ -394,15 +403,17 @@ BOSS_QUESTIONS = ("whats_new", "my_decisions", "who_overdue", "main_topics", "ci
 BOSS_PARSE_SYSTEM = GLOSSARY + """
 Ты разбираешь короткий вопрос или команду директора в мобильном приложении «Директор в кармане». Верни ТОЛЬКО JSON:
 {"kind": "question" | "command" | "unknown",
- "question": один из ["whats_new","my_decisions","who_overdue","main_topics","city","appeal","department"] или null,
- "city": город из списка или null, "department": подразделение из списка или null, "number": номер обращения вида A-012 или null,
+ "parts": [{"question": один из ["whats_new","my_decisions","who_overdue","main_topics","city","appeal","department"],
+            "city": город из списка или null, "department": подразделение из списка или null, "number": номер обращения вида A-012 или null}],
  "period": "today" | "week" | null — только если директор сам назвал период («за сегодня», «за неделю»)}
+Составной вопрос («кто просрочил и что по Павлодару») — несколько частей в порядке, как спросил директор (не больше трёх).
+«По задачам», «по поручениям», «кто просрачивает» — это who_overdue.
 Вопросы (только чтение): whats_new — что нового, что произошло, как дела в целом, сводка за период; my_decisions — что ждёт моего решения,
 что на решении, какие предложения ждут; who_overdue — кто просрочил, у кого просрочки, кто не отвечает, кто тянет; main_topics — главные
 или повторяющиеся темы, о чём чаще пишут, что болит; city — что по городу или филиалу (как дела в Омске, что в Павлодаре);
 appeal — что по обращению с номером; department — как дела у отдела или подразделения (продажи, бухгалтерия).
-Команда — просьба что-то СДЕЛАТЬ: напомнить, поторопить, запросить новости или ход работ, открыть «На решение», прочитать сводку вслух,
-отправить → kind "command" (разбирает другой модуль, question null). Всё остальное (болтовня, «закажи пиццу», «уволь», вопросы не о
+Команда — только явный глагол действия: «напомни», «попроси», «запроси», «отправь», «пусть отчитаются», «открой», «прочитай»
+→ kind "command" (разбирает другой модуль, parts пустой). «Скажи», «расскажи», «кто», «что», «сколько», «как дела» — это вопрос, не команда. Всё остальное (болтовня, «закажи пиццу», «уволь», вопросы не о
 системе) → "unknown". Город и подразделение бери только из списков."""
 
 
@@ -412,10 +423,17 @@ def parse_boss(text: str, ctx: dict) -> dict:
             raise ValueError("kind вне списка")
         if d.get("question") is not None and d["question"] not in BOSS_QUESTIONS:
             raise ValueError(f"question вне белого списка: {d['question']}")
+        parts = d.get("parts") or []
+        if not isinstance(parts, list) or not all(isinstance(x, dict) and x.get("question") in BOSS_QUESTIONS for x in parts):
+            raise ValueError("parts: вопросы вне белого списка")
     user = ("Города: " + ", ".join(c["city"] for c in ctx["cities"]) + "\nПодразделения: " + ", ".join(d["name"] for d in ctx["departments"]) +
             f"\n\nВопрос директора:\n{text}")
-    d = chat_json(BOSS_PARSE_SYSTEM, user, validate, max_tokens=200)
-    return {"kind": d["kind"], "question": d.get("question"), "city": d.get("city"), "department": d.get("department"), "number": d.get("number"), "period": d.get("period")}
+    d = chat_json(BOSS_PARSE_SYSTEM, user, validate, max_tokens=300)
+    parts = [{k: x.get(k) for k in ("question", "city", "department", "number")} for x in (d.get("parts") or [])][:3]
+    if not parts and d.get("question"):
+        parts = [{"question": d.get("question"), "city": d.get("city"), "department": d.get("department"), "number": d.get("number")}]
+    first = parts[0] if parts else {"question": None, "city": None, "department": None, "number": None}
+    return {"kind": d["kind"], **first, "period": d.get("period"), "parts": parts}
 
 
 BOSS_ANSWER_SYSTEM = GLOSSARY + DATA_RULE + """
@@ -423,7 +441,10 @@ BOSS_ANSWER_SYSTEM = GLOSSARY + DATA_RULE + """
 готовым фактам: 1–3 коротких предложения, деловой спокойный тон, на «вы», без воды, без оценок и советов. Правила:
 - используй ТОЛЬКО числа из фактов: ничего не вычисляй, не округляй, часы в дни не переводи; имена, города и номера обращений — как в фактах;
 - если фактов мало или нули — так и скажи («просрочек нет», «вашего решения ничего не ждёт»);
-- перечисления сворачивай (не больше трёх имён или тем); не упоминай ссылки и названия полей.
+- перечисления сворачивай (не больше трёх имён или тем); не упоминай ссылки и названия полей;
+- отвечай только на свою часть вопроса (тип вопроса указан) — другие части директор получит отдельно;
+- просрочки: если в фактах есть total_overdue — назови его первым, это число на плитке «просрочено»; различай «просроченные обращения»
+  (нет первого ответа в срок) и «просроченные поручения с совещаний»; при ненулевых числах никогда не говори «просрочек нет».
 Отвечай ТОЛЬКО JSON: {"answer": "..."}"""
 
 

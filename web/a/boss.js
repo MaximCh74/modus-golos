@@ -19,7 +19,11 @@
   loadGlossary();
 
   // ---------- каркас экрана ----------
-  const greetText = h('div', { class: 'boss-greet-text' }, 'Загружаем…');
+  // приветствие — до трёх строк; если длиннее, нажатие раскрывает целиком (замечание владельца 12.11)
+  const greetText = h('div', { class: 'boss-greet-text', role: 'button', tabindex: '0', title: 'Показать полностью', 'aria-expanded': 'false' }, 'Загружаем…');
+  const toggleGreet = () => { const open = greetText.classList.toggle('open'); greetText.setAttribute('aria-expanded', open ? 'true' : 'false'); };
+  greetText.addEventListener('click', toggleGreet);
+  greetText.addEventListener('keydown', ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); toggleGreet(); } });
   const greetMark = h('span', { class: 'boss-greet-mark' });
   const speakGreet = h('button', { type: 'button', class: 'btn btn-sm btn-ghost boss-speak', title: 'Озвучить приветствие', 'aria-label': 'Озвучить' }, icon('volume', { size: 18 }));
   const seg = h('div', { class: 'seg', role: 'tablist' },
@@ -27,7 +31,7 @@
   const TILES = [['new', 'пришло'], ['done', 'решено'], ['decisions', 'ждут вашего решения'], ['overdue', 'просрочено']];
   const tiles = {};
   const tilesEl = h('div', { class: 'boss-tiles' }, TILES.map(([k, label]) => { const b = h('b', {}, '…'); tiles[k] = b; return h('button', { type: 'button', class: 'boss-tile tile-' + k, 'data-tile': k, onclick: () => openList(k) }, b, h('span', {}, label)); }));
-  const ta = h('textarea', { class: 'boss-ask-text', rows: 1, placeholder: 'Что нового? Кто просрочил? Что по Омску?', 'aria-label': 'Вопрос' });
+  const ta = h('textarea', { class: 'boss-ask-text', rows: 1, placeholder: 'Спросите, например: что по Омску?', 'aria-label': 'Вопрос' });
   const mic = h('button', { type: 'button', class: 'btn mic boss-mic', title: 'Спросить голосом', 'aria-label': 'Спросить голосом' });
   const send = h('button', { type: 'button', class: 'btn btn-primary boss-send', title: 'Спросить', 'aria-label': 'Спросить' }, icon('send', { size: 20 }));
   Voice.attach(mic, ta, { onText: () => ask() });
@@ -83,17 +87,55 @@
   document.addEventListener('keydown', ev => { if (ev.key === 'Escape') closeSheet(); });
 
   const TITLES = { new: 'Пришло', done: 'Решено', decisions: 'Ждут вашего решения', overdue: 'Просрочено' };
+  // Списки и карточки — внутри /boss (замечание владельца 12.11: панель на телефоне неудобна): номер, «Коротко» одной строкой, статус,
+  // ответственный; нажатие — карточка, «К списку» — назад.
   function openList(k) {
     const items = (S.home && S.home.lists[k]) || [];
-    const link = h('a', { href: S.home.links[k], class: 'btn btn-outline btn-sm' }, iconText('external-link', 'Подробнее на сайте'));
-    let body;
-    if (!items.length) body = h('div', { class: 'card muted' }, k === 'overdue' ? 'Просрочек нет.' : k === 'decisions' ? 'Вашего решения ничего не ждёт.' : 'Пока пусто.');
-    else if (k === 'decisions') body = h('div', { class: 'boss-list' }, items.map(decisionRow));
-    else body = h('div', { class: 'boss-list' }, items.map(i => h('a', { class: 'boss-item', href: i.kind === 'task' ? '/panel#/meetings/' + i.meeting_id : '/panel#/appeal/' + i.id },
-      h('div', { class: 'row' }, i.kind === 'task' ? h('b', {}, 'Поручение') : h('b', {}, i.number), i.kind === 'task' ? h('span', { class: 'small muted' }, 'срок был ' + i.due_label + ' · ' + (i.assignee || 'без исполнителя')) : h('span', { class: 'small muted' }, [i.status, i.branch].filter(Boolean).join(' · ')),
-        h('div', { class: 'spacer' }), i.overdue ? h('span', { class: 'dot-overdue', title: 'просрочено' }) : null, i.age_days !== undefined && i.kind !== 'task' ? h('span', { class: 'small muted' }, i.age_days + ' дн') : null),
-      h('div', { class: 'small' }, i.text), i.resolution ? h('div', { class: 'small card-ok boss-res' }, i.resolution) : null, i.responsible && k !== 'done' ? h('div', { class: 'small muted' }, 'отвечает ' + i.responsible) : null)));
-    sheet(TITLES[k] + (k === 'new' || k === 'done' ? ' · ' + S.home.period_label : ''), h('div', {}, body, h('div', { class: 'row mt8' }, link)));   // решения и просрочки — не за период, а сейчас
+    const title = TITLES[k] + (k === 'new' || k === 'done' ? ' · ' + S.home.period_label : '');   // решения и просрочки — не за период, а сейчас
+    if (!items.length) { sheet(title, h('div', { class: 'card muted' }, k === 'overdue' ? 'Просрочек нет.' : k === 'decisions' ? 'Вашего решения ничего не ждёт.' : 'Пока пусто.')); return; }
+    if (k === 'decisions') { sheet(title, h('div', { class: 'boss-list' }, items.map(decisionRow))); return; }
+    openItems(title, items.map(i => ({ ...i, kind: i.kind || 'appeal' })), k === 'done');
+  }
+
+  function openItems(title, items, showResult) {
+    const back = () => openItems(title, items, showResult);
+    sheet(title, h('div', { class: 'boss-list' }, items.map(i => i.kind === 'decision' ? decisionRow(i) : itemRow(i, back, showResult))));
+  }
+
+  function itemRow(i, back, showResult) {
+    const task = i.kind === 'task';
+    return h('button', { type: 'button', class: 'boss-item boss-item-btn', onclick: () => openCard(i, back) },
+      h('div', { class: 'row' }, h('b', {}, task ? 'Поручение' : i.number), i.overdue || task ? h('span', { class: 'dot-overdue', title: 'просрочено' }) : null, h('div', { class: 'spacer' }),
+        h('span', { class: 'small muted' }, task ? 'срок был ' + i.due_label : (i.age_days !== undefined ? i.age_days + ' дн' : ''))),
+      h('div', { class: 'small one-line' }, i.text),
+      h('div', { class: 'small muted one-line' }, task ? (i.assignee || 'без исполнителя') + (i.meeting_title ? ' · «' + i.meeting_title + '»' : '')
+        : [i.status, i.responsible ? 'отвечает ' + i.responsible : 'без ответственного'].filter(Boolean).join(' · ')),
+      showResult && i.resolution ? h('div', { class: 'small boss-res one-line' }, i.resolution) : null);
+  }
+
+  function backBtn(back) { return back ? h('button', { type: 'button', class: 'btn btn-sm btn-ghost boss-back', onclick: back }, iconText('arrow-left', 'К списку')) : null; }
+
+  async function openCard(i, back) {
+    if (i.kind === 'task') {
+      sheet('Поручение с совещания', h('div', {}, backBtn(back), h('p', { class: 'boss-answer' }, i.text),
+        h('div', { class: 'small muted' }, ['срок был ' + i.due_label, i.assignee ? 'исполнитель ' + i.assignee : 'без исполнителя', i.meeting_title ? '«' + i.meeting_title + '»' : null].filter(Boolean).join(' · '))));
+      return;
+    }
+    sheet(i.number || 'Обращение', h('div', { class: 'row small muted' }, h('span', { class: 'spin' }), 'Открываю…'));
+    let a;
+    try { a = await API.get('/api/appeals/' + (i.appeal_id || i.id)); } catch (e) { toast(e.message, 'bad'); if (back) back(); return; }
+    const b = a.brief && !a.brief.unclear ? a.brief : null;
+    const news = (a.events || []).filter(e => ['progress', 'comment', 'status_changed', 'discussed_at_meeting', 'director_decided'].includes(e.kind)).slice(-1)[0];
+    sheet(a.number, h('div', { class: 'boss-card' }, backBtn(back),
+      h('div', { class: 'row' }, tag(a.stage.code === 'rejected' ? 'st-rejected' : a.stage.code === 'done' ? 'st-done' : 'st-review', a.stage.label), a.overdue ? h('span', { class: 'dot-overdue', title: 'просрочено' }) : null,
+        h('span', { class: 'small muted' }, [a.type_label, a.category, a.branch].filter(Boolean).join(' · '))),
+      h('p', { class: 'boss-answer' }, b ? b.gist : a.text),
+      b ? h('details', { class: 'small' }, h('summary', {}, 'Полный текст'), h('p', { class: 'pre' }, a.text)) : null,
+      h('div', { class: 'small mt8' }, h('b', {}, 'Отвечает: '), a.responsible || 'не назначен'),
+      h('div', { class: 'small muted' }, 'Подано ' + plural(Math.floor(a.age_hours / 24), 'день', 'дня', 'дней') + ' назад' + (a.overdue ? ' · срок первого ответа прошёл' : '')),
+      news ? h('div', { class: 'small mt8' }, h('b', {}, 'Последнее: '), eventText(news)) : null,
+      a.resolution_text ? h('div', { class: 'small card-ok boss-res mt8' }, a.resolution_text) : null,
+      h('div', { class: 'row mt8' }, h('a', { href: '/panel#/appeal/' + a.id, class: 'small muted' }, 'Открыть в панели'))));
   }
 
   function decisionRow(i) {
@@ -138,26 +180,34 @@
     busy = false; send.disabled = false;
   }
 
+  function speakBtn(r) {
+    const speak = h('button', { type: 'button', class: 'btn btn-sm', title: 'Озвучить ответ' }, iconText('volume', 'Озвучить'));
+    speak.addEventListener('click', () => speakText(speak, r.audio ? '/api/boss/answer/' + r.id + '/audio' : null, r.answer));
+    return speak;
+  }
+
   function render(text, r) {
     const q = h('div', { class: 'small muted boss-q' }, iconText('message-circle', text));
-    if (r.kind === 'question') {
-      const speak = h('button', { type: 'button', class: 'btn btn-sm', title: 'Озвучить ответ' }, iconText('volume', 'Озвучить'));
-      speak.addEventListener('click', () => speakText(speak, r.audio ? '/api/boss/answer/' + r.id + '/audio' : null, r.answer));
-      sheet(r.question_label[0].toUpperCase() + r.question_label.slice(1), h('div', {}, q, h('p', { class: 'boss-answer' }, r.answer),
-        h('div', { class: 'row mt8' }, speak, r.link ? h('a', { href: r.link, class: 'btn btn-outline btn-sm' }, iconText('external-link', r.link_label || 'Подробнее на сайте')) : null)),
-        { mark: aiMark(r.engine === 'openai', 'пересказ ИИ по фактам сервера, числа сверены', 'шаблон без ИИ — те же факты') });
+    if (r.kind === 'question' || r.kind === 'answer') {
+      const parts = r.parts || [];
+      const lists = parts.filter(p => p.list && p.list.items && p.list.items.length).map(p => h('button', { type: 'button', class: 'btn btn-sm btn-outline', onclick: () => openItems(p.list.title, p.list.items) },
+        iconText('list', p.list.title + ' · ' + p.list.items.length)));
+      const body = parts.length > 1 ? parts.map(p => h('p', { class: 'boss-answer' }, p.answer)) : [h('p', { class: 'boss-answer' }, r.answer)];
+      sheet(r.kind === 'answer' ? 'Ответ' : r.question_label[0].toUpperCase() + r.question_label.slice(1), h('div', {}, q, body,
+        h('div', { class: 'row mt8 row-wrap' }, speakBtn(r), lists)),
+        { mark: aiMark(r.engine === 'openai', 'пересказ ИИ по фактам сервера, числа сверены', r.engine === 'mixed' ? 'часть ответа — шаблон без ИИ' : 'шаблон без ИИ — те же факты') });
       if (r.audio) speakText(null, '/api/boss/answer/' + r.id + '/audio', r.answer);
       return;
     }
     if (r.kind === 'unknown') {
-      sheet('Не знаю, вот где посмотреть', h('div', {}, q, h('p', { class: 'boss-answer' }, 'Могу ответить на вопросы о системе и выполнить команды с подтверждением. Например:'),
-        h('div', { class: 'chips' }, r.can.map(x => h('button', { type: 'button', class: 'chip', onclick: () => { closeSheet(); ta.value = x; ask(); } }, x))),
-        h('div', { class: 'boss-links mt8' }, r.links.map(l => h('a', { href: l.href, class: 'btn btn-outline btn-sm' }, iconText('external-link', l.label))))));
+      sheet('Не понял вопрос', h('div', {}, q, h('p', { class: 'boss-answer' }, 'Спросите про цифры на экране, город, отдел или обращение — например:'),
+        h('div', { class: 'chips' }, r.can.map(x => h('button', { type: 'button', class: 'chip', onclick: () => { closeSheet(); ta.value = x; ask(); } }, x)))));
       return;
     }
     // команда: существующий план с обязательным подтверждением
     const p = r.plan;
-    if (p.kind === 'unknown') { render(text, { kind: 'unknown', can: p.examples, links: [{ href: '/panel#/summary', label: 'Сводка' }] }); return; }
+    if (p.kind === 'unknown') { render(text, { kind: 'unknown', can: p.examples, links: [] }); return; }
+    if (p.empty) { render(text, { kind: 'answer', answer: p.title, parts: [], engine: r.engine, audio: false }); return; }   // отправлять некому — словами
     if (p.kind === 'briefing') {
       const speak = h('button', { type: 'button', class: 'btn btn-sm btn-primary' }, iconText('volume', 'Прочитать'));
       speak.addEventListener('click', async () => { try { await API.post('/api/director/command/' + r.plan_id + '/send', {}); } catch (e) { /* уже отправлено */ } speakText(speak, '/api/panel/director-summary/audio', p.sentences.map(s => s.text).join(' ')); });
@@ -168,14 +218,14 @@
       sheet('На решение', h('div', {}, q, h('p', { class: 'boss-answer' }, p.title), h('div', { class: 'row mt8' }, h('button', { type: 'button', class: 'btn btn-primary btn-sm', onclick: async () => { try { await API.post('/api/director/command/' + r.plan_id + '/send', {}); } catch (e) { /* уже */ } closeSheet(); openList('decisions'); } }, 'Открыть'), h('button', { type: 'button', class: 'btn btn-sm', onclick: closeSheet }, 'Отмена'))));
       return;
     }
-    const sendBtn = h('button', { type: 'button', class: 'btn btn-primary btn-sm', disabled: p.empty }, iconText('send', 'Отправить'));
+    const sendBtn = h('button', { type: 'button', class: 'btn btn-primary btn-sm' }, iconText('send', 'Отправить'));
     sendBtn.addEventListener('click', async () => {
       sendBtn.disabled = true;
       try { const s = await API.post('/api/director/command/' + r.plan_id + '/send', {}); sheet('Отправлено', h('div', {}, h('p', { class: 'boss-answer' }, s.reply), h('div', { class: 'row mt8' }, h('button', { type: 'button', class: 'btn btn-sm', onclick: closeSheet }, 'Готово')))); speakText(null, '/api/director/command/' + r.plan_id + '/audio', s.reply); load(); }
       catch (e) { toast(e.message, 'bad'); sendBtn.disabled = false; }
     });
-    sheet(p.empty ? 'Некому отправлять' : 'Подтвердите команду', h('div', {}, q, h('p', { class: 'boss-answer' }, p.title),
-      p.empty ? null : h('div', { class: 'hint' }, 'Отправится только после «Отправить». Получателей посчитал сервер.'),
+    sheet('Подтвердите команду', h('div', {}, q, h('p', { class: 'boss-answer' }, p.title),
+      h('div', { class: 'hint' }, 'Отправится только после «Отправить». Получателей посчитал сервер.'),
       h('div', { class: 'boss-list' }, (p.recipients || []).map(rec => h('div', { class: 'boss-item' }, h('div', { class: 'row' }, h('b', {}, rec.name), h('span', { class: 'small muted' }, [rec.position, rec.branch].filter(Boolean).join(' · '))), h('div', { class: 'small muted' }, rec.message)))),
       h('div', { class: 'row mt8' }, sendBtn, h('button', { type: 'button', class: 'btn btn-sm', onclick: closeSheet }, 'Отмена'))),
       { mark: aiMark(r.command.engine === 'openai', 'разбор ИИ', 'по ключевым словам (без ИИ)') });

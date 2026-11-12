@@ -1,5 +1,5 @@
 """«Директор в кармане» в браузере (Playwright): на телефоне 390×844 и 360×700 экран помещается без прокрутки; четыре плитки;
-«Сегодня / Неделя» переключает цифры; вопрос текстом → нижний лист с ответом и ссылкой «Подробнее на сайте»; плитка «ждут вашего
+«Сегодня / Неделя» переключает цифры; вопрос текстом → нижний лист с ответом и списком внутри /boss; плитка «ждут вашего
 решения» → список с «Принять / Отклонить»; не директору — заглушка «Только для директора»."""
 import os
 import socket
@@ -92,7 +92,10 @@ def test_period_toggle_question_sheet_and_decisions(server, browser):
         page.fill(".boss-ask-text", "кто просрочил"); page.click(".boss-send")
         page.wait_for_selector(".boss-sheet .boss-answer")
         assert "просрочено" in page.locator(".boss-sheet .boss-answer").inner_text().lower()
-        assert "Просроченные в очереди" in page.locator(".boss-sheet").inner_text()
+        # список — внутри /boss (замечание владельца 12.11), не ссылкой в панель
+        page.click(".boss-sheet button:has-text('Просрочено ·')"); page.wait_for_selector(".boss-sheet .boss-item-btn")
+        page.locator(".boss-sheet .boss-item-btn").first.click(); page.wait_for_selector(".boss-sheet .boss-card")
+        assert "Отвечает" in page.locator(".boss-sheet").inner_text() and "/panel" not in page.url
         page.keyboard.press("Escape"); page.wait_for_timeout(200)
         assert page.locator(".boss-sheet").count() == 0
         page.click(".boss-tile[data-tile=decisions]"); page.wait_for_selector(".boss-sheet .boss-item")
@@ -104,7 +107,7 @@ def test_period_toggle_question_sheet_and_decisions(server, browser):
         page.wait_for_function("document.querySelector('.boss-tile[data-tile=decisions] b').textContent === '1'")
         page.keyboard.press("Escape"); page.wait_for_timeout(200)
         page.fill(".boss-ask-text", "закажи пиццу"); page.click(".boss-send"); page.wait_for_selector(".boss-sheet .chip")
-        assert "Не знаю" in page.locator(".boss-sheet").inner_text()
+        assert "Не понял вопрос" in page.locator(".boss-sheet").inner_text() and "/panel" not in page.locator(".boss-sheet").inner_html()   # без ссылок в панель
         assert not errors, errors
     finally:
         ctx.close()
