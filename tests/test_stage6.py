@@ -71,9 +71,11 @@ def test_bitrix_oauth_login_notify_iframe_install(c, monkeypatch):
     r = c.get("/bitrix/app")   # без сессии — страница, которая подхватит токен из sessionStorage фрейма или попросит открыть из меню
     assert r.status_code == 200 and "bitrix_app.js" in r.text
     # снаружи: кнопка → авторизация на портале → code → токены → user.current → наш сотрудник
-    r = c.get("/bitrix/login", params={"next": "/app"}, follow_redirects=False)
+    r = c.get("/bitrix/login", params={"next": "/app"}, headers={"Sec-Fetch-Dest": "document"}, follow_redirects=False)
     assert r.status_code == 302 and r.headers["location"].startswith("https://modus-test.bitrix24.kz/oauth/authorize/?client_id=local.abc&state=")
     state = r.headers["location"].split("state=")[1]
+    r2 = c.get("/bitrix/login", follow_redirects=False)   # без заголовка — страница, которая сама решает: окно → портал, фрейм → восстановление
+    assert r2.status_code == 200 and "bitrix_login.js" in r2.text and "oauth/authorize" in r2.text
     assert c.get("/bitrix/callback", params={"code": "c0de", "state": "bogus"}, follow_redirects=False).status_code == 400
     r = c.get("/bitrix/callback", params={"code": "c0de", "state": state, "domain": "modus-test.bitrix24.kz", "member_id": "m1"}, follow_redirects=False)
     assert r.status_code == 302 and r.headers["location"] == "/app" and "mf_sid=" in r.headers.get("set-cookie", "")
@@ -111,7 +113,7 @@ def test_bitrix_oauth_login_notify_iframe_install(c, monkeypatch):
     assert bitrix.match_user({"ID": "45", "NAME": "Уволенный", "ACTIVE": False}) is None
     db.ex("DELETE FROM users WHERE bitrix_id=44")
     # redirect OAuth на «Путь обработчика» — тот же адрес с code и state
-    state2 = c.get("/bitrix/login", follow_redirects=False).headers["location"].split("state=")[1]
+    state2 = c.get("/bitrix/login", headers={"Sec-Fetch-Dest": "document"}, follow_redirects=False).headers["location"].split("state=")[1]
     assert c.get("/bitrix/app", params={"code": "c0de", "state": state2}, follow_redirects=False).status_code == 302
     # установка: токены портала + страница с BX24.installFinish и CSP, разрешающим их SDK
     r = c.post("/bitrix/install", data={"AUTH_ID": "at1", "REFRESH_ID": "rt1", "member_id": "m1", "DOMAIN": "modus-test.bitrix24.kz"})

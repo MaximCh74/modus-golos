@@ -91,5 +91,9 @@ def test_frame_login_pages_and_headers(c, monkeypatch):
         r = c.get(path)
         assert r.status_code == 200 and "frame-ancestors 'self' https://modus-test.bitrix24.kz;" in r.headers["content-security-policy"] and "x-frame-options" not in r.headers, path
     assert "bitrix_app.js" in c.get("/bitrix/app").text   # без сессии — страница восстановления входа из sessionStorage фрейма
+    # из фрейма OAuth не запускается (Firefox: auth2.bitrix24.net запрещает встраивание) — та же страница восстановления; снаружи — редирект на портал
+    r = c.get("/bitrix/login", headers={"Sec-Fetch-Dest": "iframe"}, follow_redirects=False)
+    assert r.status_code == 200 and "bitrix_app.js" in r.text
+    assert c.get("/bitrix/login", headers={"Sec-Fetch-Dest": "document"}, follow_redirects=False).status_code == 302
     login(c, 6)
     assert "/a/app.js" in c.get("/bitrix/app").text       # с сессией — приложение сотрудника

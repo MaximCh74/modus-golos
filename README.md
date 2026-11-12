@@ -39,7 +39,7 @@ python3 -m uvicorn mf.main:app --port 8070
 разбор совещания — «Демо-разбор без ИИ», категория обращения — «по ключевым словам (без ИИ)».
 
 Пересоздать демо-данные: `python3 -m mf.seed --force` (при остановленном сервере).
-Тесты: `python3 -m pytest -q tests` (66 тестов, без ключа и без GPU; проверка вёрстки — Playwright с Chromium, без них пропускается).
+Тесты: `python3 -m pytest -q tests` (67 тестов, без ключа и без GPU; вёрстка — Playwright с Chromium, вход во фрейме — Playwright с Firefox; без них пропускаются).
 
 ## ИИ: ключ, STT на GPU, выбор модели
 
@@ -108,4 +108,4 @@ Cloudflare с постоянным поддоменом (домен за Cloudfl
 - `tests/` — pytest: `test_core.py` этап 1 (сценарии датасета), `test_stage2.py` режим совещания и ИИ-категория, `test_stage3.py`,
   `test_custdev.py`, `test_stage4.py`, `test_demo.py` демо-состояние, `test_stage6.py` Битрикс24 (фейковый HTTP), команды директора, публичная карта, интерфейс без эмодзи,
   `test_stage8_invites.py` сотрудники без Битрикса: приглашения, импорт, карточки, склейка с порталом; `test_stage9_ui.py` вёрстка без горизонтальной прокрутки (Playwright);
-  `test_stage10_forms.py` «Спасибо» с адресатом, плакаты филиалов, вход во фрейме.
+  `test_stage10_forms.py` «Спасибо» с адресатом, плакаты филиалов, вход во фрейме; `test_stage10_frame_firefox.py` фрейм портала в Firefox без сторонних cookie.

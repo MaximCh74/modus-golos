@@ -28,7 +28,7 @@ CSP = CSP_BASE.format(frame="'none'")
 
 
 def csp_bitrix_install() -> str:
-    return CSP_BASE.format(frame=f"'self' https://{bitrix.portal()}").replace("script-src 'self'", "script-src 'self' https://api.bitrix24.com")
+    return CSP_BASE.format(frame=f"'self' {bitrix.portal_origin()}").replace("script-src 'self'", "script-src 'self' https://api.bitrix24.com")
 SECURITY_HEADERS = {
     "Content-Security-Policy": CSP,
     "X-Content-Type-Options": "nosniff",
@@ -46,7 +46,7 @@ def security_headers(scope) -> dict:
     if not bitrix.configured():
         return SECURITY_HEADERS
     h = {k: v for k, v in SECURITY_HEADERS.items() if k != "X-Frame-Options"}
-    h["Content-Security-Policy"] = CSP_BASE.format(frame=f"'self' https://{bitrix.portal()}")
+    h["Content-Security-Policy"] = CSP_BASE.format(frame=f"'self' {bitrix.portal_origin()}")
     h["Cross-Origin-Opener-Policy"] = "unsafe-none"
     return h
 PAGES = {"/": "index.html", "/login": "login.html", "/app": "app.html", "/panel": "panel.html"}
@@ -221,10 +221,20 @@ async def _form(request: Request) -> dict:
 
 
 @app.get("/bitrix/login")
-async def bitrix_login(next: str = ""):
-    """Снаружи: кнопка «Войти через Битрикс24» → страница авторизации портала (redirect_uri задан в настройках приложения: /bitrix/callback)."""
+async def bitrix_login(request: Request, next: str = ""):
+    """Снаружи: кнопка «Войти через Битрикс24» → страница авторизации портала (redirect_uri задан в настройках приложения: /bitrix/callback).
+    Внутри фрейма портала (Sec-Fetch-Dest: iframe) OAuth не запускаем: auth2.bitrix24.net запрещает встраивание и Firefox показывал ошибку —
+    вместо этого страница, которая подхватит сессию из sessionStorage или попросит открыть пункт меню заново (вход там автоматический)."""
     _bitrix_required()
-    return RedirectResponse(bitrix.authorize_url(next if next.startswith("/") else ""), status_code=302)
+    dest = request.headers.get("sec-fetch-dest", "").lower()
+    url = bitrix.authorize_url(next if next.startswith("/") else "")
+    if dest == "iframe":
+        return page("bitrix_app.html")
+    if dest == "document":   # обычная вкладка — сразу на портал
+        return RedirectResponse(url, status_code=302)
+    # заголовка нет (старый браузер, переход скриптом): решает страница — во фрейме восстановление, в окне переход на портал
+    html = (WEB / "bitrix_login.html").read_text(encoding="utf-8").replace("__AUTHORIZE__", url.replace("&", "&amp;").replace('"', "&quot;"))
+    return HTMLResponse(html)
 
 
 @app.get("/bitrix/callback")

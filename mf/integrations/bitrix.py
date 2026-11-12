@@ -42,6 +42,12 @@ def portal() -> str:
     return p.replace("https://", "").replace("http://", "").strip("/")
 
 
+def portal_origin() -> str:
+    """Источник портала для frame-ancestors: https://<портал>; http:// — только если так явно записано в .env (локальная проверка фрейма)."""
+    raw = (os.environ.get("BITRIX_PORTAL") or "").strip().lower()
+    return ("http://" if raw.startswith("http://") else "https://") + portal()
+
+
 def client_id() -> str:
     return (os.environ.get("BITRIX_CLIENT_ID") or "").strip()
 
@@ -321,7 +327,7 @@ def check_state(state: str) -> str | None:
 
 
 def authorize_url(next_url: str = "") -> str:
-    return f"https://{portal()}/oauth/authorize/?client_id={client_id()}&state={make_state(next_url)}"
+    return f"{portal_origin()}/oauth/authorize/?client_id={client_id()}&state={make_state(next_url)}"
 
 
 def user_current(token: str, endpoint: str | None = None) -> dict:
