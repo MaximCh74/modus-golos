@@ -448,6 +448,9 @@ tr.muted td { opacity: .6; }
 .tbl.queue th, .tbl.queue td { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 10px 8px; vertical-align: middle; }
 .tbl.queue td:first-child { min-width: 0; }
 .tbl.queue .num { font-weight: var(--w-bold); color: var(--navy); }
+.q-city { color: var(--muted); font-weight: var(--w-body); white-space: nowrap; }   /* «A-026 · Самара»: номер жирный, город серым (замечание 13.11) */
+.tbl.queue td.q-resp { white-space: nowrap; }
+.qcard .fit-box { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .tbl.queue .brief { color: var(--muted); }
 .tbl.queue .tic { color: var(--muted-2); vertical-align: -2px; margin-right: 6px; }
 .tbl.queue .q-resp .avatar-sm { vertical-align: middle; margin-right: 4px; }

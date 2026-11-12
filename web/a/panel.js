@@ -131,6 +131,24 @@ function openDrawer(content, opts) {
 }
 // меню «…» (menuButton) и closeMenus — в ui.js; Esc закрывает выезжающую панель
 document.addEventListener('keydown', ev => { if (ev.key === 'Escape' && OVERLAY) { const cb = OVERLAY.onClose; closeOverlay(); if (cb) cb(); } });
+// Длинные имена в очереди (замечание 13.11): полностью, а если не влезает — фамилия до инициала («Гульнара С.»), без переноса.
+// fitName — текст с обоими вариантами, fitNames — после отрисовки и при смене ширины меряет контейнер (.fit-box или родителя).
+function fitName(full, prefix) {
+  const p = String(full || '').split(' ');
+  const t = h('span', { class: 'fit-text' }, (prefix || '') + full);
+  t.dataset.full = (prefix || '') + full; t.dataset.short = (prefix || '') + (p.length > 1 ? p[0] + ' ' + p[1][0] + '.' : full);
+  return t;
+}
+function fitNames(root) {
+  (root || document).querySelectorAll('.fit-text').forEach(t => {
+    const box = t.closest('.fit-box') || t.parentElement;
+    t.textContent = t.dataset.full;
+    if (box.scrollWidth > box.clientWidth + 1) t.textContent = t.dataset.short;
+  });
+}
+let FIT_T = 0;
+window.addEventListener('resize', () => { clearTimeout(FIT_T); FIT_T = setTimeout(() => fitNames(), 120); });
+
 function shortName(name) { const p = String(name || '').split(' '); return name && name.length > 18 && p.length > 1 ? p[0] + ' ' + p[1][0] + '.' : name; }
 
 function tabFromFilters() {
@@ -231,12 +249,12 @@ function queueRow(r, cols) {
   const tIcon = r.type === 'problem' ? 'alert-circle' : r.type === 'suggestion' ? 'lightbulb' : 'heart';
   const text = r.brief_line || r.text || '';
   const first = h('td', { class: 'q-main', title: r.number + ' · ' + r.type_label + ' · ' + text },
-    icon(tIcon, { size: 14, cls: 'tic', title: r.type_label }), h('span', { class: 'num' }, r.number),
+    icon(tIcon, { size: 14, cls: 'tic', title: r.type_label }), h('span', { class: 'num' }, r.number), r.city ? h('span', { class: 'q-city' }, ' · ' + r.city) : null,
     r.priority === 'high' ? h('span', { class: 'mini', title: 'Высокий приоритет' }, icon('alert', { size: 11 })) : null,
     r.supports ? h('span', { class: 'mini', title: '«У меня так же»: ' + r.supports }, icon('thumbs-up', { size: 11 }), String(r.supports)) : null,
     h('span', { class: 'brief' }, ' · ' + text));
   const tds = [first, h('td', {}, badge(r.status)),
-    h('td', { class: 'q-resp', title: r.responsible || 'не назначен' }, r.responsible ? h('span', { class: 'ulink' }, avatarEl({ name: r.responsible }, 'sm'), ' ', shortName(r.responsible)) : h('span', { class: 'muted' }, '—')),
+    h('td', { class: 'q-resp fit-box', title: r.responsible || 'не назначен' }, r.responsible ? h('span', { class: 'ulink' }, avatarEl({ name: r.responsible }, 'sm'), ' ', fitName(r.responsible)) : h('span', { class: 'muted' }, '—')),
     h('td', { class: 'q-age', title: fmtDate(r.created_at) + (r.overdue ? ' · просрочено' : '') }, r.overdue ? h('span', { class: 'dot-overdue', title: 'Просрочено' }) : null, fmtHours(r.age_hours))];
   for (const c of EXTRA_COLS) if (cols.has(c[0])) tds.push(extraCell(r, c[0]));
   return h('tr', { class: S.selected === r.id ? 'sel' : '', onclick: () => { location.hash = '#/appeal/' + r.id; } }, ...tds);
@@ -245,11 +263,11 @@ function queueRow(r, cols) {
 function queueCard(r) {
   const tIcon = r.type === 'problem' ? 'alert-circle' : r.type === 'suggestion' ? 'lightbulb' : 'heart';
   return h('button', { type: 'button', class: 'qcard' + (S.selected === r.id ? ' sel' : ''), onclick: () => { location.hash = '#/appeal/' + r.id; } },
-    h('div', { class: 'row' }, icon(tIcon, { size: 14, cls: 'tic', title: r.type_label }), h('b', { class: 'num' }, r.number),
+    h('div', { class: 'row' }, icon(tIcon, { size: 14, cls: 'tic', title: r.type_label }), h('b', { class: 'num' }, r.number), r.city ? h('span', { class: 'q-city' }, '· ' + r.city) : null,
       r.priority === 'high' ? h('span', { class: 'mini', title: 'Высокий приоритет' }, icon('alert', { size: 11 })) : null,
       h('div', { class: 'spacer' }), r.overdue ? h('span', { class: 'dot-overdue', title: 'Просрочено' }) : null, h('span', { class: 'small muted' }, fmtHours(r.age_hours))),
     h('div', { class: 'qcard-text' }, r.brief_line || r.text || ''),
-    h('div', { class: 'row small' }, badge(r.status), h('span', { class: 'muted one-line' }, r.responsible ? shortName(r.responsible) : 'без ответственного')));
+    h('div', { class: 'row small' }, badge(r.status), h('span', { class: 'muted one-line fit-box', title: r.responsible ? 'ответственный: ' + r.responsible : '' }, r.responsible ? fitName(r.responsible, 'отв. ') : 'без ответственного')));   // автора в списке нет — он в открытой карточке
 }
 
 async function loadQueue(flashId) {
@@ -270,8 +288,9 @@ async function loadQueue(flashId) {
   const empty = { attention: 'Ничего не требует внимания — посмотрите «Все открытые».', open: 'Открытых обращений нет.', mine: 'На вас сейчас ничего не назначено.', closed: 'Закрытых обращений нет.' };
   if (!rows.length) { table.replaceChildren(h('div', { class: 'card' }, h('div', { class: 'muted' }, empty[S.tab] || 'Ничего не найдено'))); return; }
   // телефон: карточки вместо таблицы — номер, «Коротко», статус, ответственный, возраст (замечание владельца 12.11)
-  if (PHONE.matches) { table.replaceChildren(h('div', { class: 'qcards' }, rows.map(r => { const c = queueCard(r); if (flashId === r.id) c.classList.add('flash'); return c; }))); return; }
+  if (PHONE.matches) { table.replaceChildren(h('div', { class: 'qcards' }, rows.map(r => { const c = queueCard(r); if (flashId === r.id) c.classList.add('flash'); return c; }))); fitNames(table); return; }
   table.replaceChildren(h('div', { class: 'card' }, tbl));
+  fitNames(table);
 }
 
 // ---------- карточка (этап 9: одна главная кнопка по статусу, остальное в «…», подробности и история свёрнуты) ----------

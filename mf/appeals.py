@@ -113,7 +113,7 @@ def stage_for(a: dict) -> dict:
     return {"code": "rejected" if rejected else cur["code"], "label": cur["label"], "index": idx, "steps": steps, "note": note}
 
 BASE_SELECT = """SELECT a.*, c.name AS category, c.sla_first_response_hours AS sla,
-  b.name AS branch, b.code AS branch_code, d.name AS department,
+  b.name AS branch, b.code AS branch_code, b.city AS branch_city, d.name AS department,
   u.name AS responsible, u.position AS responsible_position,
   (SELECT COUNT(*) FROM supports s WHERE s.appeal_id = a.id) AS supports
   FROM appeals a
@@ -811,6 +811,7 @@ def list_for(user: dict, f: dict) -> list[dict]:
         o = {k: r.get(k) for k in keep}
         o["text"] = short(r["text"], 120)
         o["brief_line"] = line(r, 120)
+        o["city"] = r.get("site_city") or r.get("branch_city")   # «A-026 · Самара» в очереди (замечание 13.11); объект — его город
         o["author_urgency"] = r.get("author_urgency")
         o["author_urgency_label"] = URGENCY.get(r.get("author_urgency") or "")
         o["news_days"] = news_age_days(r) if r["status"] in OPEN else None
