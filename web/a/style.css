@@ -7,7 +7,7 @@
 :root {
   /* бренд */
   --red: #e40000; --red-dark: #bc262c; --red-soft: #fff5f5; --red-tint: #fff1f1;
-  --navy: #082742; --ink: #323a47; --muted: #64748d; --muted-2: #8a95a6; --map-label: #aab4c3;
+  --navy: #082742; --ink: #323a47; --muted: #64748d; --muted-2: #8a95a6; --map-label: #7b889c;
   --line: #d1d5dd; --line-soft: #e6e9ef; --bg: #ffffff; --bg-soft: #f5f7fb; --tint: #eff6fd; --tint-line: #cfe0f6; --blue: #2f80ed; --white: #ffffff;
   --map-water: #eaf0f6;
   /* приглушённые статусные */
@@ -300,8 +300,19 @@ tr.muted td { opacity: .6; }
 .mapwrap { position: relative; }
 .map { position: relative; width: 100%; aspect-ratio: 900 / 579; border-radius: var(--radius-lg); overflow: hidden; border: 1px solid var(--line-soft); background: var(--map-water); }
 .map.cropped { aspect-ratio: var(--map-aspect, 2.05); }
+.map-scene { position: absolute; inset: 0; transform-origin: 50% 50%; }
 .map-bg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; object-fit: cover; object-position: 50% var(--map-pos-y, 50%); }
 .map-layer { position: absolute; inset: 0; }
+/* живая карта на главной (замечание владельца 12.11): очень медленный лёгкий наезд/отъезд всей сцены (метки и карточка едут вместе с
+   картой, цикл 28 с) и метки появляются по одной с запада на восток с мягким пульсом; --i — порядок метки (CSSOM в mapview.js).
+   При prefers-reduced-motion общее правило выше гасит анимации — метки сразу на месте (fill-mode backwards, базовое состояние видимое). */
+.map.live .map-scene { animation: kenburns 14s ease-in-out infinite alternate; will-change: transform; }
+@keyframes kenburns { from { transform: scale(1) translate(0, 0); } to { transform: scale(1.045) translate(-.8%, -.6%); } }
+.map.live .marker { animation: marker-in .6s var(--ease) backwards; animation-delay: calc(400ms + var(--i, 0) * 380ms); }
+.map.live .marker .pin { animation: pin-drop .6s var(--ease) backwards; animation-delay: calc(400ms + var(--i, 0) * 380ms); }
+.map.live .marker .pin::after { content: ''; position: absolute; left: 50%; top: 42%; width: 52px; height: 52px; margin: -26px 0 0 -26px; border-radius: 50%; background: var(--glow); opacity: 0; z-index: -1; animation: glow 1.6s var(--ease) 1 backwards; animation-delay: calc(650ms + var(--i, 0) * 380ms); }
+@keyframes marker-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes pin-drop { from { transform: translateY(-10px) scale(.6); } to { transform: none; } }
 .map-country { position: absolute; transform: translate(-50%, -50%); font-size: 15px; letter-spacing: .42em; text-transform: uppercase; color: var(--map-label); font-weight: var(--w-bold); pointer-events: none; white-space: nowrap; }
 .marker { position: absolute; display: flex; align-items: center; gap: 2px; transform: translate(-15px, -100%); cursor: pointer; border: 0; background: none; padding: 0; font: inherit; color: var(--ink); text-align: left; }
 .marker.off { display: none; }
@@ -653,8 +664,10 @@ select { appearance: none; -webkit-appearance: none; padding-right: 34px; backgr
   .brand-lock { --logo-h: 28px; gap: 8px; }
   .site-head .btn { padding: 8px 12px; min-height: 40px; }
   .city-pills { display: flex; }
-  .marker .mlabel { display: none; }
-  .marker.sel .mlabel { display: block; }
+  /* телефон: у каждой метки короткая подпись города под булавкой (замечание владельца 12.11) — как у чипов ниже; остриё булавки — в точке */
+  .marker { flex-direction: column; align-items: center; gap: 1px; transform: translate(-50%, -24px); }
+  .marker .mlabel { display: block; margin: 0; padding: 1px 6px; border-radius: 6px; }
+  .marker .mlabel b { font-size: 11px; }
   .home { padding: var(--s3) var(--s2) var(--s5); }
   .home-arc { display: none; }
   :root { --fs-display: 32px; }

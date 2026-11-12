@@ -1,5 +1,5 @@
 'use strict';
-// Стартовая «Модус Голос» (этап 7, шаг 1): шапка, заголовок с красной чертой, карта на реальных контурах (одно смелое место страницы),
+// Стартовая «Модус Голос» (этап 7, шаг 1; правки владельца 12.11): шапка, заголовок с красной чертой, живая карта на реальных контурах (одно смелое место страницы),
 // карточка города рядом с меткой (на телефоне — снизу листом), три тихие карточки-входа. Данные — /api/public/map без входа.
 (async function () {
   const root = document.getElementById('root');
@@ -15,9 +15,9 @@
   root.firstChild.replaceWith(siteHeader(me, cfg));
   let selected = null;
   const isMobile = () => window.matchMedia('(max-width: 768px)').matches;
-  const mapEl = mapView(map, { crop: { aspect: 2.25, top: 0.1 }, onBranch: b => select(b), onSite: () => { if (map.field) select(map.field); } });
+  const mapEl = mapView(map, { crop: { aspect: 2.25, top: 0.1 }, motion: true, onBranch: b => select(b) });   // объекты — только у директора
   const pop = h('div', { class: 'citypop hidden' });
-  mapEl.map.append(pop);
+  mapEl.scene.append(pop);   // карточка города едет вместе с картой при наезде
   const pills = h('div', { class: 'city-pills' });
   for (const b of map.branches) { const bt = h('button', { type: 'button', class: 'btn', onclick: () => select(b) }, b.city + (b.kind === 'production' ? ' · производство' : '')); bt.dataset.id = b.id; pills.append(bt); }
   if (map.field) { const bt = h('button', { type: 'button', class: 'btn', onclick: () => select(map.field) }, 'Я на объекте'); bt.dataset.id = map.field.id; pills.append(bt); }
@@ -57,7 +57,7 @@
     pop.style.setProperty('--tail', tail + '%');
   }
   window.addEventListener('resize', () => { if (selected) { const b = selected; closeAll(); select(b); } });
-  mapEl.map.addEventListener('click', e => { if (e.target === mapEl.map || e.target.classList.contains('map-bg') || e.target.classList.contains('map-layer')) closeAll(); });
+  mapEl.map.addEventListener('click', e => { if (e.target === mapEl.map || e.target === mapEl.scene || e.target.classList.contains('map-bg') || e.target.classList.contains('map-layer')) closeAll(); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeAll(); });
 
   const submit = h('button', { type: 'button', class: 'feat', onclick: () => { if (selected) location.href = selected.form_url; else { toast('Сначала выберите город на карте или в списке'); pills.firstChild.focus(); pills.scrollIntoView({ behavior: 'smooth', block: 'center' }); } } },
