@@ -2,6 +2,7 @@
 валидируется, при невалидном ответе один повтор, затем LLMError → вызывающий код уходит в ручной режим (ТЗ v1.1 §7)."""
 from __future__ import annotations
 
+import re
 import json
 import logging
 import os
@@ -468,6 +469,30 @@ def boss_greeting(facts: dict) -> str:
             raise ValueError("нет text")
     d = chat_json(BOSS_GREETING_SYSTEM, "Факты (JSON):\n" + json.dumps(facts, ensure_ascii=False), validate, max_tokens=150)
     return " ".join(d["text"].split())
+
+
+DIRECTOR_GREETING_SYSTEM = GLOSSARY + """
+Ты добавляешь к приветствию директора одну короткую живую фразу (до 12 слов) — общий тон недели по фактам: спокойно / есть что решить /
+нужно внимание к просрочкам. БЕЗ ЧИСЕЛ: ни цифр, ни чисел словами («два», «пять», «десяток», «половина» и т. п.) — числа директор увидит
+списком ниже. Не повторяй приветствие и имя. Деловой тон, на «вы». Отвечай ТОЛЬКО JSON: {"phrase": "..."}"""
+
+NUMBER_WORDS = re.compile(r"\b(ноль|нол[яюе]|один|одн[аоуи][а-яё]*|два|две|двух|двум[яи]?|три|тр[её]х|четыр[её][а-яё]*|пят[ьи][а-яё]*|шест[ьи][а-яё]*|"
+                          r"сем[ьи][а-яё]*|восем[ьи][а-яё]*|девят[ьи][а-яё]*|десят[ьи][а-яё]*|десят[оа]к[а-яё]*|[а-яё]+надцат[ьи][а-яё]*|двадцат[а-яё]*|"
+                          r"тридцат[а-яё]*|сорок[а-яё]*|сот[ниейя][а-яё]*|сто|половин[а-яё]*|пар[ау])\b", re.I)
+
+
+def director_greeting(facts: dict) -> str:
+    """Короткая фраза после приветствия директору (замечание владельца 13.11: ИИ — только приветствие, без чисел)."""
+    def validate(d: dict) -> None:
+        t = d.get("phrase") if isinstance(d, dict) else None
+        if not isinstance(t, str) or not t.strip():
+            raise ValueError("нет phrase")
+        if re.search(r"\d", t) or NUMBER_WORDS.search(t):
+            raise ValueError("в фразе есть числа")
+        if len(t) > 140:
+            raise ValueError("слишком длинно")
+    d = chat_json(DIRECTOR_GREETING_SYSTEM, "Факты (JSON):\n" + json.dumps(facts, ensure_ascii=False), validate, max_tokens=80)
+    return " ".join(d["phrase"].split())
 
 
 # ---------- озвучка (OpenAI TTS тем же ключом) ----------

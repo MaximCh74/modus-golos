@@ -275,6 +275,13 @@ details.card > summary { cursor: pointer; font-weight: var(--w-bold); color: var
 .summary-ai p { margin: 6px 0; font-size: 16px; line-height: 1.5; }
 .summary-ai a { color: var(--ink); text-decoration: none; border-bottom: 1px dashed var(--line); }
 .summary-ai a:hover { color: var(--navy); border-bottom-color: var(--navy); }
+/* сводка списком (замечание владельца 13.11): числа жирным, строка — ссылка */
+.summary-ai .sum-greet { margin: 8px 0 2px; }
+.summary-ai .sum-period { font-weight: var(--w-bold); color: var(--navy); margin-top: 6px; }
+.summary-ai .sum-list { margin: 4px 0 2px; padding-left: 22px; font-size: 16px; line-height: 1.5; }
+.summary-ai .sum-list li { margin: 3px 0; }
+.summary-ai .sum-list li::marker { color: var(--muted-2); }
+.summary-ai .sum-list b { color: var(--navy); font-weight: var(--w-bold); }
 .lines { display: flex; gap: 8px; flex-wrap: wrap; }
 .lines a { text-decoration: none; }
 .league td.score b { color: var(--navy); font-size: 18px; }

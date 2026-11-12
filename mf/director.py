@@ -90,6 +90,63 @@ def template(f: dict, user: dict) -> list[dict]:
     return out
 
 
+def _word(n: int, forms: tuple[str, str, str]) -> str:
+    return _plural(n, forms).split(" ", 1)[1]
+
+
+def _lower_first(t: str) -> str:
+    return t[:1].lower() + t[1:] if len(t) > 1 and t[1:2].islower() else t   # «1С …» и аббревиатуры не трогаем
+
+
+def items(f: dict) -> list[dict]:
+    """Сводка списком из фактов сервера (замечание владельца 13.11): строки — сегменты [текст, жирный], числа жирным; у строки — ссылка."""
+    out = [{"parts": [["Поступило: ", False], [str(f["new"]), True]], "href": "/panel#/queue?open=1"},
+           {"parts": [["Решено: ", False], [str(f["done"]), True]], "href": "/changes"}]
+    op = [["Открыто: ", False], [str(f["open"]), True]]
+    if f["urgent_open"]:
+        op += [[", из них мешают работать: ", False], [str(f["urgent_open"]), True]]
+    out.append({"parts": op, "href": "/panel#/queue?open=1" + ("&urgency=now" if f["urgent_open"] else "")})
+    if f["decisions_pending"]:
+        dp = [["Ждут вашего решения: ", False], [str(f["decisions_pending"]), True]]
+        if f["decision_max_days"]:
+            dp += [[", самое давнее — ", False], [str(f["decision_max_days"]), True], [" " + _word(f["decision_max_days"], ("день", "дня", "дней")), False]]
+        out.append({"parts": dp, "href": "/panel#/decisions"})
+    if f["cluster"]:
+        c = f["cluster"]; n = len(c["cities"])
+        out.append({"parts": [["Главная тема: ", False], [_lower_first(c["category"] or "без категории") + " — ", False], [str(c["size"]), True],
+                              [" " + _word(c["size"], ("обращение", "обращения", "обращений")) + " из ", False], [str(n), True],
+                              [" " + _word(n, ("города", "городов", "городов")), False]], "href": f"/panel#/queue?cluster_id={c['id']}"})
+    for it in out:
+        it["text"] = "".join(t for t, _ in it["parts"])
+    return out
+
+
+def _sentences(greet: str, f: dict, its: list[dict]) -> list[dict]:
+    """Тот же текст предложениями — для озвучки, команды «прочитай сводку» и старых клиентов."""
+    return ([{"text": greet, "href": None}, {"text": f"За {_plural(f['period_days'], ('день', 'дня', 'дней'))}:", "href": None}]
+            + [{"text": it["text"] + ".", "href": it["href"]} for it in its])
+
+
+def ai_phrase(f: dict) -> str | None:
+    """ИИ — только фраза к приветствию, без чисел; без ключа или при сбое — без фразы."""
+    if not llm.available():
+        return None
+    try:
+        phrase = llm.director_greeting({k: v for k, v in f.items() if k != "cluster"} | {"cluster_category": f["cluster"] and f["cluster"]["category"]})
+    except llm.LLMError as e:
+        log.warning("приветствие сводки: %s", e)
+        return None
+    return None if llm.has_forbidden(phrase) else phrase
+
+
+def build(f: dict, user: dict, phrase: str | None, v: str) -> dict:
+    greet = greeting(user) + (" " + phrase if phrase else "")
+    its = items(f)
+    return {"greeting": greet, "period": f"За {_plural(f['period_days'], ('день', 'дня', 'дней'))}:", "items": its,
+            "sentences": _sentences(greet, f, its), "engine": "openai" if phrase else "template", "facts": f, "at": db.now_iso(), "version": v,
+            "lines": _lines(f)}
+
+
 def _numbers(text: str) -> set[int]:
     return {int(x) for x in re.findall(r"\d+", text)}
 
@@ -157,16 +214,14 @@ def summary(user: dict, refresh: bool = False, force_template: bool = False) -> 
     cached = db.setting(key)
     v = version()
     if force_template:
-        f = facts()
-        return {"sentences": template(f, user), "engine": "template", "facts": f, "at": db.now_iso(), "version": v, "lines": _lines(f)}
+        return build(facts(), user, None, v)
     age = (db.now() - db.parse(cached["at"])).total_seconds() if cached and cached.get("at") else None
-    if cached and not refresh and cached.get("version") == v and age < CACHE_TTL:
+    if cached and not refresh and cached.get("version") == v and age < CACHE_TTL and "items" in cached:   # старый кэш абзацем — пересчитать
         return cached
-    if cached and refresh and age is not None and age < 60:   # F-07: «обновить» не чаще раза в минуту — каждое обновление это вызов ИИ
+    if cached and refresh and age is not None and age < 60 and "items" in cached:   # F-07: «обновить» не чаще раза в минуту — каждое обновление это вызов ИИ
         return cached
     f = facts()
-    ai = ai_sentences(f, user)
-    out = {"sentences": ai or template(f, user), "engine": "openai" if ai else "template", "facts": f, "at": db.now_iso(), "version": v, "lines": _lines(f)}
+    out = build(f, user, ai_phrase(f), v)
     db.set_setting(key, out)
     return out
 

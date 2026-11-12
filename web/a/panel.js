@@ -432,18 +432,9 @@ function summaryBlockPanel(d) {
   const speakBtn = h('button', { class: 'btn btn-sm', title: 'Озвучить сводку' }, iconText('volume', 'Озвучить'));
   speakBtn.addEventListener('click', () => speakSummary(speakBtn, d.sentences));
   const refreshBtn = h('button', { class: 'btn btn-sm', onclick: async () => { refreshBtn.disabled = true; try { await API.get('/api/panel/director-summary?refresh=1'); summary(); } catch (e) { toast(e.message, 'bad'); refreshBtn.disabled = false; } } }, iconText('refresh', 'Обновить'));
-  // до трёх строк: приветствие склеивается с первым предложением, остальное — за «ещё»
-  const s = d.sentences.slice();
-  const lines = [];
-  if (s.length > 1 && !s[0].href && s[0].text.length < 60) { lines.push({ text: s[0].text + ' ' + s[1].text, href: s[1].href }); s.splice(0, 2); }
-  lines.push(...s);
-  const line = x => h('p', {}, x.href ? h('a', { href: x.href.startsWith('/panel') ? x.href.slice(6) : x.href }, x.text) : x.text);
-  const rest = lines.slice(3);
-  const restBox = h('div', { class: 'hidden' }, rest.map(line));
-  const moreBtn = rest.length ? h('button', { class: 'btn btn-sm btn-ghost', onclick: () => { restBox.classList.toggle('hidden'); moreBtn.replaceChildren(restBox.classList.contains('hidden') ? iconText('chevron-down', 'ещё ' + rest.length) : 'свернуть'); } }, iconText('chevron-down', 'ещё ' + rest.length)) : null;
   return h('div', { class: 'card summary-ai mt16' },
-    h('div', { class: 'row' }, h('div', { class: 'lbl' }, 'Сводка для директора'), helpBtn('summary'), aiMark(d.engine === 'openai', 'пересказ ИИ по фактам сервера', 'шаблон без ИИ'), h('div', { class: 'spacer' }), h('span', { class: 'small muted' }, fmtDate(d.at)), speakBtn, refreshBtn),
-    lines.slice(0, 3).map(line), restBox, moreBtn);
+    h('div', { class: 'row' }, h('div', { class: 'lbl' }, 'Сводка для директора'), helpBtn('summary'), aiMark(d.engine === 'openai', 'приветствие ИИ, числа — из фактов сервера', 'без ИИ'), h('div', { class: 'spacer' }), h('span', { class: 'small muted' }, fmtDate(d.at)), speakBtn, refreshBtn),
+    summaryBody(d, href => href.startsWith('/panel') ? href.slice(6) : href));
 }
 
 async function leaguePanel() {

@@ -295,8 +295,8 @@ function summaryBlock(d, refresh) {
   const refreshBtn = h('button', { class: 'btn btn-sm', onclick: async () => { refreshBtn.disabled = true; try { await API.get('/api/panel/director-summary?refresh=1'); refresh(); } catch (e) { toast(e.message, 'bad'); refreshBtn.disabled = false; } } }, iconText('refresh', 'Обновить'));
   const l = d.lines || {};
   return h('div', { class: 'card summary-ai' },
-    h('div', { class: 'row' }, h('div', { class: 'lbl' }, 'Сводка'), aiMark(d.engine === 'openai', 'пересказ ИИ по фактам', 'шаблон без ИИ'), h('div', { class: 'spacer' }), h('span', { class: 'small muted' }, fmtDate(d.at)), speakBtn, refreshBtn),
-    d.sentences.map(s => h('p', {}, s.href ? h('a', { href: s.href }, s.text) : s.text)),
+    h('div', { class: 'row' }, h('div', { class: 'lbl' }, 'Сводка'), aiMark(d.engine === 'openai', 'приветствие ИИ, числа — из фактов сервера', 'без ИИ'), h('div', { class: 'spacer' }), h('span', { class: 'small muted' }, fmtDate(d.at)), speakBtn, refreshBtn),
+    summaryBody(d),
     attentionLine([[l.urgent_open, '/panel#/queue?open=1&urgency=now', 'мешают работать'], [l.decisions_over_threshold, '#/decisions', 'ждут решения'],
       [l.tasks_overdue, '/panel#/meetings?overdue=1', 'поручения просрочены'], [l.no_news, '/panel#/queue?status=in_progress', 'без новостей']]));
 }

@@ -270,6 +270,18 @@ function chips(options, onPick) {
 
 // Озвучка сводки директора: OpenAI TTS с кэшем на сервере; если недоступно — голос браузера (если есть русский).
 let _summaryAudio = null;
+// Сводка директора списком (замечание владельца 13.11): приветствие (ИИ — только оно, без чисел), «За 7 дней:» и строки из фактов
+// сервера, числа жирным; строка — ссылка в свой раздел. fixHref — для панели (/panel#/… → #/…). Старый ответ (только sentences) — абзацами.
+function summaryBody(d, fixHref) {
+  const go = href => fixHref ? fixHref(href) : href;
+  if (!d.items) return h('div', { class: 'sum-body' }, d.sentences.map(s => h('p', {}, s.href ? h('a', { href: go(s.href) }, s.text) : s.text)));
+  return h('div', { class: 'sum-body' }, h('p', { class: 'sum-greet' }, d.greeting), h('div', { class: 'sum-period' }, d.period),
+    h('ul', { class: 'sum-list' }, d.items.map(it => {
+      const kids = it.parts.map(([t, b]) => b ? h('b', {}, t) : t);
+      return h('li', {}, it.href ? h('a', { href: go(it.href) }, kids) : h('span', {}, kids));
+    })));
+}
+
 async function speakSummary(btn, sentences) {
   if (_summaryAudio && !_summaryAudio.paused) { _summaryAudio.pause(); _summaryAudio = null; btn.replaceChildren(iconText('volume', 'Озвучить')); return; }
   btn.disabled = true; btn.replaceChildren('…');
