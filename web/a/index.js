@@ -19,7 +19,7 @@
   const pop = h('div', { class: 'citypop hidden' });
   mapEl.scene.append(pop);   // карточка города едет вместе с картой при наезде
   const pills = h('div', { class: 'city-pills' });
-  for (const b of map.branches) { const bt = h('button', { type: 'button', class: 'btn', onclick: () => select(b) }, b.city + (b.kind === 'production' ? ' · производство' : '')); bt.dataset.id = b.id; pills.append(bt); }
+  for (const b of map.branches) { const bt = h('button', { type: 'button', class: 'btn', onclick: () => select(b) }, b.city); bt.dataset.id = b.id; pills.append(bt); }
   if (map.field) { const bt = h('button', { type: 'button', class: 'btn', onclick: () => select(map.field) }, 'Я на объекте'); bt.dataset.id = map.field.id; pills.append(bt); }
   mapSlot.replaceChildren(mapEl, pills);
 

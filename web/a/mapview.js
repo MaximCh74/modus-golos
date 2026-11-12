@@ -56,7 +56,7 @@ function mapView(data, opts) {
   const order = (data.branches || []).map(b => b.lng).sort((a, b) => a - b);   // порядок появления меток — с запада на восток
   for (const b of data.branches || []) {
     if (!mapInside(b.lat, b.lng)) continue;
-    const sub = b.kind === 'production' ? 'производство' : staff ? b.open + ' откр.' + (b.overdue ? ' · просрочено ' + b.overdue : '') : (b.code === 'OMSK' ? 'головной офис' : null);
+    const sub = staff ? b.open + ' откр.' + (b.overdue ? ' · просрочено ' + b.overdue : '') : null;   // на главной — только город (замечание 13.11)
     const m = h('button', { type: 'button', class: 'marker' + (staff && b.overdue ? ' warn' : '') + (b.kind === 'production' ? ' prod' : ''), title: b.name, onclick: () => { if (opts.onBranch) opts.onBranch(b, m); } },
       h('span', { class: 'pin' }, icon('map-pin', { size: 30, fill: true, width: 1.5 })),
       h('span', { class: 'mlabel' }, h('b', {}, b.city), sub ? h('span', {}, sub) : null, staff && b.overdue ? icon('alert', { size: 12, cls: 'warn-ic' }) : null));
