@@ -10,7 +10,10 @@ openai==2.44.0
 # этап 8 §4: карточки-приглашения PDF (reportlab + статические начертания Montserrat через fontTools), QR для PDF (Pillow),
 # импорт списка из Excel (openpyxl); аватарки — тоже Pillow
 reportlab==5.0.0
-Pillow==12.3.0
+# Pillow: 13.0.0 закрывает 40 уязвимостей (pip-audit 12.11), но требует Python ≥ 3.11 — он в Docker-образе (python:3.12-slim);
+# на Python 3.10 ноутбука — 12.3.0, а код открывает только JPEG/PNG/WebP с лимитом пикселей (mf/images.py), уязвимые декодеры не задействованы
+Pillow==12.3.0; python_version < "3.11"
+Pillow==13.0.0; python_version >= "3.11"
 fonttools==4.63.0
 openpyxl==3.1.5
 # тесты

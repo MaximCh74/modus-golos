@@ -490,6 +490,11 @@ def install_from_form(form: dict) -> dict:
 
 # ---------- уведомления и задачи ----------
 
+def plain(text: str) -> str:
+    """Текст сотрудника → в Битрикс24 без разметки: квадратные скобки заменяются похожими, [URL=…], [IMG], [USER=…] не срабатывают."""
+    return (text or "").replace("[", "［").replace("]", "］")
+
+
 def _demo_request() -> bool:
     """Действие из демо-входа снаружи (F-03): в настоящий Битрикс24 не дублируем."""
     from .. import auth
@@ -507,7 +512,7 @@ def notify(user_id: int | None, text: str, link: str | None = None) -> None:
     row = db.one("SELECT bitrix_id FROM users WHERE id=? AND active=1", (user_id,))
     if not row or not row["bitrix_id"]:
         return
-    msg = text
+    msg = plain(text)   # F-04: текст пишут сотрудники (в том числе анонимно) — BB-коды Битрикса в нём не работают
     if link:
         msg += f"\n[URL={_public_url()}{link}]Открыть в «Модус Голос»[/URL]"
     if os.environ.get("PYTEST_CURRENT_TEST"):
@@ -530,7 +535,7 @@ def create_task(assignee_user_id: int, title: str, description: str, due_date: s
     row = db.one("SELECT bitrix_id FROM users WHERE id=? AND active=1", (assignee_user_id,))
     if not row or not row["bitrix_id"]:
         return None
-    fields = {"TITLE": title[:250], "DESCRIPTION": description, "RESPONSIBLE_ID": int(row["bitrix_id"])}
+    fields = {"TITLE": plain(title)[:250], "DESCRIPTION": plain(description), "RESPONSIBLE_ID": int(row["bitrix_id"])}
     if due_date:
         fields["DEADLINE"] = f"{due_date}T18:00:00"
     try:

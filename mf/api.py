@@ -13,7 +13,7 @@ from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, Reque
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
-from . import ai, appeals, auth, boss, commands, db, demo, director, glossary, meetings, posters, realtime, staff
+from . import ai, appeals, auth, boss, commands, db, demo, director, glossary, images, meetings, posters, realtime, staff
 from .ai import llm, similar, stt
 from .integrations import bitrix
 from . import config
@@ -407,13 +407,10 @@ async def upload_avatar(request: Request, file: UploadFile = File(...)):
     data = await file.read(AVATAR_MAX + 1)
     if len(data) > AVATAR_MAX:
         raise HTTPException(413, "Картинка больше 3 МБ")
-    try:
-        from PIL import Image, ImageOps
-        img = Image.open(io.BytesIO(data))
-        img = ImageOps.exif_transpose(img).convert("RGB")
-        img = ImageOps.fit(img, (256, 256), method=Image.LANCZOS, centering=(0.5, 0.4))
-    except Exception:   # noqa: BLE001
-        raise HTTPException(415, "Нужна картинка (JPEG, PNG, WebP)")
+    from PIL import Image, ImageOps
+    img = images.upright(images.open_image(data)).convert("RGB")   # F-19: только JPEG/PNG/WebP, лимит пикселей
+    img = ImageOps.fit(img, (256, 256), method=Image.LANCZOS, centering=(0.5, 0.4))
+    img.info = {}   # без метаданных исходника (комментарии, ICC)
     name = f"u{user['id']}-{secrets.token_hex(6)}.jpg"
     img.save(config.AVATAR_DIR / name, "JPEG", quality=85)
     old = db.one("SELECT avatar FROM users WHERE id=?", (user["id"],))["avatar"]

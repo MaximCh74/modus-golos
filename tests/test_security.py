@@ -266,3 +266,43 @@ def test_F03_demo_login_rate_limited_and_switch_off(c, monkeypatch):
     anon(c)
     assert c.post("/api/auth/login-as", json={"user_id": 1}).status_code == 404
     assert c.get("/api/auth/users").status_code == 404 and c.get("/api/public/config").json()["demo_login"] is False
+
+
+# ---------- F-04: текст сотрудника уходит в Битрикс24 без BB-кодов ----------
+
+def test_F04_bbcode_from_anonymous_qr_is_neutralized(c, fake_bitrix):
+    legit_tokens()
+    db.ex("UPDATE users SET bitrix_id=1 WHERE id=1")
+    anon(c)
+    evil = "Спасибо! [URL=https://evil.example/login]Подтвердите вход в Битрикс24[/URL] [IMG]https://evil.example/x.png[/IMG]"
+    assert c.post("/api/public/appeals", data={"type": "praise", "text": evil, "branch_code": "PVL", "praise_to_user_id": "1"}).status_code == 200
+    msg = fake_bitrix.to(PORTAL, "im.notify.system.add")[-1]["data"]["MESSAGE"]
+    assert "[URL=https://evil" not in msg and "[IMG]" not in msg and "［URL=https://evil.example/login］" in msg
+    assert msg.count("[URL=") == 1 and "]Открыть в «Модус Голос»[/URL]" in msg   # наша ссылка обратно работает
+
+
+# ---------- F-19: картинки — только JPEG/PNG/WebP, с лимитом пикселей ----------
+
+def _img(fmt, size=(64, 64)):
+    from PIL import Image
+    buf = io.BytesIO()
+    Image.new("RGB", size, (1, 2, 3)).save(buf, fmt)
+    return buf.getvalue()
+
+
+def test_F19_avatar_rejects_exotic_formats(c):
+    login(c, 6)
+    for fmt in ("TIFF", "BMP", "GIF", "PPM"):
+        r = c.post("/api/me/avatar", files={"file": ("a.jpg", _img(fmt), "image/jpeg")})
+        assert r.status_code == 415, fmt
+    for fmt in ("JPEG", "PNG", "WEBP"):
+        assert c.post("/api/me/avatar", files={"file": ("a." + fmt.lower(), _img(fmt), "image/" + fmt.lower())}).status_code == 200, fmt
+
+
+def test_F19_avatar_rejects_decompression_bomb(c):
+    from PIL import Image
+    buf = io.BytesIO()
+    Image.new("L", (9000, 9000), 0).save(buf, "PNG", optimize=True)   # 81 Мп, файл — десятки килобайт
+    assert len(buf.getvalue()) < 3 * 1024 * 1024
+    login(c, 6)
+    assert c.post("/api/me/avatar", files={"file": ("bomb.png", buf.getvalue(), "image/png")}).status_code == 415
