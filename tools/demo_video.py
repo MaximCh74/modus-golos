@@ -82,7 +82,7 @@ def main() -> None:
         page.click("button:has-text('Принять') >> nth=0"); page.wait_for_timeout(1500); shot(page, "11_decision_accepted")
         # Шаг 5: что изменили, профиль, лига, награды
         login(page, base, 16)
-        page.goto(f"{base}/app#/changes"); page.wait_for_selector("text=Что изменили"); page.wait_for_timeout(800); shot(page, "12_changes_thanks")
+        page.goto(f"{base}/app#/changes"); page.wait_for_selector("text=Результаты обращений"); page.wait_for_timeout(800); shot(page, "12_changes_thanks")
         page.goto(f"{base}/app#/u/6"); page.wait_for_selector("text=Внедрённые идеи"); shot(page, "13_profile")
         page.goto(f"{base}/app#/league"); page.wait_for_selector("text=Лига филиалов"); shot(page, "14_league")
         page.goto(f"{base}/app#/rewards"); page.wait_for_selector("text=Награды"); shot(page, "15_rewards")

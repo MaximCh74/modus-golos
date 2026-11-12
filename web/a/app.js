@@ -1,5 +1,5 @@
 'use strict';
-// Приложение сотрудника (PWA): главная, новое обращение, карточка, «Что изменили», уведомления, баллы.
+// Приложение сотрудника (PWA): главная, новое обращение, карточка, «Результаты обращений», уведомления, баллы.
 let ME = null, DICTS = null;
 const root = document.getElementById('root');
 
@@ -66,7 +66,7 @@ function placeholder(title, text) {
 }
 
 function tabs(active) {
-  const items = [['#/changes', 'Что изменили'], ['#/rewards', 'Награды'], ['#/league', 'Лига']];
+  const items = [['#/changes', 'Результаты обращений'], ['#/rewards', 'Награды'], ['#/league', 'Лига']];
   items.push(['#/tasks', 'Мои поручения' + (ME.tasks_open ? ' · ' + ME.tasks_open : '')], ['#/u/' + ME.id, 'Мой профиль']);
   if (ME.role !== 'employee') items.push(['#/meeting', 'Совещание']);
   if (ME.role === 'director' || ME.role === 'admin') items.push(['#/decisions', 'На решение']);
@@ -254,7 +254,7 @@ async function appealCard(id) {
 
 async function changes() {
   const rows = await API.get('/api/changes');
-  root.replaceChildren(h('div', { class: 'wrap' }, h('a', { href: '#/', class: 'small ict' }, icon('arrow-left', { size: 14 }), 'Назад'), h('div', { class: 'h1' }, 'Что изменили'), tabs('#/changes'),
+  root.replaceChildren(h('div', { class: 'wrap' }, h('a', { href: '#/', class: 'small ict' }, icon('arrow-left', { size: 14 }), 'Назад'), h('div', { class: 'h1' }, 'Результаты обращений'), tabs('#/changes'),
     h('p', { class: 'hint' }, 'Реализованные обращения: проблема и что сделали.'),
     rows.length ? rows.map(r => {
       const tb = (!r.is_mine && !r.thanked_by_me && r.author) ? h('button', { class: 'btn btn-sm', onclick: async ev => { ev.stopPropagation(); tb.disabled = true; try { await API.post('/api/appeals/' + r.id + '/thank'); toast('Спасибо передано ' + r.author.name); changes(); } catch (e) { toast(e.message, 'bad'); tb.disabled = false; } } }, iconText('heart', 'Спасибо')) : null;
@@ -313,7 +313,7 @@ async function profileScreen(uid) {
     u.praises && u.praises.length ? h('div', { class: 'lbl mt16' }, 'Благодарности коллег') : null,
     u.praises && u.praises.length ? h('div', { class: 'card list' }, u.praises.map(pr => h('div', { class: 'item', onclick: () => { location.hash = '#/appeal/' + pr.id; } }, h('div', { class: 'row' }, iconText('heart', pr.from || 'Коллега'), h('div', { class: 'spacer' }), h('span', { class: 'small muted' }, fmtDate(pr.created_at))), h('div', { class: 'small' }, pr.text)))) : null,
     h('div', { class: 'lbl mt16' }, 'Внедрённые идеи'),
-    h('div', { class: 'card list' }, u.implemented.length ? u.implemented.map(i => h('div', { class: 'item', onclick: () => { location.hash = '#/appeal/' + i.id; } }, h('div', { class: 'row' }, h('b', {}, i.number), h('span', { class: 'small muted' }, fmtDate(i.closed_at))), h('div', { class: 'small' }, i.text), h('div', { class: 'small card-ok ict' }, icon('arrow-right', { size: 14 }), i.resolution_text || ''))) : h('div', { class: 'muted' }, 'Пока нет — внедрённые идеи попадают сюда из «Что изменили»'))));
+    h('div', { class: 'card list' }, u.implemented.length ? u.implemented.map(i => h('div', { class: 'item', onclick: () => { location.hash = '#/appeal/' + i.id; } }, h('div', { class: 'row' }, h('b', {}, i.number), h('span', { class: 'small muted' }, fmtDate(i.closed_at))), h('div', { class: 'small' }, i.text), h('div', { class: 'small card-ok ict' }, icon('arrow-right', { size: 14 }), i.resolution_text || ''))) : h('div', { class: 'muted' }, 'Пока нет — внедрённые идеи попадают сюда из «Результаты обращений»'))));
 }
 
 async function rewardsScreen() {

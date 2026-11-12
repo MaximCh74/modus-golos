@@ -157,7 +157,7 @@ async def public_branches(request: Request):
 
 @router.get("/public/changes")
 async def public_changes():
-    """Лента «Что изменили» без входа (этап 7): номер, тип, категория, филиал, суть, что сделали, число «спасибо» — без авторов."""
+    """Лента «Результаты обращений» без входа (этап 7): номер, тип, категория, филиал, суть, что сделали, число «спасибо» — без авторов."""
     out = []
     for r in appeals.changes(50):
         out.append({k: r[k] for k in ("id", "number", "type_label", "category", "branch", "resolution_text", "closed_at", "thanks")} | {"text": r["brief_line"] or r["text"]})

@@ -407,13 +407,13 @@ def can_manage(a: dict, user: dict) -> bool:
 
 
 def can_view(a: dict, user: dict) -> bool:
-    """Полная карточка: ведущий, автор; реализованные — всем (лента «Что изменили»). Поддержавший («У меня так же») видит только
+    """Полная карточка: ведущий, автор; реализованные — всем (лента «Результаты обращений»). Поддержавший («У меня так же») видит только
     краткую карточку — view_limited (аудит 12.11, F-05: раньше поддержка открывала любое обращение вместе с вложениями)."""
     if can_manage(a, user):
         return True
     if author_id(a["id"]) == user["id"]:
         return True
-    return a["status"] == "done"   # лента «Что изменили» — открыта всем сотрудникам
+    return a["status"] == "done"   # лента «Результаты обращений» — открыта всем сотрудникам
 
 
 def supported_by(a: dict, user: dict) -> bool:
@@ -456,7 +456,7 @@ def set_status(appeal_id: int, actor: dict, status: str, text: str | None = None
     if status == "rejected" and not text:
         raise HTTPException(422, "Отказ требует мотивировки — автор её увидит")
     if status == "done" and not text:
-        raise HTTPException(422, "Укажите, что сделано: это увидит автор и лента «Что изменили»")
+        raise HTTPException(422, "Укажите, что сделано: это увидит автор и лента «Результаты обращений»")
     sets, params = ["status=?"], [status]
     if status in ("done", "rejected"):
         sets.append("resolution_text=?"); params.append(text)
@@ -838,7 +838,7 @@ def mine(user: dict) -> list[dict]:
 
 
 def changes(limit: int = 50) -> list[dict]:
-    """Лента «Что изменили»: проблема → что сделали (закрывает A-020 из датасета)."""
+    """Лента «Результаты обращений»: проблема → что сделали (закрывает A-020 из датасета)."""
     rows = [decorate(r) for r in db.q(BASE_SELECT + " WHERE a.status IN ('done','closed') AND a.resolution_text IS NOT NULL AND a.type != 'praise' "
                                      "ORDER BY COALESCE(a.closed_at, a.updated_at) DESC LIMIT ?", (limit,))]
     out = []

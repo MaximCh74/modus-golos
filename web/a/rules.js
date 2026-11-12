@@ -10,7 +10,7 @@
       h('div', { class: 'lbl' }, 'За что'),
       h('div', { class: 'list mt8' },
         h('div', { class: 'item' }, h('div', { class: 'row' }, h('b', { class: 'big' }, '+' + p.accepted), h('div', {}, h('b', {}, 'Обращение принято к рассмотрению'), h('div', { class: 'small muted' }, 'Ответственный перевёл его из «Новое» в «На рассмотрении»')))),
-        h('div', { class: 'item' }, h('div', { class: 'row' }, h('b', { class: 'big' }, '+' + p.done), h('div', {}, h('b', {}, 'Реализовано'), h('div', { class: 'small muted' }, 'Проблема решена или идея внедрена — это попадает в ленту «Что изменили»')))),
+        h('div', { class: 'item' }, h('div', { class: 'row' }, h('b', { class: 'big' }, '+' + p.done), h('div', {}, h('b', {}, 'Реализовано'), h('div', { class: 'small muted' }, 'Проблема решена или идея внедрена — это попадает в ленту «Результаты обращений»')))),
         h('div', { class: 'item' }, h('div', { class: 'row' }, h('b', { class: 'big' }, '+' + p.support), h('div', {}, h('b', {}, 'Коллега нажал «У меня так же»'), h('div', { class: 'small muted' }, 'За каждого, но не больше +' + p.support_cap + ' на одно обращение'))))),
       h('div', { class: 'hint mt8' }, 'Баллы получает автор. За отправку обращения баллов нет — важен результат, а не количество.')),
     h('div', { class: 'card' },

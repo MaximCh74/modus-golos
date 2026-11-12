@@ -305,7 +305,7 @@ function cardContent(a, id) {
   const commentForm = () => textForm('Комментарий автору', 'Комментарий (увидит автор)', '/comment', 'Комментарий добавлен', 'Добавить');
   const statusChange = (code, label) => {
     if (code !== 'rejected' && code !== 'done') return act(() => post('/status', { status: code }), 'Статус: ' + label);
-    show(textForm(code === 'rejected' ? 'Отклонить' : 'Реализовано', code === 'rejected' ? 'Мотивировка отказа — автор её увидит (обязательно)' : 'Что сделано — увидит автор и лента «Что изменили» (обязательно)', '/status', 'Статус изменён', 'Подтвердить', { status: code }));
+    show(textForm(code === 'rejected' ? 'Отклонить' : 'Реализовано', code === 'rejected' ? 'Мотивировка отказа — автор её увидит (обязательно)' : 'Что сделано — увидит автор и лента «Результаты обращений» (обязательно)', '/status', 'Статус изменён', 'Подтвердить', { status: code }));
   };
   const decisionForm = () => h('div', { class: 'card card-info act' },
     h('div', { class: 'row' }, h('b', {}, 'Решение по обращению'), h('div', { class: 'spacer' }), h('button', { class: 'btn btn-sm btn-ghost', title: 'Закрыть', onclick: () => formBox.replaceChildren() }, icon('x'))),
