@@ -27,12 +27,12 @@ async function boot() {
 function renderTop() {
   let top = document.getElementById('top');
   if (!top) { top = h('div', { class: 'topbar', id: 'top' }); document.body.prepend(top); }
-  top.replaceChildren(
+  top.replaceChildren(...[   // replaceChildren превращает null в текст «null» — пустые элементы отфильтровываем
     brandLock('#/', 'Модус Голос — на главную приложения', 'brand'),
     h('div', { class: 'spacer' }),
     showPoints() ? h('span', { class: 'small muted', title: 'Мои баллы' }, iconText('star', String(ME.points || 0))) : null,
     h('a', { href: '#/notifications', class: 'btn btn-sm bell', title: 'Уведомления' }, icon('bell'), ME.unread ? h('span', { class: 'n' }, String(ME.unread)) : null),
-    h('a', { href: '/login', class: 'btn btn-sm', title: 'Сменить пользователя' }, ME.name.split(' ')[0]));
+    h('a', { href: '/login', class: 'btn btn-sm', title: 'Сменить пользователя' }, ME.name.split(' ')[0])].filter(Boolean));
 }
 
 async function route() {
