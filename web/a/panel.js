@@ -34,12 +34,17 @@ async function boot() {
   });
 }
 
+// стартовая страница роли: директор — «Сводка» (ТЗ владельца 13.11), администратор — «Администрирование» (13.11), остальные — очередь
+function startHash() { return ME.role === 'director' ? '#/summary' : ME.role === 'admin' ? '#/admin' : '#/queue'; }
+
 function renderTop() {
   let top = document.getElementById('top');
   if (!top) { top = h('div', { class: 'topbar', id: 'top' }); document.body.prepend(top); }
-  const hash = location.hash || '#/queue';
-  const nav = [['#/queue', 'Очередь']];
+  const hash = location.hash || startHash();
+  // порядок меню (ТЗ владельца 13.11): Сводка · Очередь · Совещания · На решение · Лига · Администрирование
+  const nav = [];
   if (ME.role !== 'responsible') nav.push(['#/summary', 'Сводка']);
+  nav.push(['#/queue', 'Очередь']);
   nav.push(['#/meetings', 'Совещания']);
   if (ME.role !== 'responsible') nav.push(['#/decisions', 'На решение']);
   nav.push(['#/league', 'Лига']);
@@ -54,7 +59,7 @@ function renderTop() {
     onclick: ev => { ev.stopPropagation(); toggleNav(!panel.classList.contains('open')); } }, icon('menu'));
   function toggleNav(open) { panel.classList.toggle('open', open); toggle.setAttribute('aria-expanded', open ? 'true' : 'false'); }
   top.replaceChildren(
-    brandLock('#/queue', 'Модус Голос — панель', 'brand'),
+    brandLock(startHash(), 'Модус Голос — панель', 'brand'),
     h('div', { class: 'nav' }, nav.map(([href, label]) => h('a', { href, class: isActive(href) ? 'active' : '' }, label))),
     h('div', { class: 'spacer' }),
     h('a', { href: '#/help', class: 'btn btn-sm' + (hash.startsWith('#/help') ? ' on' : ''), title: 'Справка: термины простым языком', 'aria-label': 'Справка' }, icon('help-circle')),
@@ -80,8 +85,8 @@ function labelTables(scope) {
 new MutationObserver(muts => { if (muts.some(m => m.addedNodes.length)) labelTables(document.getElementById('root')); }).observe(document.getElementById('root'), { childList: true, subtree: true });
 
 async function route() {
-  // администратор после входа — сразу «Администрирование», сверху «Сотрудники» (замечание владельца 13.11)
-  if (ME.role === 'admin' && ['', '#', '#/'].includes(location.hash)) { location.replace('#/admin'); return; }   // hashchange вызовет route ещё раз (history занят функцией ui.js)
+  // после входа: директор — сразу «Сводка» (ТЗ 13.11), администратор — «Администрирование», сверху «Сотрудники» (замечание владельца 13.11)
+  if (['', '#', '#/'].includes(location.hash) && startHash() !== '#/queue') { location.replace(startHash()); return; }   // hashchange вызовет route ещё раз (history занят функцией ui.js)
   const hash = location.hash || '#/queue';
   const p = hash.slice(1).split('/').filter(Boolean);
   renderTop();
@@ -435,9 +440,13 @@ async function summary() {
     h('div', { class: 'kpi' }, h('b', {}, pct(d.considered_share)), h('span', {}, 'доля рассмотренных', helpBtn('kpi_considered'))),
     h('div', { class: 'kpi' }, h('b', {}, fmtHours(d.avg_first_response_hours)), h('span', {}, 'среднее время первого ответа', helpBtn('kpi_first_response'))),
     h('div', { class: 'kpi' }, h('b', {}, String(d.done_period)), h('span', {}, 'реализовано за 30 дней', helpBtn('kpi_done_period'))));
-  const byType = h('div', { class: 'card' }, h('b', {}, 'По типам'), h('div', { class: 'row mt8' }, Object.entries(d.by_type).filter(([, n]) => n).map(([t, n]) => h('span', { class: 'badge tag-type' }, TYPES[t] + ': ' + n))),
-    h('b', { class: 'mt16' }, 'По статусам'), h('div', { class: 'row mt8' }, STATUS_GROUPS.map(g => [g, g.value.split(',').reduce((n, s) => n + (d.by_status[s] || 0), 0)]).filter(([, n]) => n)
-      .map(([g, n]) => h('span', { class: 'badge ' + g.cls }, g.label + ': ' + n))));
+  // «По типам / По статусам» — чипы крупнее (×1,25), под ними часы по городам филиалов (ТЗ владельца 13.11, п. 3)
+  const clock = cityClock(md, { userId: ME.id });
+  const byType = h('div', { class: 'card stats-card' }, h('div', { class: 'sum-chips' },
+    h('div', {}, h('b', {}, 'По типам'), h('div', { class: 'row mt8' }, Object.entries(d.by_type).filter(([, n]) => n).map(([t, n]) => h('span', { class: 'badge tag-type' }, TYPES[t] + ': ' + n)))),
+    h('div', {}, h('b', {}, 'По статусам'), h('div', { class: 'row mt8' }, STATUS_GROUPS.map(g => [g, g.value.split(',').reduce((n, s) => n + (d.by_status[s] || 0), 0)]).filter(([, n]) => n)
+      .map(([g, n]) => h('span', { class: 'badge ' + g.cls }, g.label + ': ' + n))))),
+    clock ? h('div', { class: 'clock-wrap' }, clock) : null);
   const branches = h('div', { class: 'card' }, h('b', {}, 'Филиалы', helpBtn('by_branch')), h('div', { class: 'hint' }, 'Количество обращений филиал не ранжирует — лига по качеству во вкладке «Лига».'),
     h('table', { class: 'tbl mt8 by-branch' }, h('thead', {}, h('tr', {}, ['Филиал', 'Всего', 'Открыто', 'Просрочено', 'Рассмотрено', 'Первый ответ', 'Реализовано', 'Главная тема'].map(t => h('th', {}, t)))),
       h('tbody', {}, d.by_branch.map(b => h('tr', { onclick: () => { S.filters = b.site ? { site: b.site } : { branch_id: b.id }; S.tab = 'open'; location.hash = '#/queue'; } },
@@ -458,15 +467,42 @@ async function summary() {
     ['Проверить просрочки сейчас', async () => { const r = await API.post('/api/panel/check-overdue'); toast(r.escalated.length ? 'Эскалировано: ' + r.escalated.join(', ') : 'Новых просрочек нет'); summary(); }],
     ds && ds.engine === 'openai' ? ['Показать сводку шаблоном без ИИ', async () => { const t = await API.get('/api/panel/director-summary?engine=template'); const box = document.querySelector('.summary-ai'); if (box) box.replaceWith(summaryBlockPanel(t)); }] : null]) : null;
   const command = ME.role === 'director' ? commandPanel({ decisionsHref: '#/decisions', compact: true }) : null;   // команды — только директору (F-21)
-  root.replaceChildren(h('div', { class: 'wrap wrap-wide' }, h('div', { class: 'row' }, h('div', { class: 'h1' }, 'Сводка'), h('div', { class: 'spacer' }), more), sumBlock, attention, command, kpis, h('div', { class: 'split mt16 map-split' }, mapCard, byType), branches, clustersBox, cats));   // карта — крупно, рамка 46…86° в. д. × 45…62° с. ш. (13.11)
+  // раскладка (ТЗ владельца 13.11, п. 2): на всю ширину; сверху карта (~60 %) и справа сводка с командой, ниже на всю ширину —
+  // «Требуют внимания», плитки, «По типам / По статусам» с часами, «Филиалы»; до 1200 px колонки друг под другом (CSS .sum-top)
+  const side = h('div', { class: 'sum-side' }, sumBlock, command);
+  root.replaceChildren(h('div', { class: 'wrap wrap-full sum-page' }, h('div', { class: 'row sum-head' }, h('div', { class: 'h1' }, 'Сводка'), h('div', { class: 'spacer' }), more),
+    h('div', { class: 'sum-top' }, mapCard, side), attention, kpis, byType, branches, clustersBox, cats));
+  fitSummarySide(mapCard, side);
+}
+
+// правая колонка — по высоте карты: текст сводки длиннее — прокрутка внутри карточки, карта не растягивается (ТЗ 13.11, п. 2)
+const SUM_WIDE = window.matchMedia('(min-width: 1200px)');
+let SUM_FIT = null;
+SUM_WIDE.addEventListener('change', () => { if (SUM_FIT) SUM_FIT(); });
+function fitSummarySide(mapCard, side) {
+  const fit = () => {
+    const card = side.querySelector('.summary-ai');   // карточку могут подменить («шаблоном без ИИ») — ищем каждый раз
+    if (!card) return;
+    const fade = () => card.classList.toggle('more-down', card.scrollHeight - card.scrollTop - card.clientHeight > 4);   // текст продолжается ниже
+    if (!card.dataset.fade) { card.dataset.fade = '1'; card.addEventListener('scroll', fade, { passive: true }); }
+    if (!SUM_WIDE.matches) { card.style.maxHeight = ''; fade(); return; }
+    const rest = [...side.children].filter(x => x !== card).reduce((n, x) => n + x.getBoundingClientRect().height, 0);
+    const gap = parseFloat(getComputedStyle(side).rowGap) || 0;
+    card.style.maxHeight = Math.max(220, Math.floor(mapCard.getBoundingClientRect().height - rest - gap * (side.children.length - 1))) + 'px';
+    fade();
+  };
+  if (window.ResizeObserver) { const ro = new ResizeObserver(fit); ro.observe(mapCard); ro.observe(side); for (const x of side.children) ro.observe(x); }
+  SUM_FIT = fit;
+  fit();
 }
 
 function summaryBlockPanel(d) {
   const speakBtn = h('button', { class: 'btn btn-sm', title: 'Озвучить сводку' }, 'Озвучить');
   speakBtn.addEventListener('click', () => speakSummary(speakBtn, d.sentences));
   const refreshBtn = h('button', { class: 'btn btn-sm', onclick: async () => { refreshBtn.disabled = true; try { await API.get('/api/panel/director-summary?refresh=1'); summary(); } catch (e) { toast(e.message, 'bad'); refreshBtn.disabled = false; } } }, iconText('refresh', 'Обновить'));
-  return h('div', { class: 'card summary-ai mt16' },
-    h('div', { class: 'row' }, h('div', { class: 'lbl' }, 'Сводка для директора'), helpBtn('summary'), h('div', { class: 'spacer' }), h('span', { class: 'small muted' }, fmtDate(d.at)), speakBtn, refreshBtn),
+  return h('div', { class: 'card summary-ai' },
+    h('div', { class: 'row' }, h('div', { class: 'lbl' }, 'Сводка для директора'), helpBtn('summary'), h('div', { class: 'spacer' }),
+      h('div', { class: 'row sum-acts' }, h('span', { class: 'small muted' }, fmtDate(d.at)), speakBtn, refreshBtn)),   // время и кнопки переносятся вместе
     summaryBody(d, href => href.startsWith('/panel') ? href.slice(6) : href));
 }
 

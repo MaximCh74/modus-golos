@@ -187,7 +187,9 @@ def test_admin_lands_in_administration():
     from mf.main import _home_for
     assert _home_for({"role": "admin"}) == "/panel#/admin" and _home_for({"role": "employee"}) == "/app" and _home_for({"role": "director"}) == "/panel"
     assert "me.role === 'admin' ? '/panel#/admin'" in (ROOT / "web" / "a" / "login.js").read_text(encoding="utf-8")
-    assert "if (ME.role === 'admin' && ['', '#', '#/'].includes(location.hash)) { location.replace('#/admin'); return; }" in (ROOT / "web" / "a" / "panel.js").read_text(encoding="utf-8")
+    js = (ROOT / "web" / "a" / "panel.js").read_text(encoding="utf-8")   # стартовая роли — startHash() (ТЗ 13.11: директор — «Сводка»)
+    assert "ME.role === 'director' ? '#/summary' : ME.role === 'admin' ? '#/admin' : '#/queue'" in js
+    assert "if (['', '#', '#/'].includes(location.hash) && startHash() !== '#/queue') { location.replace(startHash()); return; }" in js
 
 
 def test_admin_tables_numbered_and_help_everywhere():

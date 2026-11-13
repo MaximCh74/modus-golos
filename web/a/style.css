@@ -14,6 +14,12 @@
   --tile-new-bg: #eaf2fc; --tile-new-ic: #d6e6f8; --tile-done-bg: #e9f6ee; --tile-done-ic: #d2eedc; --tile-done-fg: #1f7a46;
   --tile-dec-bg: #eaf2fc; --tile-dec-line: #8fb2e0; --tile-late-bg: #fdeeee; --tile-late-ic: #f8d9d9;   /* плитки /boss по образцу владельца 13.11 */
   --shadow-soft: 0 1px 2px rgba(8, 39, 66, .04), 0 8px 22px rgba(8, 39, 66, .07);   /* мягкие тени карточек и плиток /boss */
+  /* объём панели (ТЗ владельца 13.11, п. 4): фон на тон темнее карточек; тень в два слоя — близкая плотная и дальняя размытая;
+     светлая кромка сверху, как подсветка; у карты — лёгкая внутренняя тень по краю. Новых цветов нет — те же тёмно-синий и белый */
+  --bg-page: #edf1f6;
+  --shadow-card: 0 1px 2px rgba(8, 39, 66, .08), 0 12px 32px -10px rgba(8, 39, 66, .16);
+  --card-hi: inset 0 1px 0 rgba(255, 255, 255, .95);
+  --map-inset: inset 0 1px 10px rgba(8, 39, 66, .14), inset 0 0 0 1px rgba(8, 39, 66, .05);
   --seg-on: linear-gradient(180deg, #123b64 0%, var(--navy) 55%, var(--navy-deep) 100%);   /* активная половина: глубокий тёмно-синий, темнее книзу */
   --ic-ring: 0 3px 8px rgba(8, 39, 66, .10), inset 0 1px 0 rgba(255, 255, 255, .9);
   --ic-new: linear-gradient(180deg, #f6f9fe 0%, #d9e7f8 100%); --ic-done: linear-gradient(180deg, #f5fbf7 0%, #d2eedc 100%); --ic-late: linear-gradient(180deg, #fff7f7 0%, #f7dada 100%);
@@ -903,3 +909,48 @@ select { appearance: none; -webkit-appearance: none; padding-right: 34px; backgr
   .stats { grid-template-columns: repeat(2, 1fr); }
   .grid2.form-cols { grid-template-columns: 1fr; }
 }
+
+/* «Сводка» директора (ТЗ владельца 13.11, п. 2–4): на всю ширину; сверху карта (~60 %) и справа сводка с командой — по высоте карты,
+   длинный текст сводки прокручивается внутри карточки (max-height ставит fitSummarySide в panel.js); ниже на всю ширину — «Требуют
+   внимания», плитки, «По типам / По статусам» с часами, «Филиалы». До 1200 px колонки встают друг под друга: карта → сводка → остальное */
+.wrap-full { max-width: 2400px; padding: var(--s3); }
+.sum-head { margin-bottom: var(--s1); }
+.sum-page .kpis { margin-bottom: var(--s2); }
+.sum-top { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: var(--s2); align-items: stretch; margin-bottom: var(--s2); }
+.sum-top > .card, .sum-side > .card { margin-bottom: 0; }
+.sum-top > .map-card { align-self: start; }   /* карта — по своей высоте; правая колонка тянется до неё, а не наоборот */
+.sum-side { display: flex; flex-direction: column; gap: var(--s2); min-width: 0; }
+.sum-side .summary-ai { flex: 1 1 auto; min-height: 0; overflow: auto; overscroll-behavior: contain; }
+.sum-side .summary-ai > .row:first-child { position: sticky; top: calc(-1 * var(--s3)); z-index: 1; margin-top: calc(-1 * var(--s3)); padding: var(--s3) 0 6px; background: var(--card); }
+.sum-side .summary-ai.more-down::after { content: ''; position: sticky; bottom: calc(-1 * var(--s3)); display: block; height: 40px; margin: -40px calc(-1 * var(--s3)) calc(-1 * var(--s3)); background: linear-gradient(to bottom, transparent, var(--card) 85%); pointer-events: none; }
+.sum-side .command { flex: none; }
+.sum-acts { gap: 8px; }
+@media (min-width: 481px) { .sum-acts { flex-wrap: nowrap; } }
+@media (max-width: 1599px) {   /* узкая правая колонка: поле команды на всю строку, микрофон и «Выполнить» под ним */
+  .sum-side .cmd-row { flex-wrap: wrap; }
+  .sum-side .cmd-row > .spacer { flex: 1 1 100%; }
+}
+@media (max-width: 1199px) {
+  .sum-top { grid-template-columns: minmax(0, 1fr); }
+  .sum-side .summary-ai { overflow: visible; }
+  .sum-side .summary-ai > .row:first-child { position: static; margin-top: 0; padding: 0; }
+}
+@media (max-width: 480px) { .wrap-full { padding: var(--s2) 12px; } }
+/* чипы «По типам / По статусам» — в 1,25 раза крупнее обычных (12 → 15 px, отступы 2/10 → 3/13), цвета статусов прежние */
+.sum-chips { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: var(--s2) var(--s4); }
+.sum-chips .row { gap: 8px; }
+.sum-chips .badge { font-size: 15px; padding: 3px 13px; }
+/* часы по городам: крупно ЧЧ:ММ, секунды мельче рядом, разница с устройством; ниже день недели и дата; ниже — города чипами */
+.clock-wrap { margin-top: var(--s3); padding-top: var(--s3); border-top: 1px solid var(--line-soft); }
+.clock-face { display: flex; align-items: baseline; gap: 6px var(--s2); flex-wrap: wrap; }
+.clock-time { color: var(--navy); font-size: 52px; line-height: 1; font-weight: var(--w-semi); letter-spacing: -.01em; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.clock-ss { font-size: 24px; color: var(--muted); font-weight: var(--w-body); margin-left: 3px; letter-spacing: 0; }
+.clock-diff { font-size: var(--fs-small); color: var(--muted); white-space: nowrap; }
+.clock-date { margin-top: 8px; font-size: 17px; color: var(--ink); }
+.clock-cities { margin-top: 14px; }
+@media (max-width: 480px) { .clock-time { font-size: 44px; } .clock-ss { font-size: 20px; } }
+/* объём (п. 4): только в панели — фон на тон темнее, карточкам двухслойная тень и светлая кромка сверху; вложенным — только кромка */
+html.panel-page, html.panel-page body { background: var(--bg-page); }
+html.panel-page .card:not(.card-elevated), html.panel-page .kpi { border-top-color: var(--white); box-shadow: var(--card-hi), var(--shadow-card); }
+html.panel-page .card .card, html.panel-page .drawer .card { box-shadow: var(--card-hi); }
+html.panel-page .map::after { content: ''; position: absolute; inset: 0; border-radius: inherit; box-shadow: var(--map-inset); pointer-events: none; }

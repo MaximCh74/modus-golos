@@ -3,7 +3,7 @@
 // с отпечатком (?v=…). Файлы без отпечатка (шрифт, картинки) сверяются с сервером при каждом запросе (cache: 'no-cache' → 304), —
 // Cloudflare отдаёт им «max-age=14400», и без сверки браузер четыре часа показывал старое.
 const CACHE = 'mf-shell-__BUILD__';
-const SHELL = ['/offline', '/a/style.css', '/a/api.js', '/a/ui.js', '/a/app.js', '/a/panel.js', '/a/meeting.js', '/a/mapview.js', '/a/qr.js', '/a/track.js', '/a/login.js', '/a/index.js', '/a/staff.js', '/a/invite.js', '/a/icons.js', '/a/command.js', '/a/boss.js', '/a/pwa.js',
+const SHELL = ['/offline', '/a/style.css', '/a/api.js', '/a/ui.js', '/a/app.js', '/a/panel.js', '/a/meeting.js', '/a/mapview.js', '/a/qr.js', '/a/track.js', '/a/login.js', '/a/index.js', '/a/staff.js', '/a/invite.js', '/a/icons.js', '/a/command.js', '/a/clock.js', '/a/boss.js', '/a/pwa.js',
   '/a/img/logo.svg', '/a/modus-golos-wordmark.svg', '/a/fonts/Montserrat.ttf', '/a/img/icons/icon-192.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL.map(u => new Request(u, { cache: 'reload' })))).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
