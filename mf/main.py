@@ -172,6 +172,8 @@ async def lifespan(app: FastAPI):
         if demo.FIXTURE.is_file():
             log.info("пустая база — поднимаем демо-снапшот: %s", demo.reset())
     seed.ensure()
+    if db.fill_timezones(db.conn()):   # новая установка: seed кладёт филиалы без зоны — зона по городу (ТЗ 13.11)
+        db.conn().commit()
     cleanup_audio()
     task = asyncio.create_task(overdue_loop())
     if os.environ.get("MF_STT_WARMUP", "1") == "1" and not os.environ.get("PYTEST_CURRENT_TEST"):

@@ -103,6 +103,7 @@ MIGRATIONS = [
     ("users", "phone", "TEXT"),   # этап 8: телефон (ручное добавление, склейка с Битриксом по телефону)
     ("appeals", "praise_to_user_id", "INTEGER"), ("appeals", "praise_to_department_id", "INTEGER"),   # «Кому спасибо» (коллега или отдел)
     ("sessions", "demo", "INTEGER NOT NULL DEFAULT 0"),   # аудит 12.11, F-03: сессия из «Войти как…» (демо) — опасное только с ноутбука
+    ("branches", "timezone", "TEXT"),   # ТЗ 13.11, часы по городам: зона IANA филиала; пустую заполняет fill_timezones по городу
 ]
 
 _conn: sqlite3.Connection | None = None
@@ -143,12 +144,23 @@ def conn() -> sqlite3.Connection:
             cols = {r[1] for r in c.execute(f"PRAGMA table_info({table})").fetchall()}
             if col not in cols:
                 c.execute(f"ALTER TABLE {table} ADD COLUMN {col} {decl}")
+        fill_timezones(c)
         # аудит 12.11, F-15: токены приглашений — только хэш (старые открытые токены переводятся при первом открытии базы)
         for iid, tok in c.execute("SELECT id, token FROM invites WHERE token NOT LIKE 'h:%'").fetchall():
             c.execute("UPDATE invites SET token=? WHERE id=?", (token_hash(tok), iid))
         c.commit()
         _conn = c
     return _conn
+
+
+def fill_timezones(c: sqlite3.Connection) -> int:
+    """Зона филиала без зоны — по городу из справочника (geo.ZONES), незнакомый город и объект без города — Asia/Almaty (ТЗ 13.11).
+    Заданную зону не трогаем. Вызывается при каждом открытии базы: так доводятся и старые базы, и филиалы, добавленные позже."""
+    from . import geo   # geo импортирует db — только внутри функции
+    rows = c.execute("SELECT id, city FROM branches WHERE timezone IS NULL OR timezone=''").fetchall()
+    for bid, city in rows:
+        c.execute("UPDATE branches SET timezone=? WHERE id=?", (geo.timezone_for(city), bid))
+    return len(rows)
 
 
 def reset() -> None:

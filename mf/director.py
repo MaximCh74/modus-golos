@@ -292,6 +292,7 @@ def map_data() -> dict:
             if r.get("cluster_id"):
                 clusters[r["cluster_id"]] = clusters.get(r["cluster_id"], 0) + 1
         out_b.append({"id": b["id"], "code": b["code"], "name": b["name"], "city": b["city"], "kind": b["kind"], "lat": b["lat"], "lng": b["lng"],
+                      "is_hq": b["is_hq"], "timezone": b["timezone"] or geo.timezone_for(b["city"]),   # часы по городам (ТЗ 13.11)
                       "total": len(items), "open": len(open_items), "overdue": sum(1 for r in open_items if r["overdue"]),
                       "urgent": sum(1 for r in open_items if r.get("author_urgency") == "now"),
                       "unassigned": sum(1 for r in open_items if r["unassigned"]),
@@ -304,7 +305,8 @@ def map_data() -> dict:
             continue
         g = geo.lookup(r["site_city"])
         key = geo.norm(g["name"] if g else r["site_city"])
-        s = sites.setdefault(key, {"city": g["name"] if g else r["site_city"].split(",")[0].strip(), "total": 0, "open": 0, "overdue": 0, "numbers": []})
+        s = sites.setdefault(key, {"city": g["name"] if g else r["site_city"].split(",")[0].strip(), "total": 0, "open": 0, "overdue": 0, "numbers": [],
+                                   "timezone": geo.timezone_for(g["name"] if g else r["site_city"])})
         s["total"] += 1
         is_open = r["status"] in appeals.OPEN
         s["open"] += 1 if is_open else 0
