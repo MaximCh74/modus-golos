@@ -333,7 +333,7 @@ function siteHeader(me, cfg, opts) {
   opts = opts || {};
   const right = me
     ? h('div', { class: 'row' }, h('span', { class: 'small muted' }, me.name.split(' ')[0]), h('a', { href: me.role === 'employee' ? '/app' : '/panel', class: 'btn btn-sm' }, me.role === 'employee' ? 'Приложение' : 'Панель'))
-    : h('a', { href: '/login' + (opts.next ? '?next=' + encodeURIComponent(opts.next) : ''), class: 'btn btn-outline' }, iconText('user', 'Войти'));
+    : h('a', { href: '/login' + (opts.next ? '?next=' + encodeURIComponent(opts.next) : ''), class: 'btn btn-outline' }, 'Войти');
   return h('header', { class: 'site-head' },
     brandLock('/', 'Модус Голос — на главную'), h('div', { class: 'spacer' }), right);
 }

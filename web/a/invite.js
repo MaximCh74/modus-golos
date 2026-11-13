@@ -18,7 +18,7 @@
     page.replaceChildren(brand());
     const u = info.user || null;
     if (info.status === 'active') {
-      const btn = h('button', { class: 'btn btn-primary btn-big mt16' }, iconText('log-in', 'Войти'));
+      const btn = h('button', { class: 'btn btn-primary btn-big mt16' }, 'Войти');
       btn.addEventListener('click', async () => {
         btn.disabled = true; btn.replaceChildren('Входим…');
         try {
@@ -39,7 +39,7 @@
     } else if (info.status === 'already_in') {
       page.append(h('div', { class: 'h1' }, 'Вы уже вошли'),
         h('div', { class: 'card card-ok' }, h('b', {}, u ? u.name : ''), h('div', { class: 'small mt8' }, 'Это устройство уже помнит вас — приглашение не нужно открывать снова.')),
-        h('a', { href: info.home || '/app', class: 'btn btn-primary btn-big mt16' }, iconText('arrow-right', 'Открыть приложение')));
+        h('a', { href: info.home || '/app', class: 'btn btn-primary btn-big mt16' }, 'Открыть приложение'));
     } else {
       const titles = { used: 'Ссылка уже использована', expired: 'Срок приглашения истёк', revoked: 'Приглашение отозвано', deactivated: 'Учётная запись отключена', missing: 'Приглашение не найдено', busy: 'Слишком много попыток' };
       page.append(h('div', { class: 'h1' }, titles[info.status] || 'Приглашение недействительно'),

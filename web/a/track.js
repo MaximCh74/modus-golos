@@ -26,7 +26,7 @@
     let answer = null;
     if (a.pending_question) {
       const ta = h('textarea', { placeholder: 'Ваш ответ' });
-      const btn = h('button', { class: 'btn btn-primary btn-big' }, iconText('send', 'Ответить'));
+      const btn = h('button', { class: 'btn btn-primary btn-big' }, 'Ответить');
       answer = h('div', { class: 'card card-warn' }, h('b', {}, 'Ответственный просит уточнить'), h('p', { class: 'pre' }, a.pending_question), ta, h('div', { class: 'mt8' }, btn));
       btn.addEventListener('click', async () => {
         btn.disabled = true;

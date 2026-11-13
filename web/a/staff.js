@@ -64,14 +64,14 @@ function staffSection(d, reload) {
             h('div', { class: 'small' }, 'Сотрудник открывает QR камерой телефона или ссылку, нажимает «Войти» — и телефон запомнил его. Паролей нет, ссылка одноразовая.'),
             h('div', { class: 'row mt8' }, link),
             h('div', { class: 'row mt8' },
-              wa ? h('a', { href: wa, class: 'btn btn-sm btn-primary', target: '_blank', rel: 'noopener' }, iconText('message-circle', 'Отправить в WhatsApp')) : h('button', { class: 'btn btn-sm', disabled: true, title: 'Укажите телефон сотрудника' }, iconText('message-circle', 'Отправить в WhatsApp')),
-              h('button', { class: 'btn btn-sm', onclick: () => copy(inviteText(u, inv), 'Приглашение скопировано') }, iconText('copy', 'Скопировать приглашение')),
-              h('a', { href: inv.card_url, class: 'btn btn-sm', target: '_blank', rel: 'noopener' }, iconText('printer', 'Карточка PDF')),
-              h('button', { class: 'btn btn-sm btn-ghost', title: 'Прежняя ссылка сразу перестанет работать, прежний телефон выйдет', onclick: () => issue(u) }, iconText('refresh', 'Выдать заново'))))));
+              wa ? h('a', { href: wa, class: 'btn btn-sm btn-primary', target: '_blank', rel: 'noopener' }, 'Отправить в WhatsApp') : h('button', { class: 'btn btn-sm', disabled: true, title: 'Укажите телефон сотрудника' }, 'Отправить в WhatsApp'),
+              h('button', { class: 'btn btn-sm', onclick: () => copy(inviteText(u, inv), 'Приглашение скопировано') }, 'Скопировать приглашение'),
+              h('a', { href: inv.card_url, class: 'btn btn-sm', target: '_blank', rel: 'noopener' }, 'Карточка PDF'),
+              h('button', { class: 'btn btn-sm btn-ghost', title: 'Прежняя ссылка сразу перестанет работать, прежний телефон выйдет', onclick: () => issue(u) }, 'Выдать заново')))));
     } else if (st.code === 'active') {   // F-15: в базе только хэш — ссылку показываем час после выдачи
       inviteBlock = h('div', { class: 'card card-info' }, h('div', { class: 'row' }, h('b', {}, 'Личное приглашение'), tag(st.cls, st.label)),
         h('div', { class: 'small mt8' }, 'Приглашение действует. Ссылку, QR и карточку показываем только в течение часа после выдачи — так их нельзя достать из копии базы. Нужна ссылка или карточка — «Выдать заново»: прежняя ссылка перестанет работать.'),
-        h('div', { class: 'row mt8' }, h('button', { class: 'btn btn-sm btn-primary', onclick: () => issue(u) }, iconText('refresh', 'Выдать заново'))));
+        h('div', { class: 'row mt8' }, h('button', { class: 'btn btn-sm btn-primary', onclick: () => issue(u) }, 'Выдать заново')));
     } else {
       inviteBlock = h('div', { class: 'card card-info' }, h('div', { class: 'row' }, h('b', {}, 'Личное приглашение'), st.label ? tag(st.cls, st.label) : null),
         h('div', { class: 'small mt8' }, st.code === 'used' ? 'Сотрудник уже вошёл по приглашению; «Выдать заново» — если телефон потерян или сменился: прежнее устройство выйдет.' : st.code === 'none' ? 'Ссылка и QR для входа без пароля: сотрудник открывает один раз, устройство запоминает его.' : 'Прежняя ссылка больше не работает — выдайте новую.'),
@@ -85,7 +85,7 @@ function staffSection(d, reload) {
       h('div', { class: 'card' }, h('b', {}, 'Данные сотрудника'),
         h('div', { class: 'grid2 mt8' }, field('Имя и фамилия', name), field('Должность', pos), field('Роль', role), field('Город / филиал', br), field('Отдел', dep), field('Руководитель', mgr), field('Телефон (WhatsApp)', phone), field('Почта', email)),
         h('details', { class: 'sect mt8' }, h('summary', {}, 'Битрикс24'), h('div', { class: 'mt8' }, field('ID пользователя портала', bx, u.bitrix_id ? 'Сопоставлен с порталом: синхронизация обновляет отдел и должность' : 'Заполняется синхронизацией — по почте или телефону; совпадение только по имени не склеивается — укажите ID вручную'))),
-        h('div', { class: 'row mt16' }, save, h('div', { class: 'spacer' }), u.active ? (() => { const off = h('button', { class: 'btn', title: 'Вход закроется, обращения, баллы и история останутся', onclick: () => { if (!off.dataset.armed) { off.dataset.armed = '1'; off.replaceChildren(iconText('user-x', 'Подтвердить отключение')); return; } setActive(u, false); } }, iconText('user-x', 'Отключить')); return off; })() : h('button', { class: 'btn btn-outline', onclick: () => setActive(u, true) }, iconText('user-plus', 'Включить')))));
+        h('div', { class: 'row mt16' }, save, h('div', { class: 'spacer' }), u.active ? (() => { const off = h('button', { class: 'btn', title: 'Вход закроется, обращения, баллы и история останутся', onclick: () => { if (!off.dataset.armed) { off.dataset.armed = '1'; off.replaceChildren(iconText('user-x', 'Подтвердить отключение')); return; } setActive(u, false); } }, iconText('user-x', 'Отключить')); return off; })() : h('button', { class: 'btn btn-outline', onclick: () => setActive(u, true) }, 'Включить'))));
     openDrawer(content, { label: u.name, onClose: () => { STAFF_UI.openId = null; } });
   }
 

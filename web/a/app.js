@@ -106,13 +106,11 @@ async function home() {
   if (me) ME = me;   // счётчик невыполненных поручений — свежий после каждого возврата на главную
   ME.points = pts.balance; renderTop();
   // «Мои поручения» на видном месте со счётчиком невыполненных (пункт 1 очереди 12.11); нули не показываем
-  const tasksCard = h('a', { href: '#/tasks', class: 'card taskbar', id: 'my-tasks' }, icon('list-checks', { size: 24 }),
-    h('div', { class: 'spacer' }, h('b', {}, 'Мои поручения'), h('div', { class: 'small muted' }, ME.tasks_open ? plural(ME.tasks_open, 'невыполненное', 'невыполненных', 'невыполненных') + (ME.tasks_overdue ? ' · просрочено ' + ME.tasks_overdue : '') : 'невыполненных нет')),
-    ME.tasks_open ? h('span', { class: 'count' + (ME.tasks_overdue ? ' late' : '') }, String(ME.tasks_open)) : null, icon('chevron-right', { size: 18, cls: 'chev' }));
+  const tasksCard = h('a', { href: '#/tasks', class: 'card taskbar', id: 'my-tasks' }, h('div', { class: 'spacer' }, h('b', {}, 'Мои поручения'), h('div', { class: 'small muted' }, ME.tasks_open ? plural(ME.tasks_open, 'невыполненное', 'невыполненных', 'невыполненных') + (ME.tasks_overdue ? ' · просрочено ' + ME.tasks_overdue : '') : 'невыполненных нет')),
+    ME.tasks_open ? h('span', { class: 'count' + (ME.tasks_overdue ? ' late' : '') }, String(ME.tasks_open)) : null);
   const command = ME.role === 'director' ? commandPanel({ decisionsHref: '#/decisions' }) : null;   // команды — только директору (F-21)
   // «Совещание» — у ответственных и директора с главной (на телефоне его нет в нижней панели, 13.11, п. 6)
-  const meetingCard = ME.role !== 'employee' ? h('a', { href: '#/meeting', class: 'card taskbar', id: 'home-meeting' }, icon('mic', { size: 24 }),
-    h('div', { class: 'spacer' }, h('b', {}, 'Совещание'), h('div', { class: 'small muted' }, 'Записать или загрузить планёрку')), icon('chevron-right', { size: 18, cls: 'chev' })) : null;
+  const meetingCard = ME.role !== 'employee' ? h('a', { href: '#/meeting', class: 'card taskbar', id: 'home-meeting' }, h('div', { class: 'spacer' }, h('b', {}, 'Совещание'), h('div', { class: 'small muted' }, 'Записать или загрузить планёрку'))) : null;
   root.replaceChildren(h('div', { class: 'wrap' }, summary ? summaryBlock(summary, () => route()) : null, command, decisions,
     // одна главная кнопка (замечание владельца 13.11, п. 5): «Проблема / Идея / Спасибо» — переключателем внутри формы, как в QR-форме
     h('a', { href: '#/new', class: 'btn btn-primary btn-big home-cta', id: 'home-cta' }, iconText('message-circle', 'Есть идея или проблема?', { size: 20 })),
@@ -152,7 +150,7 @@ async function newAppeal(startType) {
   const draftBox = h('div', {});
   const simBox = h('div', {});
   let similarShown = false, anyway = false;
-  const draftBtn = h('button', { type: 'button', class: 'btn btn-sm', onclick: () => draft() }, iconText('sparkles', 'Подставить категорию и решение'));
+  const draftBtn = h('button', { type: 'button', class: 'btn btn-sm', onclick: () => draft() }, 'Подставить категорию и решение');
   async function draft() {
     if (type === 'praise') return;
     if (text.value.trim().length < 5) { toast('Сначала опишите, что происходит', 'bad'); return; }
@@ -310,7 +308,7 @@ async function points() {
 // ---------- этап 4: сводка директора, профиль, награды, лига ----------
 
 function summaryBlock(d, refresh) {
-  const speakBtn = h('button', { class: 'btn btn-sm', title: 'Озвучить сводку' }, iconText('volume', 'Озвучить'));
+  const speakBtn = h('button', { class: 'btn btn-sm', title: 'Озвучить сводку' }, 'Озвучить');
   speakBtn.addEventListener('click', () => speakSummary(speakBtn, d.sentences));
   const refreshBtn = h('button', { class: 'btn btn-sm', onclick: async () => { refreshBtn.disabled = true; try { await API.get('/api/panel/director-summary?refresh=1'); refresh(); } catch (e) { toast(e.message, 'bad'); refreshBtn.disabled = false; } } }, iconText('refresh', 'Обновить'));
   const l = d.lines || {};
@@ -334,8 +332,7 @@ async function profileScreen(uid) {
       mine ? h('div', { class: 'row mt8' }, h('button', { class: 'btn btn-sm btn-outline', onclick: () => file.click() }, iconText('user', u.avatar ? 'Сменить аватарку' : 'Загрузить аватарку')), file) : null), adminMenu),
       h('div', { class: 'stats mt16 n' + stats.length }, stats.map(([n, label, help]) => h('div', { class: 'stat' }, h('b', {}, String(n)), h('span', { class: 'small muted' }, label, help ? helpBtn(help) : null))))),
     // «Награды» — внутри профиля (на телефоне их нет в нижней панели, 13.11, п. 6); баллы и награды — только сотрудникам
-    mine && showPoints() ? h('a', { href: '#/rewards', class: 'card taskbar', id: 'profile-rewards' }, icon('star', { size: 24 }),
-      h('div', { class: 'spacer' }, h('b', {}, 'Награды'), h('div', { class: 'small muted' }, 'На что хватает баллов: ' + (ME.points || 0))), icon('chevron-right', { size: 18, cls: 'chev' })) : null,
+    mine && showPoints() ? h('a', { href: '#/rewards', class: 'card taskbar', id: 'profile-rewards' }, h('div', { class: 'spacer' }, h('b', {}, 'Награды'), h('div', { class: 'small muted' }, 'На что хватает баллов: ' + (ME.points || 0)))) : null,
     u.praises && u.praises.length ? h('div', { class: 'lbl mt16' }, 'Благодарности коллег') : null,
     u.praises && u.praises.length ? h('div', { class: 'card list' }, u.praises.map(pr => h('div', { class: 'item', onclick: () => { location.hash = '#/appeal/' + pr.id; } }, h('div', { class: 'row' }, iconText('heart', pr.from || 'Коллега'), h('div', { class: 'spacer' }), h('span', { class: 'small muted' }, fmtDate(pr.created_at))), h('div', { class: 'small' }, pr.text)))) : null,
     h('div', { class: 'lbl mt16' }, 'Внедрённые идеи'),

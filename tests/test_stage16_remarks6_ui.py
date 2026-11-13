@@ -239,3 +239,40 @@ def test_panel_tablet_no_horizontal_scroll(base, browser, width):
         assert not errors, errors
     finally:
         ctx.close()
+
+
+# ---------- правило 13.11: в кнопках с текстом значков нет; режим совещания — две кнопки без значков ----------
+
+TEXT_BTN_WITH_ICON = """[...document.querySelectorAll('button, a.btn, .btn')].filter(b => {
+  const r = b.getBoundingClientRect(); if (!r.width) return false;
+  if (b.closest('.help-wrap') || ['bn-item', 'qcard', 'marker', 'pick', 'boss-tile', 'bell'].some(c => b.classList.contains(c))) return false;   // колокольчик — значок со счётчиком
+  const svg = [...b.querySelectorAll('svg')].some(s => s.getBoundingClientRect().width > 0 && getComputedStyle(s).display !== 'none');
+  return svg && b.innerText.trim();
+}).map(b => b.innerText.trim().slice(0, 40))"""
+
+
+@pytest.mark.parametrize("uid,width,path", [(2, 375, "/app#/meeting"), (2, 1440, "/panel#/meetings"), (1, 1440, "/panel#/summary"), (1, 375, "/boss"),
+                                            (15, 1440, "/panel#/admin"), (17, 375, "/app#/new"), (17, 375, "/app#/u/17"), (1, 1440, "/")])
+def test_no_icons_in_text_buttons(base, browser, uid, width, path):
+    ctx, page, errors = _open(browser, base, uid, width, path)
+    try:
+        page.wait_for_timeout(1500)
+        bad = page.evaluate(TEXT_BTN_WITH_ICON)
+        assert not bad, (path, bad)
+        assert _fits(page) and not errors, errors
+    finally:
+        ctx.close()
+
+
+@pytest.mark.parametrize("width", [360, 390])
+def test_meeting_two_plain_buttons_fit(base, browser, width):
+    ctx, page, errors = _open(browser, base, 2, width, "/app#/meeting")
+    try:
+        page.wait_for_selector("text=Режим совещания")
+        btns = page.evaluate("[...document.querySelectorAll('.grid2 .btn-big')].map(b => [b.innerText.replace(/\\s+/g, ' ').trim(), b.scrollWidth <= b.clientWidth, b.getBoundingClientRect().right <= innerWidth, b.querySelectorAll('svg').length])")
+        assert [x[0] for x in btns] == ["Начать запись", "Загрузить"] and all(x[1] and x[2] and x[3] == 0 for x in btns), btns
+        inp = page.evaluate("(() => { const i = document.querySelector('.card input[type=text]'); return [i.placeholder, i.scrollWidth <= i.clientWidth]; })()")
+        assert inp == ["Название (необязательно)", True]
+        assert _fits(page) and not errors, errors
+    finally:
+        ctx.close()

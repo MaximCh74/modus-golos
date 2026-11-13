@@ -33,7 +33,7 @@
           h('div', { class: 'tile' }, icon('folder', { size: 22 }), h('span', {}, 'Открытых'), h('b', {}, String(b.open))),
           h('div', { class: 'tile' }, icon('check-circle', { size: 22 }), h('span', {}, 'Решено за месяц'), h('b', {}, String(b.done_month)))),
       field ? null : h('div', { class: 'cc-theme' }, icon('layers', { size: 18 }), h('span', {}, 'Главная тема: ', h('b', {}, b.top_category || 'открытых обращений нет'))),
-      h('a', { href: b.form_url, class: 'btn btn-primary btn-big' }, iconText('pencil', 'Подать обращение')));
+      h('a', { href: b.form_url, class: 'btn btn-primary btn-big' }, 'Подать обращение'));
   }
   function closeAll() { pop.classList.add('hidden'); const s = document.querySelector('.sheet'); if (s) { s.remove(); } const bd = document.querySelector('.sheet-back'); if (bd) bd.remove(); }
   function select(b) {
@@ -61,10 +61,10 @@
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeAll(); });
 
   const submit = h('button', { type: 'button', class: 'feat', onclick: () => { if (selected) location.href = selected.form_url; else { toast('Сначала выберите город на карте или в списке'); pills.firstChild.focus(); pills.scrollIntoView({ behavior: 'smooth', block: 'center' }); } } },
-    icon('message-circle', { size: 26 }), h('div', {}, h('b', {}, 'Подать обращение'), h('span', {}, 'Идеи, вопросы, проблемы')), icon('chevron-right', { size: 20, cls: 'chev' }));
-  const changes = h('a', { href: '/changes', class: 'feat' }, icon('layers', { size: 26 }), h('div', {}, h('b', {}, 'Результаты обращений'), h('span', {}, 'Что уже сделано по вашим идеям')), icon('chevron-right', { size: 20, cls: 'chev' }));
+    h('div', {}, h('b', {}, 'Подать обращение'), h('span', {}, 'Идеи, вопросы, проблемы')));
+  const changes = h('a', { href: '/changes', class: 'feat' }, h('div', {}, h('b', {}, 'Результаты обращений'), h('span', {}, 'Что уже сделано по вашим идеям')));
   const statsHref = me && me.role !== 'employee' ? '/panel#/summary' : '/login?next=' + encodeURIComponent('/panel#/summary');
-  const stats = h('a', { href: statsHref, class: 'feat' }, icon('bar-chart', { size: 26 }), h('div', {}, h('b', {}, 'Статистика'), h('span', {}, 'Открытые и решённые')), icon('chevron-right', { size: 20, cls: 'chev' }));
+  const stats = h('a', { href: statsHref, class: 'feat' }, h('div', {}, h('b', {}, 'Статистика'), h('span', {}, 'Открытые и решённые')));
   featsSlot.replaceChildren(submit, changes, stats);
   main.append(h('div', { class: 'home-foot' }, h('span', {}, h('a', { href: '/rules' }, 'Как начисляются баллы'), ' — прозрачные правила вместо разовых премий'),
     h('span', {}, 'разработано ', h('b', {}, 'Cyber QALQAN Systems'), ' · данные демонстрационные · ', versionTag())));

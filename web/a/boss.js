@@ -12,7 +12,7 @@
   if (ME.role !== 'director') {
     root.replaceChildren(h('div', { class: 'boss-gate' }, h('img', { src: '/a/img/logo.svg', alt: 'Модус Трейд', class: 'boss-logo' }),
       h('div', { class: 'card card-warn' }, h('b', {}, 'Только для директора. '), 'Вы вошли как ', h('b', {}, ME.name), ' (' + ME.role_label.toLowerCase() + ').'),
-      h('div', { class: 'row' }, h('a', { href: '/login?next=' + encodeURIComponent('/boss'), class: 'btn btn-primary' }, iconText('log-in', 'Войти как директор')),
+      h('div', { class: 'row' }, h('a', { href: '/login?next=' + encodeURIComponent('/boss'), class: 'btn btn-primary' }, 'Войти как директор'),
         h('a', { href: ME.role === 'employee' ? '/app' : '/panel', class: 'btn btn-outline' }, ME.role === 'employee' ? 'В приложение' : 'В панель'))));
     return;
   }
@@ -129,7 +129,7 @@
       showResult && i.resolution ? h('div', { class: 'small boss-res one-line' }, i.resolution) : null);
   }
 
-  function backBtn(back) { return back ? h('button', { type: 'button', class: 'btn btn-sm btn-ghost boss-back', onclick: back }, iconText('arrow-left', 'К списку')) : null; }
+  function backBtn(back) { return back ? h('button', { type: 'button', class: 'btn btn-sm btn-ghost boss-back', onclick: back }, 'К списку') : null; }
 
   async function openCard(i, back) {
     if (i.kind === 'task') {
@@ -197,7 +197,7 @@
   }
 
   function speakBtn(r) {
-    const speak = h('button', { type: 'button', class: 'btn btn-sm', title: 'Озвучить ответ' }, iconText('volume', 'Озвучить'));
+    const speak = h('button', { type: 'button', class: 'btn btn-sm', title: 'Озвучить ответ' }, 'Озвучить');
     speak.addEventListener('click', () => speakText(speak, r.audio ? '/api/boss/answer/' + r.id + '/audio' : null, r.answer));
     return speak;
   }
@@ -225,7 +225,7 @@
     if (p.kind === 'unknown') { render(text, { kind: 'unknown', can: p.examples, links: [] }); return; }
     if (p.empty) { render(text, { kind: 'answer', answer: p.title, parts: [], engine: r.engine, audio: false }); return; }   // отправлять некому — словами
     if (p.kind === 'briefing') {
-      const speak = h('button', { type: 'button', class: 'btn btn-sm btn-primary' }, iconText('volume', 'Прочитать'));
+      const speak = h('button', { type: 'button', class: 'btn btn-sm btn-primary' }, 'Прочитать');
       speak.addEventListener('click', async () => { try { await API.post('/api/director/command/' + r.plan_id + '/send', {}); } catch (e) { /* уже отправлено */ } speakText(speak, '/api/panel/director-summary/audio', p.sentences.map(s => s.text).join(' ')); });
       sheet('Сводка', h('div', {}, q, p.sentences.map(s => h('p', { class: 'boss-answer small' }, s.text)), h('div', { class: 'row mt8' }, speak)), { mark: helpBtn('summary') });
       return;
@@ -242,7 +242,7 @@
       sheet('На решение', h('div', {}, q, h('p', { class: 'boss-answer' }, p.title), h('div', { class: 'row mt8' }, h('button', { type: 'button', class: 'btn btn-primary btn-sm', onclick: async () => { try { await API.post('/api/director/command/' + r.plan_id + '/send', {}); } catch (e) { /* уже */ } closeSheet(); openList('decisions'); } }, 'Открыть'), h('button', { type: 'button', class: 'btn btn-sm', onclick: closeSheet }, 'Отмена'))));
       return;
     }
-    const sendBtn = h('button', { type: 'button', class: 'btn btn-primary btn-sm' }, iconText('send', 'Отправить'));
+    const sendBtn = h('button', { type: 'button', class: 'btn btn-primary btn-sm' }, 'Отправить');
     sendBtn.addEventListener('click', async () => {
       sendBtn.disabled = true;
       try { const s = await API.post('/api/director/command/' + r.plan_id + '/send', {}); sheet('Отправлено', h('div', {}, h('p', { class: 'boss-answer' }, s.reply), h('div', { class: 'row mt8' }, h('button', { type: 'button', class: 'btn btn-sm', onclick: closeSheet }, 'Готово')))); speakText(null, '/api/director/command/' + r.plan_id + '/audio', s.reply); load(); }

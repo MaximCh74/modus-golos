@@ -7,7 +7,7 @@ function commandPanel(opts) {
   const box = h('div', { class: 'card command' });
   const ta = h('textarea', { class: 'cmd-text', rows: 1, placeholder: opts.compact ? 'Команда голосом или текстом: «запроси новости по обращениям в работе в Омске до 18:00»' : 'Например: «запроси новости по обращениям в работе в Омске до 18:00»' });
   const mic = h('button', { type: 'button', class: 'btn mic', title: 'Команда голосом' });
-  const run = h('button', { type: 'button', class: 'btn btn-primary' }, iconText('send', 'Выполнить'));
+  const run = h('button', { type: 'button', class: 'btn btn-primary' }, 'Выполнить');
   const result = h('div', { class: 'mt8' });
   let busy = false;
   Voice.attach(mic, ta, { onText: () => parse() });
@@ -52,7 +52,7 @@ function commandPanel(opts) {
       if (p.kind === 'open') { showCard(); return; }
       result.replaceChildren(h('div', { class: 'card card-info' }, h('div', { class: 'row' }, h('b', {}, p.title)),
         h('div', { class: 'small mt8' }, p.item.text),
-        h('div', { class: 'row mt8' }, h('button', { class: 'btn btn-sm btn-primary', onclick: showCard }, iconText('arrow-right', 'Да, открыть')), h('button', { class: 'btn btn-sm', onclick: edit }, 'Нет'))));
+        h('div', { class: 'row mt8' }, h('button', { class: 'btn btn-sm btn-primary', onclick: showCard }, 'Да, открыть'), h('button', { class: 'btn btn-sm', onclick: edit }, 'Нет'))));
       return;
     }
     if (p.kind === 'open') {
@@ -60,11 +60,11 @@ function commandPanel(opts) {
       result.replaceChildren(h('div', { class: 'card card-info' }, h('div', { class: 'row' }, h('b', {}, p.title), engine),
         p.item ? h('div', { class: 'small mt8' }, (p.item.number ? p.item.number + ' · ' : 'идея с совещания · ') + (p.item.wait_days !== null && p.item.wait_days !== undefined ? 'ждёт решения ' + Math.floor(p.item.wait_days) + ' дн' : '')) : null,
         h('div', { class: 'hint mt8' }, 'Принять или отклонить — только кнопкой на экране «На решение». На решении сейчас: ' + p.pending + '.'),
-        h('div', { class: 'row mt8' }, h('button', { class: 'btn btn-sm btn-primary', onclick: go }, iconText('arrow-right', 'Открыть')), h('button', { class: 'btn btn-sm', onclick: edit }, 'Изменить'), h('button', { class: 'btn btn-sm', onclick: cancel }, 'Отмена'))));
+        h('div', { class: 'row mt8' }, h('button', { class: 'btn btn-sm btn-primary', onclick: go }, 'Открыть'), h('button', { class: 'btn btn-sm', onclick: edit }, 'Изменить'), h('button', { class: 'btn btn-sm', onclick: cancel }, 'Отмена'))));
       return;
     }
     if (p.kind === 'briefing') {
-      const speak = h('button', { class: 'btn btn-sm btn-primary' }, iconText('volume', 'Прочитать'));
+      const speak = h('button', { class: 'btn btn-sm btn-primary' }, 'Прочитать');
       speak.addEventListener('click', async () => { try { await API.post('/api/director/command/' + r.plan_id + '/send', {}); } catch (e) { /* уже отправлено */ } speakSummary(speak, p.sentences); });
       result.replaceChildren(h('div', { class: 'card card-info' }, h('div', { class: 'row' }, h('b', {}, p.title), helpBtn('summary')),
         p.sentences.map(s => h('p', { class: 'small' }, s.text)),
@@ -88,7 +88,7 @@ function commandPanel(opts) {
         h('div', { class: 'small' }, rec.items.map(i => h('div', { class: 'muted' }, (i.number ? i.number + ' — ' : '') + i.title + (i.kind === 'task' ? ' (срок был ' + i.due_label + ')' : i.news_days !== undefined && i.news_days !== null ? ' · без новостей ' + i.news_days + ' дн' : i.overdue ? ' · срок первого ответа прошёл' : '')))),
         msg);
     });
-    const send = h('button', { class: 'btn btn-sm btn-primary', disabled: p.empty }, iconText('send', 'Отправить'));
+    const send = h('button', { class: 'btn btn-sm btn-primary', disabled: p.empty }, 'Отправить');
     send.addEventListener('click', async () => {
       send.disabled = true;
       try {

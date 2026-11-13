@@ -18,11 +18,11 @@ async function meetingStart(opts) {
   opts = opts || {};
   stopPoll();
   const list = await API.get('/api/meetings');
-  const title = h('input', { type: 'text', placeholder: 'Название встречи (необязательно), например «Планёрка продаж»' });
+  const title = h('input', { type: 'text', placeholder: 'Название (необязательно)' });   // подсказка влезает целиком на 360 (13.11)
   const canRecord = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder);
-  const recBtn = h('button', { class: 'btn btn-primary btn-big', disabled: !canRecord }, iconText('mic', 'Начать запись'));
+  const recBtn = h('button', { class: 'btn btn-primary btn-big', disabled: !canRecord }, 'Начать запись');   // в кнопках с текстом значков нет (13.11)
   const file = h('input', { type: 'file', accept: 'audio/*,video/*,.m4a,.mp3,.wav,.ogg,.webm,.opus,.mp4,.mov,.mkv', class: 'visually-hidden', tabindex: '-1' });
-  const uploadBtn = h('button', { class: 'btn btn-outline btn-big', onclick: () => file.click() }, iconText('upload', 'Загрузить аудио или видеозвонок'));
+  const uploadBtn = h('button', { class: 'btn btn-outline btn-big', onclick: () => file.click() }, 'Загрузить');   // что можно загрузить — в «?» у заголовка
   const ta = h('textarea', { placeholder: 'Текст расшифровки. Формат «Имя: реплика» помогает разбору.' });
   const textBtn = h('button', { class: 'btn btn-sm btn-primary', onclick: () => submitMeeting({ title: title.value, transcript: ta.value }, opts) }, 'Разобрать текст');
   const demoBtn = h('button', { class: 'btn btn-sm', onclick: () => { ta.value = DEMO_TRANSCRIPT; } }, 'Подставить демо-планёрку');
@@ -250,7 +250,7 @@ async function tasksScreen(opts) {
       h('span', { class: 'small muted' }, 'из «' + t.meeting_title + '»' + (t.meeting_creator ? ' · ' + t.meeting_creator : '')), h('div', { class: 'spacer' }),
       h('span', { class: 'small' }, t.due_date ? 'до ' + fmtDue(t.due_date) : h('span', { class: 'muted' }, 'срок не назван'))),
     h('div', { class: 'mt8' }, t.text),
-    t.task_status !== 'done' ? h('div', { class: 'row mt8' }, h('button', { class: 'btn btn-sm btn-primary', onclick: () => act(t, 'done') }, iconText('check', 'Выполнено')),
+    t.task_status !== 'done' ? h('div', { class: 'row mt8' }, h('button', { class: 'btn btn-sm btn-primary', onclick: () => act(t, 'done') }, 'Выполнено'),
       t.task_status !== 'in_progress' ? menuButton([['Взять в работу', () => act(t, 'in_progress')]]) : null) : h('div', { class: 'small muted mt8' }, 'выполнено' + (t.done_at ? ' ' + fmtDate(t.done_at) : '')));
   root.replaceChildren(h('div', { class: 'wrap' }, back(opts.backHref || '#/'), h('div', { class: 'h1' }, 'Мои поручения', helpBtn('my_tasks')),
     h('p', { class: 'hint' }, 'Поручения с совещаний, где вас назначили исполнителем.'),
@@ -282,7 +282,7 @@ function appealDecisionCard(i, refresh) {
   const reason = h('textarea', { class: 'hidden', rows: 2, placeholder: 'Причина отклонения — её увидят автор и ответственный (обязательно)' });
   const comment = h('input', { type: 'text', placeholder: 'Комментарий при принятии (необязательно): что выделено, какой срок' });
   const act = async (decision, text) => { try { await API.post('/api/director/appeals/' + i.appeal_id + '/decide', { decision, comment: text }); toast(decision === 'accepted' ? 'Принято — ответственный и автор уведомлены' : 'Отклонено'); refresh(); } catch (e) { toast(e.message, 'bad'); } };
-  const accept = h('button', { class: 'btn btn-sm btn-primary', onclick: () => act('accepted', comment.value) }, iconText('check', 'Принять'));
+  const accept = h('button', { class: 'btn btn-sm btn-primary', onclick: () => act('accepted', comment.value) }, 'Принять');
   const rejectBtn = h('button', { class: 'btn btn-sm', onclick: () => { if (reason.classList.contains('hidden')) { reason.classList.remove('hidden'); reason.focus(); rejectBtn.textContent = 'Подтвердить отклонение'; return; } act('rejected', reason.value); } }, 'Отклонить');
   return h('div', { class: 'card ' + (i.over_threshold ? 'card-warn' : '') },
     h('div', { class: 'row' }, h('a', { href: '#/appeal/' + i.appeal_id }, h('b', {}, i.number)), h('span', { class: 'small muted' }, [i.category, brCity(i.branch), i.responsible ? 'ведёт ' + i.responsible : null].filter(Boolean).join(' · ')), h('div', { class: 'spacer' }), waitTag(i)),

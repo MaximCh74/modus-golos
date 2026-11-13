@@ -171,7 +171,7 @@ async function queue() {
   const tabs = h('div', { class: 'tabs q' }, QUEUE_TABS.map(([code, label]) => h('a', { href: '#', class: S.tab === code ? 'active' : '', onclick: ev => { ev.preventDefault(); S.tab = code; delete S.filters.closed; delete S.filters.mine; delete S.filters.attention; delete S.filters.open; if (code !== 'closed' && S.filters.status && CLOSED_STATUSES.includes(S.filters.status)) delete S.filters.status; queue(); } }, label)));
   const active = FILTER_KEYS.filter(k => S.filters[k]);
   const filtersBtn = h('button', { class: 'btn btn-sm' + (active.length ? ' on' : ''), onclick: () => filtersDrawer() }, iconText('filter', 'Фильтры' + (active.length ? ' · ' + active.length : '')));
-  const viewBtn = h('button', { class: 'btn btn-sm view-btn', onclick: () => viewMenu(viewBtn) }, iconText('sliders', 'Вид'));
+  const viewBtn = h('button', { class: 'btn btn-sm view-btn', onclick: () => viewMenu(viewBtn) }, 'Вид');
   const toolbar = h('div', { class: 'toolbar' }, q, tabs, h('div', { class: 'spacer' }), filtersBtn, viewBtn);
   const chips = h('div', { class: 'chips chips-active' }, active.map(k => h('button', { type: 'button', class: 'chip', title: 'Убрать фильтр', onclick: () => { delete S.filters[k]; queue(); } }, filterLabel(k), ' ', icon('x', { size: 12 }))),
     active.length > 1 ? h('button', { type: 'button', class: 'btn btn-sm btn-ghost', onclick: () => { for (const k of active) delete S.filters[k]; queue(); } }, 'Сбросить всё') : null);
@@ -412,7 +412,7 @@ async function meetingsList() {
   const chk = h('input', { type: 'checkbox', checked: overdueOnly });
   chk.addEventListener('change', () => { location.hash = '#/meetings' + (chk.checked ? '?overdue=1' : ''); });
   root.replaceChildren(h('div', { class: 'wrap wrap-wide' }, h('div', { class: 'row' }, h('div', { class: 'h1' }, 'Совещания'), h('label', { class: 'check small' }, chk, 'только с просроченными поручениями'), h('div', { class: 'spacer' }),
-    h('a', { href: '#/meetings/new', class: 'btn btn-primary btn-sm' }, iconText('plus', 'Записать или загрузить планёрку'))),
+    h('a', { href: '#/meetings/new', class: 'btn btn-primary btn-sm' }, 'Записать или загрузить планёрку')),
     h('p', { class: 'hint' }, 'Запись планёрки, расшифровка, разбор: итог, решения, поручения, идеи директору, связанные обращения. Ответственные видят свои совещания, директор и администратор — все.'),
     h('div', { class: 'card' }, list.length ? tbl : h('div', { class: 'muted' }, 'Совещаний пока нет'))));
 }
@@ -461,7 +461,7 @@ async function summary() {
 }
 
 function summaryBlockPanel(d) {
-  const speakBtn = h('button', { class: 'btn btn-sm', title: 'Озвучить сводку' }, iconText('volume', 'Озвучить'));
+  const speakBtn = h('button', { class: 'btn btn-sm', title: 'Озвучить сводку' }, 'Озвучить');
   speakBtn.addEventListener('click', () => speakSummary(speakBtn, d.sentences));
   const refreshBtn = h('button', { class: 'btn btn-sm', onclick: async () => { refreshBtn.disabled = true; try { await API.get('/api/panel/director-summary?refresh=1'); summary(); } catch (e) { toast(e.message, 'bad'); refreshBtn.disabled = false; } } }, iconText('refresh', 'Обновить'));
   return h('div', { class: 'card summary-ai mt16' },
@@ -554,11 +554,11 @@ async function adminScreen() {
       h('div', {},
         h('div', { class: 'card' }, h('b', {}, 'Настройки', helpBtn('adm_settings')), h('div', { class: 'grid2 mt8' }, inputs), dirAdminRow, h('div', { class: 'mt8' }, saveBtn), h('div', { class: 'hint mt8' }, 'Пороги похожести и повторяющихся тем — для режима ИИ; без ключа действуют пороги по ключевым словам.')),
         bitrixCard,
-        h('div', { class: 'card' }, h('div', { class: 'row' }, h('b', {}, 'Филиалы и QR', helpBtn('adm_branches')), h('div', { class: 'spacer' }), h('a', { href: '/api/admin/branches/posters.pdf', class: 'btn btn-sm btn-primary', target: '_blank', rel: 'noopener' }, iconText('printer', 'Все плакаты PDF'))),
+        h('div', { class: 'card' }, h('div', { class: 'row' }, h('b', {}, 'Филиалы и QR', helpBtn('adm_branches')), h('div', { class: 'spacer' }), h('a', { href: '/api/admin/branches/posters.pdf', class: 'btn btn-sm btn-primary', target: '_blank', rel: 'noopener' }, 'Все плакаты PDF')),
           h('div', { class: 'list mt8' }, d.branches.map((b, bi) => h('div', { class: 'item branch-item noclick' }, h('div', { class: 'row' }, rowNumSpan(bi), h('img', { src: b.qr_svg, alt: 'QR ' + (b.kind === 'field' ? 'объект' : b.city || brCity(b.name)), class: 'qr-thumb' }), h('div', { class: 'spacer' }, h('b', {}, b.kind === 'field' ? 'Объект' : b.city || brCity(b.name)), b.kind === 'field' ? h('div', { class: 'small muted' }, 'город укажут в форме') : null),
-            h('div', { class: 'row' }, h('a', { href: b.poster_url, class: 'btn btn-sm', target: '_blank', rel: 'noopener', title: 'Плакат A4 с QR для печати' }, iconText('printer', 'Плакат PDF')),
+            h('div', { class: 'row' }, h('a', { href: b.poster_url, class: 'btn btn-sm', target: '_blank', rel: 'noopener', title: 'Плакат A4 с QR для печати' }, 'Плакат PDF'),
               h('button', { class: 'btn btn-sm', title: 'Скопировать ссылку на форму', onclick: async () => { try { await navigator.clipboard.writeText(b.form_url); toast('Ссылка скопирована: ' + b.form_url); } catch (e) { toast('Скопируйте вручную: ' + b.form_url); } } }, iconText('link', 'Скопировать ссылку')),
-              h('a', { href: '/q/' + b.code, class: 'btn btn-sm btn-ghost', target: '_blank', rel: 'noopener', title: 'Открыть форму обращения' }, iconText('external-link', 'Открыть форму')))))))),
+              h('a', { href: '/q/' + b.code, class: 'btn btn-sm btn-ghost', target: '_blank', rel: 'noopener', title: 'Открыть форму обращения' }, 'Открыть форму'))))))),
         geoAdminCard(),
         h('div', { class: 'card' }, h('b', {}, 'Аватарки', helpBtn('adm_avatars')), avatars.length ? h('div', { class: 'list mt8' }, avatars.map((u, ui) => h('div', { class: 'item noclick' }, h('div', { class: 'row' }, rowNumSpan(ui), avatarEl({ name: u.name, avatar: '/api/avatars/' + u.avatar }), h('span', {}, u.name), h('div', { class: 'spacer' }), h('button', { class: 'btn btn-sm', onclick: async () => { await API.post('/api/admin/users/' + u.id + '/avatar/remove'); toast('Убрана'); adminScreen(); } }, 'Убрать'))))) : h('div', { class: 'muted small mt8' }, 'Пользовательских аватарок нет'))))));
 }
@@ -595,7 +595,7 @@ function geoAdminCard() {
       h('div', { class: 'hint' }, 'Город объекта из QR-формы встаёт на карту сам — по справочнику областных центров и промышленных городов Казахстана и России. Незнакомый город — ниже: поставьте точку нажатием на карту. Новый филиал — с координатами, как раньше.'),
       d.unplaced.length ? h('div', { class: 'list mt8' }, d.unplaced.map((s, si) => h('div', { class: 'item noclick' }, h('div', { class: 'row' }, rowNumSpan(si),
         h('span', {}, h('b', {}, s.city), h('span', { class: 'small muted' }, ' · обращений: ' + s.total)), h('div', { class: 'spacer' }),
-        h('button', { class: 'btn btn-sm', onclick: () => pick(s.city) }, iconText('map-pin', 'Поставить точку')))))) : h('div', { class: 'small muted mt8' }, 'Все объекты на карте — без метки нет.'),
+        h('button', { class: 'btn btn-sm', onclick: () => pick(s.city) }, 'Поставить точку'))))) : h('div', { class: 'small muted mt8' }, 'Все объекты на карте — без метки нет.'),
       picker,
       d.points.length ? h('div', { class: 'mt8' }, h('div', { class: 'small muted' }, 'Точки, поставленные вручную:'), h('div', { class: 'list' }, d.points.map((p, pi) => h('div', { class: 'item noclick' }, h('div', { class: 'row' }, rowNumSpan(pi),
         h('span', {}, p.name, h('span', { class: 'small muted' }, ' · ' + p.lat.toFixed(2) + ', ' + p.lng.toFixed(2))), h('div', { class: 'spacer' }),
