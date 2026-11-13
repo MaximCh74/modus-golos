@@ -7,30 +7,36 @@
 // motion — живая карта (наезд/отъезд, метки по одной; класс .live, анимации в style.css); слой объектов (data.sites) — только при staff.
 // onBranch(b, el), onSite(s, el). Методы: flash(id), select(id|null), pos(id) → {x, y} в процентах контейнера.
 // Подписи стран не прячутся за обрезкой: прижимаются к краю полосы (clamp), чтобы «Казахстан» был виден и на широкой ленте ноутбука.
-const MAP = { lon0: 45, lon1: 82, lat0: 46.5, lat1: 60.5, aspect: 900 / 579 };
-const MAP_COUNTRIES = [{ name: 'Россия', lat: 57.3, lng: 52.5 }, { name: 'Казахстан', lat: 48.3, lng: 66.5 }];   // «Казахстан» — в центре страны, ниже меток
-function mapXY(lat, lng) { return [(lng - MAP.lon0) / (MAP.lon1 - MAP.lon0) * 100, (MAP.lat1 - lat) / (MAP.lat1 - MAP.lat0) * 100]; }
-function mapInside(lat, lng) { return lat !== null && lat !== undefined && lat >= MAP.lat0 && lat <= MAP.lat1 && lng >= MAP.lon0 && lng <= MAP.lon1; }
+const MAP = { lon0: 45, lon1: 82, lat0: 46.5, lat1: 60.5, aspect: 900 / 579, src: '/a/img/map.svg',
+  countries: [{ name: 'Россия', lat: 57.3, lng: 52.5 }, { name: 'Казахстан', lat: 48.3, lng: 66.5 }] };   // «Казахстан» — в центре страны, ниже меток
+// карта директора (замечание владельца 13.11): больше России сверху, страны в балансе — 46…86° в. д., 45…62° с. ш. (tools/make_map.py
+// --frame); подписи стран — в центре видимой части страны («Россия» чуть выше центроида, чтобы не лечь на Тюмень)
+const MAP_DIRECTOR = { lon0: 46, lon1: 86, lat0: 45, lat1: 62, aspect: 900 / 643, src: '/a/img/map-director.svg',
+  countries: [{ name: 'Россия', lat: 59.4, lng: 65.1 }, { name: 'Казахстан', lat: 49.15, lng: 67.3 }] };
+function mapXY(lat, lng, f) { f = f || MAP; return [(lng - f.lon0) / (f.lon1 - f.lon0) * 100, (f.lat1 - lat) / (f.lat1 - f.lat0) * 100]; }
+function mapInside(lat, lng, f) { f = f || MAP; return lat !== null && lat !== undefined && lat >= f.lat0 && lat <= f.lat1 && lng >= f.lon0 && lng <= f.lon1; }
 
 function mapView(data, opts) {
   opts = opts || {};
   const staff = !!opts.staff;
-  const img = h('img', { src: '/a/img/map.svg', alt: 'Карта городов', class: 'map-bg' });
+  const F = opts.frame || MAP;
+  const img = h('img', { src: F.src, alt: 'Карта городов', class: 'map-bg' });
   const scene = h('div', { class: 'map-scene' }, img);   // всё, что едет вместе с картой при наезде: подложка, слои, карточка города
   const box = h('div', { class: 'map' + (opts.crop ? ' cropped' : '') + (opts.motion ? ' live' : '') }, scene);
+  box.style.setProperty('--map-ratio', String(F.aspect));   // пропорции блока = пропорции рамки, без искажения
   // обрезка: контейнер шире кадра → картинка масштабируется по ширине, видна полоса высотой visible (доля), начиная с top
   let visible = 1, top = 0;
   const cropActive = () => opts.crop && !window.matchMedia('(max-width: 768px)').matches;
   function layout() {
     if (cropActive()) {
-      visible = MAP.aspect / opts.crop.aspect; top = Math.min(opts.crop.top || 0, 1 - visible);
+      visible = F.aspect / opts.crop.aspect; top = Math.min(opts.crop.top || 0, 1 - visible);
       box.style.setProperty('--map-aspect', String(opts.crop.aspect));
       img.style.setProperty('--map-pos-y', (visible < 1 ? top / (1 - visible) * 100 : 50) + '%');
     } else { visible = 1; top = 0; }
   }
   layout();
   const place = (el, lat, lng, clamp) => {   // → [x, y] в процентах контейнера; за пределами полосы — класс off (подписи стран — к краю)
-    const [x, yi] = mapXY(lat, lng);
+    const [x, yi] = mapXY(lat, lng, F);
     let y = (yi - top * 100) / visible;
     if (clamp) y = Math.max(6, Math.min(92, y));
     el.style.left = x + '%'; el.style.top = y + '%';
@@ -43,22 +49,23 @@ function mapView(data, opts) {
   const layerBranches = h('div', { class: 'map-layer' });
   const placed = [];
   if (opts.countries !== false) {
-    for (const c of MAP_COUNTRIES) { const el = h('span', { class: 'map-country' }, c.name); placed.push([el, c.lat, c.lng, true]); layerCountries.append(el); }
+    for (const c of F.countries) { const el = h('span', { class: 'map-country' }, c.name); placed.push([el, c.lat, c.lng, true]); layerCountries.append(el); }
   }
   const outside = [];
   for (const s of staff ? data.sites || [] : []) {   // объекты командированных — только в панели директора
-    if (!mapInside(s.lat, s.lng)) { outside.push(s); continue; }
-    // объект командированных — маленькая метка «объект · Атырау» по той же логике цвета (замечание 13.11): зелёная — просрочек нет,
-    // красная — есть просрочки; открытых обращений нет (данных нет) — серая контурная
-    const sState = s.open ? (s.overdue ? ' m-late' : ' m-ok') : ' m-none';
-    const sm = h('button', { type: 'button', class: 'marker site' + sState, title: 'Объект командированных: ' + s.city + ' · открытых ' + s.open + (s.overdue ? ' · просрочено ' + s.overdue : ''), onclick: () => { if (opts.onSite) opts.onSite(s, sm); } },
-      h('span', { class: 'pin' + (s.open ? '' : ' pin-outline') }, icon('map-pin', { size: 20, fill: !!s.open, width: s.open ? 1.5 : 2 })), h('span', { class: 'mlabel' }, 'объект · ' + s.city));
+    if (!mapInside(s.lat, s.lng, F)) { outside.push(s); continue; }
+    // объект командированных — точно как город (замечание владельца 13.11): такая же большая метка того же цвета по тому же правилу
+    // (зелёная — просрочек нет, красная — есть) и такая же карточка-подпись; отличие — «объект» мелко серым во второй строке
+    const sState = s.overdue ? ' m-late' : ' m-ok';
+    const sm = h('button', { type: 'button', class: 'marker site' + sState, title: 'Объект командированных: ' + s.city, onclick: () => { if (opts.onSite) opts.onSite(s, sm); } },
+      h('span', { class: 'pin' }, icon('map-pin', { size: 30, fill: true, width: 1.5 })),
+      h('span', { class: 'mlabel' }, h('b', {}, s.city), h('span', { class: 'm-site' }, 'объект', h('span', { class: 'm-rest' }, ' · ' + s.open + ' откр.' + (s.overdue ? ' · просрочено ' + s.overdue : '')))));
     placed.push([sm, s.lat, s.lng]);
     layerSites.append(sm);
   }
   const order = (data.branches || []).map(b => b.lng).sort((a, b) => a - b);   // порядок появления меток — с запада на восток
   for (const b of data.branches || []) {
-    if (!mapInside(b.lat, b.lng)) continue;
+    if (!mapInside(b.lat, b.lng, F)) continue;
     const sub = staff ? b.open + ' откр.' + (b.overdue ? ' · просрочено ' + b.overdue : '') : null;   // на главной — только город (замечание 13.11)
     // у директора цвет метки — два цвета (замечание 13.11): зелёная — просрочек нет, красная — есть просрочки
     const state = !staff ? '' : b.overdue ? ' m-late' : ' m-ok';
@@ -105,13 +112,22 @@ function mapView(data, opts) {
   const relayout = () => { layout(); for (const [el, lat, lng, clamp] of placed) place(el, lat, lng, clamp); fitLabels(); };
   relayout();
   scene.append(layerCountries, layerSites, layerBranches);
-  if (window.ResizeObserver) new ResizeObserver(() => fitLabels()).observe(box);   // размеры подписей известны после вставки в страницу
+  // пересчёт при любом изменении размеров: карта вставлена или изменилась, подпись стала шире (догрузился шрифт — так «Павлодар»
+  // и обрезался у владельца), окно повернули; один раз за кадр
+  let fitQueued = false;
+  const refit = () => { if (fitQueued) return; fitQueued = true; requestAnimationFrame(() => { fitQueued = false; fitLabels(); }); };
+  if (window.ResizeObserver) {
+    const ro = new ResizeObserver(refit);
+    ro.observe(box);
+    for (const lab of scene.querySelectorAll('.mlabel')) ro.observe(lab);
+  }
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => fitLabels());   // шрифт догрузился — подписи шире
+  window.addEventListener('resize', refit);
   const wrap = h('div', { class: 'mapwrap' }, box);
   if (opts.legend) {
     wrap.append(h('div', { class: 'row small muted mt8 legend' },
       staff ? h('span', { class: 'ict' }, icon('map-pin', { size: 16, fill: true, cls: 'lg-pin m-ok' }), 'просрочек нет') : null,
       staff ? h('span', { class: 'ict' }, icon('map-pin', { size: 16, fill: true, cls: 'lg-pin m-late' }), 'есть просрочки') : h('span', { class: 'ict' }, icon('map-pin', { size: 16, fill: true, cls: 'lg-pin' }), 'офис / производство'),
-      h('span', { class: 'ict' }, icon('map-pin', { size: 16, width: 2, cls: 'lg-pin lg-site' }), 'объект без открытых обращений'),
       staff && (data.unplaced || []).length ? h('span', {}, 'без метки: ' + data.unplaced.map(s => s.city + ' (' + s.total + ')').join(', ') + ' — точку ставит администратор') : null,
       outside.length ? h('span', {}, 'вне рамки: ' + outside.map(s => s.city + ' (' + s.open + ')').join(', ')) : null));
   }

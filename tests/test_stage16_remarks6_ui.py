@@ -54,13 +54,20 @@ def browser():
         b.close()
 
 
+_STATES: dict = {}   # сессия на пользователя: демо-вход ограничен 30 входами в минуту с адреса (площадка, 13.11) — входим по разу
+
+
 def _open(browser, base, uid, width, path):
     phone = width < 500
-    ctx = browser.new_context(viewport={"width": width, "height": 812 if phone else 900}, locale="ru-RU", is_mobile=phone, has_touch=phone, service_workers="block")
+    key = (base, uid)
+    ctx = browser.new_context(viewport={"width": width, "height": 812 if phone else 900}, locale="ru-RU", is_mobile=phone, has_touch=phone,
+                              service_workers="block", storage_state=_STATES.get(key))
     page = ctx.new_page()
     errors = []
     page.on("pageerror", lambda e: errors.append(str(e)))
-    page.request.post(f"{base}/api/auth/login-as", data={"user_id": uid})
+    if key not in _STATES:
+        assert page.request.post(f"{base}/api/auth/login-as", data={"user_id": uid}).ok
+        _STATES[key] = ctx.storage_state()
     page.goto(base + path)
     return ctx, page, errors
 
@@ -273,6 +280,21 @@ def test_meeting_two_plain_buttons_fit(base, browser, width):
         assert [x[0] for x in btns] == ["Начать запись", "Загрузить"] and all(x[1] and x[2] and x[3] == 0 for x in btns), btns
         inp = page.evaluate("(() => { const i = document.querySelector('.card input[type=text]'); return [i.placeholder, i.scrollWidth <= i.clientWidth]; })()")
         assert inp == ["Название (необязательно)", True]
+        assert _fits(page) and not errors, errors
+    finally:
+        ctx.close()
+
+
+@pytest.mark.parametrize("width", [375, 1280, 1440, 1920])
+def test_director_map_labels_never_clipped(base, browser, width):
+    ctx, page, errors = _open(browser, base, 1, width, "/panel#/summary")
+    try:
+        page.wait_for_selector(".map .marker"); page.wait_for_timeout(1500)
+        out = page.evaluate("""(() => { const m = document.querySelector('.map').getBoundingClientRect();
+          return [...document.querySelectorAll('.map .marker .mlabel, .map .map-country')].filter(l => { const r = l.getBoundingClientRect();
+            return r.left < m.left - 0.5 || r.right > m.right + 0.5 || r.top < m.top - 0.5 || r.bottom > m.bottom + 0.5; }).map(l => l.innerText); })()""")
+        assert not out, out
+        assert page.locator(".legend .ict").count() == 2
         assert _fits(page) and not errors, errors
     finally:
         ctx.close()

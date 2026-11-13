@@ -424,7 +424,7 @@ async function summary() {
   const [d, ds, md] = await Promise.all([API.get('/api/panel/summary?days=30'), API.get('/api/panel/director-summary').catch(() => null), API.get('/api/panel/map').catch(() => null)]);
   const l = (ds && ds.lines) || {};
   const sumBlock = ds ? summaryBlockPanel(ds) : null;
-  MAPVIEW = md ? mapView(md, { staff: true, legend: true, crop: { aspect: 1.9, top: 0.18 }, onBranch: b => { S.filters = { branch_id: b.id }; S.tab = 'open'; location.hash = '#/queue'; }, onSite: s => { S.filters = { q: s.city }; S.tab = 'open'; location.hash = '#/queue'; } }) : null;
+  MAPVIEW = md ? mapView(md, { staff: true, legend: true, frame: MAP_DIRECTOR, onBranch: b => { S.filters = { branch_id: b.id }; S.tab = 'open'; location.hash = '#/queue'; }, onSite: s => { S.filters = { q: s.city }; S.tab = 'open'; location.hash = '#/queue'; } }) : null;
   const mapCard = h('div', { class: 'card map-card' }, h('div', { class: 'row' }, h('b', {}, 'Карта'), h('span', { class: 'hint' }, 'клик по городу — очередь филиала')), MAPVIEW || h('div', { class: 'muted small' }, 'карта недоступна'));
   const pct = x => x === null || x === undefined ? '—' : Math.round(x * 100) + ' %';
   const attention = h('div', { class: 'card attention' }, attentionLine([[d.overdue, '#/queue?overdue=1', 'просрочено'], [d.unassigned, '#/queue?unassigned=1', 'без ответственного'], [l.decisions_over_threshold, '#/decisions', 'ждут решения'],
@@ -457,7 +457,7 @@ async function summary() {
     ['Проверить просрочки сейчас', async () => { const r = await API.post('/api/panel/check-overdue'); toast(r.escalated.length ? 'Эскалировано: ' + r.escalated.join(', ') : 'Новых просрочек нет'); summary(); }],
     ds && ds.engine === 'openai' ? ['Показать сводку шаблоном без ИИ', async () => { const t = await API.get('/api/panel/director-summary?engine=template'); const box = document.querySelector('.summary-ai'); if (box) box.replaceWith(summaryBlockPanel(t)); }] : null]) : null;
   const command = ME.role === 'director' ? commandPanel({ decisionsHref: '#/decisions', compact: true }) : null;   // команды — только директору (F-21)
-  root.replaceChildren(h('div', { class: 'wrap wrap-wide' }, h('div', { class: 'row' }, h('div', { class: 'h1' }, 'Сводка'), h('div', { class: 'spacer' }), more), sumBlock, attention, command, kpis, h('div', { class: 'mt16' }, mapCard), h('div', { class: 'split' }, h('div', {}, branches, clustersBox, cats), byType)));   // карта — на всю ширину (13.11)
+  root.replaceChildren(h('div', { class: 'wrap wrap-wide' }, h('div', { class: 'row' }, h('div', { class: 'h1' }, 'Сводка'), h('div', { class: 'spacer' }), more), sumBlock, attention, command, kpis, h('div', { class: 'split mt16 map-split' }, mapCard, byType), branches, clustersBox, cats));   // карта — крупно, рамка 46…86° в. д. × 45…62° с. ш. (13.11)
 }
 
 function summaryBlockPanel(d) {

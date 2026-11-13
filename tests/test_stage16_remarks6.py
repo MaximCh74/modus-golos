@@ -248,7 +248,21 @@ def test_branch_is_city_in_api_everywhere(c):
 
 def test_map_labels_flip_instead_of_clipping():
     js = (ROOT / "web" / "a" / "mapview.js").read_text(encoding="utf-8")
-    assert "const fitLabels = () =>" in js and "'flip-x'" in js and "new ResizeObserver(() => fitLabels())" in js
+    assert "const fitLabels = () =>" in js and "'flip-x'" in js and "ro.observe(lab)" in js   # подпись стала шире (шрифт) — пересчёт
     css = (ROOT / "web" / "a" / "style.css").read_text(encoding="utf-8")
     assert ".marker.flip-x { flex-direction: row-reverse;" in css and re.search(r"\.map-country \{[^}]*font-size: 19px", css)
-    assert "crop: { aspect: 1.9, top: 0.18 }" in (ROOT / "web" / "a" / "panel.js").read_text(encoding="utf-8")
+    assert "frame: MAP_DIRECTOR" in (ROOT / "web" / "a" / "panel.js").read_text(encoding="utf-8")
+    assert "document.fonts.ready.then(() => fitLabels())" in js   # подписи пересчитываются, когда догрузился шрифт
+
+
+def test_director_map_frame_and_objects_like_cities():
+    """Карта директора (13.11): рамка 46…86° в. д. × 45…62° с. ш. (своя подложка), подписи стран в центре видимой части,
+    объект — та же большая метка и карточка, что у города, «объект» — во второй строке; в легенде два пункта."""
+    js = (ROOT / "web" / "a" / "mapview.js").read_text(encoding="utf-8")
+    assert "const MAP_DIRECTOR = { lon0: 46, lon1: 86, lat0: 45, lat1: 62, aspect: 900 / 643, src: '/a/img/map-director.svg'" in js
+    svg = (ROOT / "web" / "a" / "img" / "map-director.svg").read_text(encoding="utf-8")
+    assert 'viewBox="0 0 900 643"' in svg
+    assert "h('span', { class: 'm-site' }, 'объект'" in js and "icon('map-pin', { size: 30, fill: true, width: 1.5 })" in js
+    assert "const sState = s.overdue ? ' m-late' : ' m-ok';" in js and "объект без открытых обращений" not in js
+    css = (ROOT / "web" / "a" / "style.css").read_text(encoding="utf-8")
+    assert ".marker.site .mlabel {" not in css and ".marker.site .pin .ic" not in css   # объект оформлен как город

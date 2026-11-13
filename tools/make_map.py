@@ -13,9 +13,16 @@ import math
 import sys
 
 LON0, LON1, LAT0, LAT1 = 45.0, 82.0, 46.5, 60.5
+# карта директора (замечание владельца 13.11): больше России сверху — от Самары с запасом (46° в. д.) до востока за Павлодаром (86°),
+# с севера до 62° с. ш., с юга с запасом под Атырау (45°): --frame 46,86,45,62 → web/a/img/map-director.svg
+if "--frame" in sys.argv:
+    i = sys.argv.index("--frame")
+    LON0, LON1, LAT0, LAT1 = (float(x) for x in sys.argv[i + 1].split(","))
+    del sys.argv[i:i + 2]
 W = 900
 KX = W / (LON1 - LON0)                      # px на градус долготы
-KY = KX / math.cos(math.radians(54.0))      # px на градус широты (средняя широта полосы — 54°)
+MID = 54.0 if (LAT0, LAT1) == (46.5, 60.5) else (LAT0 + LAT1) / 2   # средняя широта рамки (у стартовой — 54°, как было)
+KY = KX / math.cos(math.radians(MID))       # px на градус широты (сжатие по средней широте рамки)
 H = round((LAT1 - LAT0) * KY)
 # Замечание владельца 12.11: заливка стран заметно темнее воды и фона страницы, границы чёткие — на телефоне карта должна читаться.
 # Казахстан — самый тёмный (фокус карты), Россия чуть светлее, остальные страны по краям — ещё светлее; вода светлая.
@@ -109,5 +116,30 @@ def main() -> None:
     print("</svg>")
 
 
+def centroids(path: str, names=("Russia", "Kazakhstan")) -> dict:
+    """Центр видимой части страны в рамке (центроид площади обрезанных полигонов) — туда ставится подпись страны."""
+    data = json.load(open(path, encoding="utf-8"))
+    out = {}
+    for f in data["features"]:
+        name = f["properties"].get("ADMIN")
+        if name not in names:
+            continue
+        geom = f["geometry"]
+        polys = geom["coordinates"] if geom["type"] == "MultiPolygon" else [geom["coordinates"]]
+        A = cx = cy = 0.0
+        for poly in polys:
+            c = clip([(float(x), float(y)) for x, y in poly[0]])
+            for (x1, y1), (x2, y2) in zip(c, c[1:] + c[:1]):
+                k = x1 * y2 - x2 * y1
+                A += k; cx += (x1 + x2) * k; cy += (y1 + y2) * k
+        if A:
+            out[name] = (round(cy / (3 * A), 2), round(cx / (3 * A), 2))   # (lat, lng)
+    return out
+
+
 if __name__ == "__main__":
+    if "--centroids" in sys.argv:
+        sys.argv.remove("--centroids")
+        print(json.dumps({"frame": [LON0, LON1, LAT0, LAT1], "size": [W, H], "centroids": centroids(sys.argv[1])}, ensure_ascii=False))
+        sys.exit(0)
     main()

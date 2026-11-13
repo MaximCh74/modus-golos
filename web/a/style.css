@@ -360,7 +360,7 @@ tr.muted td { opacity: .6; }
 
 /* карта: контуры Natural Earth + метки; подписи городов — белые «таблетки» с мягкой тенью; выбранный — пульсирующее свечение */
 .mapwrap { position: relative; }
-.map { position: relative; width: 100%; aspect-ratio: 900 / 579; border-radius: var(--radius-lg); overflow: hidden; border: 1px solid var(--line-soft); background: var(--map-water); }
+.map { position: relative; width: 100%; aspect-ratio: var(--map-ratio, 900 / 579); border-radius: var(--radius-lg); overflow: hidden; border: 1px solid var(--line-soft); background: var(--map-water); }
 .map.cropped { aspect-ratio: var(--map-aspect, 2.05); }
 .map-scene { position: absolute; inset: 0; transform-origin: 50% 50%; }
 .map-bg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; object-fit: cover; object-position: 50% var(--map-pos-y, 50%); }
@@ -387,24 +387,17 @@ tr.muted td { opacity: .6; }
 .marker .mlabel { display: block; background: var(--white); border-radius: var(--radius-sm); padding: 4px 10px; box-shadow: var(--shadow-1); white-space: nowrap; line-height: 1.2; margin-bottom: 6px; }
 .marker .mlabel b { color: var(--navy); font-size: 13px; display: block; }
 .marker .mlabel span { color: var(--muted); font-size: 11px; display: block; }
+.marker .mlabel .m-site .m-rest { display: inline; }   /* объект: «объект · 1 откр. · просрочено 1» одной строкой */
 .marker .mlabel .warn-ic { color: var(--warn); vertical-align: -2px; margin-left: 3px; display: inline; }
 .marker.blink .pin { animation: blink .6s 6; }
-.marker.site { --mx: -10px; }   /* остриё контурной метки — в точке объекта */
 /* подписи не обрезаются краем карты (13.11): не влезает справа — слева от метки; у верхнего/нижнего края — ниже/выше (mapview.js fitLabels) */
 .marker.flip-x { flex-direction: row-reverse; --mx: calc(-100% + 15px); }
-.marker.site.flip-x { --mx: calc(-100% + 10px); }
-.marker.site.flip-x .mlabel { margin: 0 4px 0 0; }
 .marker.flip-down .mlabel { transform: translateY(calc(50% + 18px)); }
 .marker.flip-up .mlabel { transform: translateY(calc(-50% - 18px)); }
-.marker .pin-outline { color: var(--map-none); filter: none; }
-.marker.site .pin .ic { width: 20px; height: 20px; }   /* объект — маленькая метка и на телефоне */
-.marker .pin-outline .ic { stroke: currentColor; fill: var(--white); }
 .marker.m-ok .pin, .marker.m-ok:hover .pin, .lg-pin.m-ok { color: var(--map-ok); }
 .marker.m-late .pin, .marker.m-late:hover .pin, .lg-pin.m-late { color: var(--red); }
-.lg-pin.lg-site { color: var(--map-none); fill: var(--white); stroke: currentColor; }
 .sdot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--muted-2); border: 1.5px solid var(--white); box-shadow: 0 0 0 1px var(--muted-2); }
 .sdot.lg { width: 8px; height: 8px; }
-.marker.site .mlabel { display: inline-block; font-size: 10px; margin: 0 0 0 4px; padding: 2px 6px; vertical-align: middle; }
 .lg-pin { color: var(--red); stroke: var(--white); }
 .legend { gap: 14px; }
 /* ручная точка объекта на карте (администрирование) */
@@ -836,8 +829,7 @@ select { appearance: none; -webkit-appearance: none; padding-right: 34px; backgr
   .city-pills { display: flex; }
   /* телефон: у каждой метки короткая подпись города под булавкой (замечание владельца 12.11) — как у чипов ниже; остриё булавки — в точке */
   .marker { flex-direction: column; align-items: center; gap: 1px; --mx: -50%; --my: -24px; }
-  .marker.site { --mx: -50%; }
-  .marker.flip-x, .marker.site.flip-x { flex-direction: column; align-items: flex-end; --mx: calc(-100% + 13px); }
+  .marker.flip-x { flex-direction: column; align-items: flex-end; --mx: calc(-100% + 13px); }
   .marker.flip-r { align-items: flex-start; --mx: -13px; }
   .marker.flip-up { flex-direction: column-reverse; --my: -100%; }
   .marker.flip-up .mlabel, .marker.flip-down .mlabel { transform: none; }
@@ -847,10 +839,12 @@ select { appearance: none; -webkit-appearance: none; padding-right: 34px; backgr
   .home-arc { display: none; }
   :root { --fs-display: 32px; }
   .lead { font-size: 16px; }
-  .map.cropped { aspect-ratio: 900 / 579; }
+  .map.cropped { aspect-ratio: var(--map-ratio, 900 / 579); }
   .map-country { font-size: 13px; letter-spacing: .3em; }
   .card.map-card { padding-left: 10px; padding-right: 10px; }   /* карта директора на телефоне — почти во всю ширину (13.11) */
   .marker .mlabel span { display: none; }
+  .marker .mlabel .m-site { display: block; font-size: 10px; line-height: 1.1; }   /* на телефоне у объекта — слово «объект» под городом */
+  .marker .mlabel .m-site .m-rest { display: none; }
   .marker .pin .ic { width: 26px; height: 26px; }
   .city-pills { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; -webkit-overflow-scrolling: touch; }
   .city-pills .btn { flex: none; }
