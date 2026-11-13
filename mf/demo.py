@@ -24,19 +24,22 @@ SHIFT = [
     ("points_ledger", "created_at", "iso"), ("reward_claims", "created_at", "iso"), ("reward_claims", "decided_at", "iso"),
     ("notifications", "created_at", "iso"), ("notifications", "read_at", "iso"), ("sessions", "created_at", "iso"),
     ("invites", "created_at", "iso"), ("invites", "expires_at", "iso"), ("invites", "used_at", "iso"), ("invites", "revoked_at", "iso"),   # этап 8 §4
+    ("client_messages", "created_at", "iso"), ("client_messages", "consent_at", "iso"),   # сообщения клиентов (13.11)
 ]
 TRIGGERS = ("t_events_no_update", "t_events_no_delete", "t_ledger_no_update", "t_ledger_no_delete")
 
 
 def fingerprint(path: Path | None = None) -> str:
-    """Отпечаток состояния: количества обращений, событий, пунктов совещаний, поддержек, «спасибо», совещаний, уведомлений и последний номер
-    (без дат — после reset они сдвинуты на «сегодня»)."""
+    """Отпечаток состояния: количества обращений, событий, пунктов совещаний, поддержек, «спасибо», совещаний, уведомлений, сообщений
+    клиентов и последний номер (без дат — после reset они сдвинуты на «сегодня»)."""
     c = sqlite3.connect(str(path or config.DB_PATH))
     try:
         parts = [c.execute(q).fetchone()[0] for q in (
             "SELECT COUNT(*) FROM appeals", "SELECT COUNT(*) FROM appeal_events", "SELECT COUNT(*) FROM meeting_items",
             "SELECT COUNT(*) FROM supports", "SELECT COUNT(*) FROM thanks", "SELECT COALESCE(MAX(number),'') FROM appeals",
             "SELECT COUNT(*) FROM meetings", "SELECT COUNT(*) FROM notifications")]
+        if c.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='client_messages'").fetchone():   # сообщения клиентов (13.11)
+            parts.append(c.execute("SELECT COUNT(*) FROM client_messages").fetchone()[0])
     finally:
         c.close()
     return hashlib.sha1("|".join(map(str, parts)).encode()).hexdigest()[:12]

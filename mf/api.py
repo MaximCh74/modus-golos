@@ -14,7 +14,7 @@ from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, Reque
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
-from . import ai, appeals, auth, boss, commands, db, demo, director, glossary, images, meetings, posters, realtime, staff, version
+from . import ai, appeals, auth, boss, clients, commands, db, demo, director, glossary, images, meetings, posters, realtime, staff, version
 from .ai import llm, similar, stt
 from .integrations import bitrix
 from . import config
@@ -79,6 +79,7 @@ class RateLimit:
 # суточный лимит вызовов (настройка «Вызовов ИИ в сутки», ai/budget). Тест — tests/test_stage17_venue_limits.py.
 qr_limit = RateLimit(60, 600, burst=(30, 60))
 stt_limit = RateLimit(120, 600, burst=(60, 60))
+client_limit = RateLimit(60, 600, burst=(30, 60))   # форма клиентов /c — как QR-форма (13.11)
 similar_limit = RateLimit(120, 600, burst=(60, 60), message="Слишком много запросов подряд — попробуйте через несколько минут")   # F-06: «похожие» без входа
 staff_limit = RateLimit(300, 600, burst=(60, 60), message="Слишком много запросов подряд — попробуйте через несколько минут")     # F-06: поиск адресата без входа
 ai_user_limit = RateLimit(150, 600, message="Слишком много запросов к ИИ подряд — подождите несколько минут")      # F-07: ИИ для вошедших, на человека
@@ -225,6 +226,35 @@ async def public_create(request: Request, type: str = Form(...), text: str = For
             "track_url": f"/t/{a['tracking_token']}", "logged_in": user is not None,
             "category": a["category"], "responsible": a["responsible"], "priority": a["priority"], "ai_engine": (cls or {}).get("engine"),
             "brief": appeals.brief_of(a), "type": a["type"]}
+
+
+@router.post("/public/client-messages")
+async def public_client_message(request: Request, kind: str = Form(...), text: str = Form(...), place: str = Form(""), name: str = Form(""),
+                                contact: str = Form(""), consent: str = Form(""), website: str = Form(""), file: UploadFile | None = File(None)):
+    """Форма клиентов /c (решение владельца 13.11, минимум): без входа; лимит частоты — как у QR-формы; ловушка для ботов — скрытое поле
+    website: человек его не видит, бот заполняет — ответ «принято», но ничего не сохраняется. Фото — только картинка, без метаданных."""
+    client_limit.check(client_ip(request))
+    if website.strip():
+        return {"ok": True}
+    try:
+        m = clients.create(kind, text, place, name, contact, parse_bool(consent))
+    except ValueError as e:
+        raise HTTPException(422, str(e))
+    if file and file.filename:
+        data = await file.read(MAX_ATTACH + 1)
+        if len(data) > MAX_ATTACH:
+            db.ex("DELETE FROM client_messages WHERE id=?", (m["id"],))
+            raise HTTPException(413, "Фото больше 10 МБ")
+        if data:
+            try:
+                data, mime, ext = images.clean_bytes(images.upright(images.open_image(data)))
+            except HTTPException:
+                db.ex("DELETE FROM client_messages WHERE id=?", (m["id"],))
+                raise
+            stored = f"c{m['id']}-{secrets.token_hex(8)}{ext}"
+            (config.UPLOAD_DIR / stored).write_bytes(data)
+            db.ex("UPDATE client_messages SET photo=?, photo_mime=? WHERE id=?", (stored, mime, m["id"]))
+    return {"ok": True}
 
 
 async def classify(text: str, type_hint: str | None, author_urgency: str | None = None, author_scope: str | None = None,
@@ -548,6 +578,22 @@ async def attachment(att_id: int, request: Request, t: str | None = None):
 
 
 # ---------- панель ----------
+
+@router.get("/panel/client-messages")
+async def panel_client_messages(request: Request):
+    """«От клиентов» (13.11): все сообщения клиентов, новые сверху — директору и администратору."""
+    auth.require(request, "director", "admin")
+    return {"items": clients.listing()}
+
+
+@router.get("/panel/client-messages/{mid}/photo")
+async def panel_client_photo(mid: int, request: Request):
+    auth.require(request, "director", "admin")
+    r = db.one("SELECT photo, photo_mime FROM client_messages WHERE id=?", (mid,))
+    if not r or not r["photo"] or not (config.UPLOAD_DIR / r["photo"]).is_file():
+        raise HTTPException(404, "Фото не найдено")
+    return FileResponse(config.UPLOAD_DIR / r["photo"], media_type=r["photo_mime"] or "image/jpeg")
+
 
 def _manage(appeal_id: int, user: dict) -> dict:
     a = appeals.get(appeal_id)

@@ -262,6 +262,12 @@ async def qr_page(code: str):
     return page("qr.html")
 
 
+@app.get("/c")
+async def client_page():
+    """Обратная связь для клиентов (13.11): благодарность, вопрос или замечание без входа; город можно подставить ссылкой ?city=."""
+    return page("c.html")
+
+
 @app.get("/t/{token}")
 async def track_page(token: str):
     return page("track.html")

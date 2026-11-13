@@ -61,6 +61,10 @@ CREATE TABLE IF NOT EXISTS invites (
   id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, token TEXT UNIQUE NOT NULL, created_by INTEGER,
   created_at TEXT NOT NULL, expires_at TEXT NOT NULL, used_at TEXT, revoked_at TEXT);
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+-- обратная связь от клиентов (решение владельца 13.11, минимум): без статусов, баллов и уведомлений; контакт — только с согласием
+CREATE TABLE IF NOT EXISTS client_messages (
+  id INTEGER PRIMARY KEY, kind TEXT NOT NULL, text TEXT NOT NULL, place TEXT, name TEXT, contact TEXT, consent_at TEXT,
+  photo TEXT, photo_mime TEXT, created_at TEXT NOT NULL);
 
 CREATE INDEX IF NOT EXISTS ix_appeals_status ON appeals(status);
 CREATE INDEX IF NOT EXISTS ix_appeals_resp ON appeals(responsible_id);
