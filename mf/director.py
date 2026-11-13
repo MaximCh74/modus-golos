@@ -93,10 +93,11 @@ def items(f: dict) -> list[dict]:
     """Сводка списком из фактов сервера (замечание владельца 13.11): строки — сегменты [текст, жирный], числа жирным; у строки — ссылка."""
     out = [{"key": "new", "parts": [["Поступило: ", False], [str(f["new"]), True]], "href": "/panel#/queue?open=1"},
            {"key": "done", "parts": [["Решено: ", False], [str(f["done"]), True]], "href": "/changes"}]
-    op = [["Открыто: ", False], [str(f["open"]), True]]
+    # «мешают работать» — вложенной строкой под «Открыто» (образец владельца 13.11); красная точка + тёмная цифра, красного текста нет
+    op = {"key": "open", "parts": [["Открыто: ", False], [str(f["open"]), True]], "href": "/panel#/queue?open=1" + ("&urgency=now" if f["urgent_open"] else "")}
     if f["urgent_open"]:
-        op += [[", из них мешают работать: ", False], [str(f["urgent_open"]), True, "dot"]]   # красная точка + тёмная цифра (красного текста нет)
-    out.append({"key": "open", "parts": op, "href": "/panel#/queue?open=1" + ("&urgency=now" if f["urgent_open"] else "")})
+        op["sub"] = [["из них мешают работать: ", False], [str(f["urgent_open"]), True, "dot"]]
+    out.append(op)
     if f["decisions_pending"]:
         dp = [["Ждут вашего решения: ", False], [str(f["decisions_pending"]), True]]
         if f["decision_max_days"]:
@@ -107,8 +108,8 @@ def items(f: dict) -> list[dict]:
         out.append({"key": "theme", "parts": [["Главная тема: ", False], [_lower_first(c["category"] or "без категории") + " — ", False], [str(c["size"]), True],
                               [" " + _word(c["size"], ("обращение", "обращения", "обращений")) + " из ", False], [str(n), True],
                               [" " + _word(n, ("города", "городов", "городов")), False]], "href": f"/panel#/queue?cluster_id={c['id']}"})
-    for it in out:
-        it["text"] = "".join(p[0] for p in it["parts"])
+    for it in out:   # text — строка целиком (озвучка, команда «прочитай сводку»): «Открыто: 24, из них мешают работать: 7»
+        it["text"] = "".join(p[0] for p in it["parts"]) + (", " + "".join(p[0] for p in it["sub"]) if it.get("sub") else "")
     return out
 
 
@@ -130,7 +131,7 @@ def ai_phrase(f: dict) -> str | None:
     return None if llm.has_forbidden(phrase) else phrase
 
 
-SUMMARY_FMT = 2   # формат списка сводки: при изменении (13.11 — красная точка у «мешают работать») старый кэш пересчитывается
+SUMMARY_FMT = 3   # формат списка сводки: при изменении (13.11 — красная точка у «мешают работать») старый кэш пересчитывается
 
 
 def build(f: dict, user: dict, phrase: str | None, v: str) -> dict:

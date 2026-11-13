@@ -276,13 +276,15 @@ function chips(options, onPick) {
 let _summaryAudio = null;
 // Сводка директора списком (замечание владельца 13.11): приветствие (ИИ — только оно, без чисел), «За 7 дней:» и строки из фактов
 // сервера, числа жирным; строка — ссылка в свой раздел. fixHref — для панели (/panel#/… → #/…). Старый ответ (только sentences) — абзацами.
+// части строки сводки [текст, жирный, 'dot'] → узлы; «dot» — красная точка перед тёмной цифрой (красного текста нет)
+function sumParts(parts) { return parts.map(([t, b, mark]) => mark === 'dot' ? h('b', { class: 'num-dot' }, h('span', { class: 'dot-overdue' }), t) : b ? h('b', {}, t) : t); }
 function summaryBody(d, fixHref) {
   const go = href => fixHref ? fixHref(href) : href;
   if (!d.items) return h('div', { class: 'sum-body' }, d.sentences.map(s => h('p', {}, s.href ? h('a', { href: go(s.href) }, s.text) : s.text)));
   return h('div', { class: 'sum-body' }, h('p', { class: 'sum-greet' }, d.greeting), h('div', { class: 'sum-period' }, d.period),
     h('ul', { class: 'sum-list' }, d.items.map(it => {
-      const kids = it.parts.map(([t, b, mark]) => mark === 'dot' ? h('b', { class: 'num-dot' }, h('span', { class: 'dot-overdue' }), t) : b ? h('b', {}, t) : t);   // «мешают работать» — красная точка + тёмная цифра
-      return h('li', {}, it.href ? h('a', { href: go(it.href) }, kids) : h('span', {}, kids));
+      const kids = sumParts(it.parts);
+      return h('li', {}, it.href ? h('a', { href: go(it.href) }, kids) : h('span', {}, kids), it.sub ? h('ul', { class: 'sum-sub' }, h('li', {}, sumParts(it.sub))) : null);   // «мешают работать» — вложенной строкой
     })));
 }
 

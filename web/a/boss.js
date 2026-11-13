@@ -27,11 +27,11 @@
   const greetMark = h('span', { class: 'boss-greet-mark' });
   const speakGreet = h('button', { type: 'button', class: 'btn btn-sm btn-ghost boss-speak', title: 'Озвучить приветствие', 'aria-label': 'Озвучить' }, icon('volume', { size: 18 }));
   const seg = h('div', { class: 'seg', role: 'tablist' },
-    ['week', 'month'].map(p => h('button', { type: 'button', role: 'tab', class: 'seg-btn' + (S.period === p ? ' on' : ''), 'data-period': p, onclick: () => setPeriod(p) }, iconText('calendar', p === 'week' ? 'Неделя' : 'Месяц', { size: 18 }))));
+    ['week', 'month'].map(p => h('button', { type: 'button', role: 'tab', class: 'seg-btn' + (S.period === p ? ' on' : ''), 'data-period': p, onclick: () => setPeriod(p) }, p === 'week' ? 'Неделя' : 'Месяц')));   // без календарей (образец 13.11)
   // плитки по образцу владельца (13.11): иконка в круге на мягком фоне; «ждут решения» и «просрочено» — текущее состояние («сейчас»)
   const TILES = [['new', 'поступило', 'inbox'], ['done', 'решено', 'check-circle'], ['decisions', 'ждут вашего решения', 'send'], ['overdue', 'просрочено', 'clock']];
   const tiles = {};
-  const tilesEl = h('div', { class: 'boss-tiles' }, TILES.map(([k, label, ic]) => { const b = h('b', {}, '…'); tiles[k] = b; return h('button', { type: 'button', class: 'boss-tile tile-' + k, 'data-tile': k, onclick: () => openList(k) }, h('span', { class: 'tile-ic' }, icon(ic, { size: 24 })), h('span', { class: 'tile-body' }, b, h('span', { class: 'tile-label' }, label), k === 'decisions' || k === 'overdue' ? h('small', { class: 'tile-now' }, 'сейчас') : null)); }));
+  const tilesEl = h('div', { class: 'boss-tiles' }, TILES.map(([k, label, ic]) => { const b = h('b', {}, '…'); tiles[k] = b; return h('button', { type: 'button', class: 'boss-tile tile-' + k, 'data-tile': k, onclick: () => openList(k) }, h('span', { class: 'tile-ic' }, icon(ic, { size: 24, width: 1.5 })), h('span', { class: 'tile-body' }, b, h('span', { class: 'tile-label' }, label), k === 'decisions' || k === 'overdue' ? h('small', { class: 'tile-now' }, 'сейчас') : null)); }));
   const ta = h('textarea', { class: 'boss-ask-text', rows: 1, placeholder: 'Спросите, например: что по Омску?', 'aria-label': 'Вопрос' });
   const mic = h('button', { type: 'button', class: 'btn mic boss-mic', title: 'Спросить голосом', 'aria-label': 'Спросить голосом' });
   const send = h('button', { type: 'button', class: 'btn btn-primary boss-send', title: 'Спросить', 'aria-label': 'Спросить' }, icon('send', { size: 20 }));
@@ -40,7 +40,8 @@
   ta.addEventListener('keydown', ev => { if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); ask(); } });
   const askBox = h('div', { class: 'boss-ask' }, h('div', { class: 'boss-ask-row' }, ta, send), h('div', { class: 'boss-mic-row' }, mic, h('span', { class: 'boss-mic-label' }, 'Спросить')));
   const screen = h('main', { class: 'boss' },
-    h('header', { class: 'boss-head' }, h('img', { src: '/a/img/logo.svg', alt: 'Модус Трейд' }), h('span', { class: 'boss-title' }, 'Директор в кармане'), h('div', { class: 'spacer' }),
+    // на телефоне у логотипа только знак — заголовок «Директор в кармане» влезает целиком на 360–390 (образец 13.11)
+    h('header', { class: 'boss-head' }, h('span', { class: 'boss-mark' }, h('img', { src: '/a/img/logo.svg', alt: 'Модус Трейд' })), h('span', { class: 'boss-title' }, 'Директор в кармане'), h('div', { class: 'spacer' }),
       h('a', { href: '/panel#/summary', class: 'btn btn-sm btn-ghost', title: 'Панель на сайте', 'aria-label': 'Панель на сайте' }, icon('external-link', { size: 18 })),
       h('a', { href: '/login?next=' + encodeURIComponent('/boss'), class: 'btn btn-sm btn-ghost', title: 'Сменить пользователя', 'aria-label': 'Сменить пользователя' }, icon('log-out', { size: 18 }))),
     h('section', { class: 'card boss-greet' }, h('div', { class: 'boss-greet-row' }, h('span', { class: 'boss-name' }, ME.name), greetMark, h('div', { class: 'spacer' }), speakGreet), greetText),
@@ -65,14 +66,19 @@
       const LIST = { new: 'new', done: 'done', decisions: 'decisions' };
       greetText.replaceChildren(h('p', { class: 'boss-greet-hi' }, g.greeting), h('div', { class: 'boss-greet-period' }, g.period),
         h('ul', { class: 'boss-greet-list' }, g.items.map(it => {
-          const kids = it.parts.map(([t, b, mark]) => mark === 'dot' ? h('b', { class: 'num-dot' }, h('span', { class: 'dot-overdue' }), t) : b ? h('b', {}, t) : t);
-          if (!LIST[it.key]) return h('li', {}, h('span', {}, kids));
+          const kids = sumParts(it.parts);
+          const sub = it.sub ? h('ul', { class: 'sum-sub' }, h('li', {}, sumParts(it.sub))) : null;   // «из них мешают работать» — вложенной строкой
+          if (!LIST[it.key]) return h('li', {}, h('span', {}, kids), sub);
           const go = ev => { ev.stopPropagation(); openList(LIST[it.key]); };   // строчный элемент, а не кнопка: маркер списка — у первой строки
-          return h('li', {}, h('span', { class: 'linkish', role: 'button', tabindex: '0', onclick: go, onkeydown: ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); go(ev); } } }, kids));
+          return h('li', {}, h('span', { class: 'linkish', role: 'button', tabindex: '0', onclick: go, onkeydown: ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); go(ev); } } }, kids), sub);
         })));
     } else greetText.textContent = g.text;
     greetMark.replaceChildren(aiMark(g.engine === 'openai', 'приветствие ИИ, числа — из фактов сервера', 'без ИИ'));
+    requestAnimationFrame(markFit);
   }
+  // затухание внизу приветствия — только если список не влез целиком
+  function markFit() { greetText.classList.toggle('fits', greetText.scrollHeight <= greetText.clientHeight + 1); }
+  window.addEventListener('resize', () => requestAnimationFrame(markFit));
   function setPeriod(p) {
     S.period = p;
     try { localStorage.setItem('mf.boss.period', p); } catch (e) { /* нет хранилища */ }
