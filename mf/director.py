@@ -261,7 +261,7 @@ def league() -> dict:
 
 
 def top_employees(limit: int = 10) -> list[dict]:
-    rows = db.q("""SELECT u.id, u.name, u.position, u.avatar, b.name AS branch, b.city AS city, COALESCE(SUM(l.amount), 0) AS points
+    rows = db.q("""SELECT u.id, u.name, u.position, u.avatar, """ + appeals.BRANCH_LABEL + """ AS branch, b.city AS city, COALESCE(SUM(l.amount), 0) AS points
                    FROM users u LEFT JOIN branches b ON b.id=u.branch_id LEFT JOIN points_ledger l ON l.user_id=u.id
                    WHERE u.active=1 GROUP BY u.id HAVING points > 0 ORDER BY points DESC, u.name LIMIT ?""", (limit,))
     for r in rows:

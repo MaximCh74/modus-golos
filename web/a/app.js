@@ -163,7 +163,7 @@ async function newAppeal(startType) {
       if (d.category_id) cat.value = String(d.category_id);
       if (d.priority) prio.value = d.priority;
       if (d.proposed_solution && !sol.value.trim()) sol.value = d.proposed_solution;
-      draftBox.replaceChildren(h('div', { class: 'card card-info small' }, h('div', { class: 'row' }, h('b', {}, 'Мы поняли так'), aiMark(d.engine === 'openai', 'черновик ИИ', 'черновик без ИИ')),
+      draftBox.replaceChildren(h('div', { class: 'card card-info small' }, h('div', { class: 'row' }, h('b', {}, 'Мы поняли так'), helpBtn('draft')),
         d.summary ? h('div', { class: 'mt8' }, d.summary) : null,
         h('div', { class: 'mt8' }, 'Категория: ' + (d.category || 'не определена — выберите сами') + ' · приоритет: ' + (PRIO[d.priority] || '—')),
         d.clarifying_question ? h('div', { class: 'mt8' }, h('b', {}, 'Уточните сразу: '), d.clarifying_question) : null,
@@ -245,7 +245,7 @@ async function appealCard(id) {
     h('div', { class: 'row' }, h('span', { class: 'h1' }, a.number), tag(a.stage.code === 'rejected' ? 'st-rejected' : a.stage.code === 'done' ? 'st-done' : 'st-review', a.stage.label), helpBtn('stages'), a.overdue ? tag('tag-overdue', 'Просрочено') : null,
       a.is_anonymous ? tag('tag-anon', 'анонимно') : null, tag('tag-type', a.type_label)),
     stageTracker(a.stage),
-    h('div', { class: 'small muted' }, [a.category, brCity(a.branch), a.site_city ? 'объект: ' + a.site_city : null, a.department].filter(Boolean).join(' · ')),
+    h('div', { class: 'small muted' }, [a.category, a.branch, a.department].filter(Boolean).join(' · ')),
     a.limited ? h('div', { class: 'hint mt8' }, 'Вы отметили «У меня так же»: видны номер, статус и суть. Подробности — у автора и ответственного.')
       : a.is_mine ? null : h('div', { class: 'row small mt8' }, userLink(a.author, 'sm')),
     a.brief && !a.is_mine ? briefBlock(a) : null,
@@ -315,7 +315,7 @@ function summaryBlock(d, refresh) {
   const refreshBtn = h('button', { class: 'btn btn-sm', onclick: async () => { refreshBtn.disabled = true; try { await API.get('/api/panel/director-summary?refresh=1'); refresh(); } catch (e) { toast(e.message, 'bad'); refreshBtn.disabled = false; } } }, iconText('refresh', 'Обновить'));
   const l = d.lines || {};
   return h('div', { class: 'card summary-ai' },
-    h('div', { class: 'row' }, h('div', { class: 'lbl' }, 'Сводка'), aiMark(d.engine === 'openai', 'приветствие ИИ, числа — из фактов сервера', 'без ИИ'), h('div', { class: 'spacer' }), h('span', { class: 'small muted' }, fmtDate(d.at)), speakBtn, refreshBtn),
+    h('div', { class: 'row' }, h('div', { class: 'lbl' }, 'Сводка'), helpBtn('summary'), h('div', { class: 'spacer' }), h('span', { class: 'small muted' }, fmtDate(d.at)), speakBtn, refreshBtn),
     summaryBody(d),
     attentionLine([[l.urgent_open, '/panel#/queue?open=1&urgency=now', 'мешают работать'], [l.decisions_over_threshold, '#/decisions', 'ждут решения'],
       [l.tasks_overdue, '/panel#/meetings?overdue=1', 'поручения просрочены'], [l.no_news, '/panel#/queue?status=in_progress', 'без новостей']]));

@@ -79,7 +79,7 @@ function fmtHours(x) {
 
 function badge(status) { const s = STATUS[status] || [status, '']; return h('span', { class: 'badge ' + s[1] }, s[0]); }
 // Пометка «ИИ / без ИИ» (этап 9, правило 5): маленькая иконка с подсказкой при наведении, не цветной бейдж
-function aiMark(isAi, aiLabel, plainLabel) { return h('span', { class: 'ai-ic', title: isAi ? (aiLabel || 'ИИ') : (plainLabel || 'без ИИ'), 'aria-label': isAi ? (aiLabel || 'ИИ') : (plainLabel || 'без ИИ') }, icon(isAi ? 'sparkles' : 'file-text', { size: 14 })); }
+// значка ИИ (искры) рядом с заголовками больше нет (13.11): что текст сделал ИИ — сказано в подсказке «?» по-человечески
 function tag(cls, text) { return h('span', { class: 'badge ' + cls }, text); }
 
 // трекер в карточке — те же пять статусов, что на экране везде (13.11): Новое → В работе (или Уточнение) → Решено (или Отклонено)
@@ -147,7 +147,7 @@ let _cfgP = null;
 function publicConfig() { return _cfgP || (_cfgP = API.get('/api/public/config').catch(() => ({}))); }
 function versionTag() { const s = h('span', { class: 'ver' }); publicConfig().then(c => { if (c && c.version) s.textContent = 'версия ' + c.version; }); return s; }
 // Филиал на экране — только город (замечания владельца 13.11): «Омск — головной офис» → «Омск»; где сервер дал город — берём его.
-function brCity(name) { return name ? String(name).split(' — ')[0] : name; }
+function brCity(name) { if (!name) return name; const s = String(name); return /^объект/i.test(s) && !s.includes(' · ') ? 'объект' : s.split(' — ')[0]; }   // «Объект (командировка)» → «объект»
 // Нумерация строк в таблицах и списках администрирования (замечание владельца 13.11): «1.», «2.» узкой колонкой слева, моноширинные цифры
 function rowNum(i) { return h('td', { class: 'rownum', 'data-label': '' }, (i + 1) + '.'); }
 function rowNumTh() { return h('th', { class: 'rownum', 'aria-label': 'Номер строки' }); }
@@ -252,10 +252,9 @@ function briefBlock(a, opts) {
   opts = opts || {};
   const b = a.brief;
   if (!b) return null;
-  const ai = a.brief_engine === 'openai';
   const head = [a.author ? a.author.name : 'Анонимно', a.branch, a.input_mode === 'voice' ? 'голосом' : 'текстом'].filter(Boolean).join(' · ');
   return h('div', { class: 'card ' + (b.unclear ? 'card-warn' : 'card-info') + ' brief' },
-    h('div', { class: 'row' }, h('b', {}, 'Коротко'), helpBtn('brief'), h('span', { class: 'small muted' }, head), h('div', { class: 'spacer' }), aiMark(ai, 'пересказ ИИ', b.note || 'без ИИ')),
+    h('div', { class: 'row' }, h('b', {}, 'Коротко'), helpBtn('brief'), h('span', { class: 'small muted' }, head)),
     h('div', { class: 'mt8' }, h('b', {}, 'Суть: '), b.gist || '—'),
     b.proposes ? h('div', {}, h('b', {}, 'Что предлагает: '), b.proposes) : null,
     b.expects ? h('div', {}, h('b', {}, 'Чего ждёт: '), b.expects) : null,

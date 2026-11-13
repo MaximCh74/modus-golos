@@ -32,7 +32,7 @@ function commandPanel(opts) {
 
   function render(r) {
     const p = r.plan, cmd = r.command;
-    const engine = aiMark(cmd.engine === 'openai', 'разбор ИИ', 'по ключевым словам (без ИИ)');
+    const engine = helpBtn('command_result');   // «?»: команду разбирает ИИ, получателей считает система (значка ИИ нет, 13.11)
     if (p.kind === 'unknown') {
       result.replaceChildren(h('div', { class: 'card card-warn' }, h('div', { class: 'row' }, h('b', {}, p.title), engine),
         h('ul', { class: 'small mt8' }, p.help.map(x => h('li', {}, x))),
@@ -66,7 +66,7 @@ function commandPanel(opts) {
     if (p.kind === 'briefing') {
       const speak = h('button', { class: 'btn btn-sm btn-primary' }, iconText('volume', 'Прочитать'));
       speak.addEventListener('click', async () => { try { await API.post('/api/director/command/' + r.plan_id + '/send', {}); } catch (e) { /* уже отправлено */ } speakSummary(speak, p.sentences); });
-      result.replaceChildren(h('div', { class: 'card card-info' }, h('div', { class: 'row' }, h('b', {}, p.title), aiMark(p.engine === 'openai', 'пересказ ИИ по фактам', 'шаблон без ИИ')),
+      result.replaceChildren(h('div', { class: 'card card-info' }, h('div', { class: 'row' }, h('b', {}, p.title), helpBtn('summary')),
         p.sentences.map(s => h('p', { class: 'small' }, s.text)),
         h('div', { class: 'row mt8' }, speak, h('button', { class: 'btn btn-sm', onclick: cancel }, 'Отмена'))));
       return;

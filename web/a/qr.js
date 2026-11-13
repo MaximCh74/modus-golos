@@ -74,7 +74,7 @@
   setType('problem');
 
   root.replaceChildren(h('div', { class: 'wrap' },
-    h('div', { class: 'hero dots' }, h('div', { class: 'brand' }, h('img', { src: '/a/img/logo.svg', alt: 'Модус Трейд' })), h('div', { class: 'lbl mt16' }, 'Модус Голос · каждый голос услышан'), h('div', { class: 'h1' }, (branch.kind === 'field' ? branch.name : 'Филиал: ' + (branch.city || brCity(branch.name))))),
+    h('div', { class: 'hero dots' }, h('div', { class: 'brand' }, h('img', { src: '/a/img/logo.svg', alt: 'Модус Трейд' })), h('div', { class: 'lbl mt16' }, 'Модус Голос · каждый голос услышан'), h('div', { class: 'h1' }, (branch.kind === 'field' ? 'Объект' : 'Филиал: ' + (branch.city || brCity(branch.name))))),
     form));
 
   form.addEventListener('submit', async ev => {

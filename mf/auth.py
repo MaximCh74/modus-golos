@@ -140,8 +140,8 @@ def logout(token: str | None) -> None:
 def public(user: dict) -> dict:
     out = {k: user[k] for k in ("id", "name", "role", "branch_id", "department_id", "position")}
     out["role_label"] = ROLE_LABEL.get(user["role"], user["role"])
-    b = db.one("SELECT name FROM branches WHERE id=?", (user["branch_id"],))
+    b = db.one("SELECT name, city, kind FROM branches WHERE id=?", (user["branch_id"],))
     d = db.one("SELECT name FROM departments WHERE id=?", (user["department_id"],))
-    out["branch"] = b["name"] if b else None
+    out["branch"] = (("объект" if b["kind"] == "field" else (b["city"] or b["name"])) if b else None)   # только город (13.11)
     out["department"] = d["name"] if d else None
     return out

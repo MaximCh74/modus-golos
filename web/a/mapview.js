@@ -62,7 +62,7 @@ function mapView(data, opts) {
     const sub = staff ? b.open + ' откр.' + (b.overdue ? ' · просрочено ' + b.overdue : '') : null;   // на главной — только город (замечание 13.11)
     // у директора цвет метки — два цвета (замечание 13.11): зелёная — просрочек нет, красная — есть просрочки
     const state = !staff ? '' : b.overdue ? ' m-late' : ' m-ok';
-    const m = h('button', { type: 'button', class: 'marker' + state + (b.kind === 'production' ? ' prod' : ''), title: b.name, onclick: () => { if (opts.onBranch) opts.onBranch(b, m); } },
+    const m = h('button', { type: 'button', class: 'marker' + state + (b.kind === 'production' ? ' prod' : ''), title: b.city || brCity(b.name), onclick: () => { if (opts.onBranch) opts.onBranch(b, m); } },
       h('span', { class: 'pin' }, icon('map-pin', { size: 30, fill: true, width: 1.5 })),
       h('span', { class: 'mlabel' }, h('b', {}, b.city), sub ? h('span', {}, sub) : null));   // без «⚠»: «5 откр. · просрочено 2»
     m.dataset.branch = b.id;
@@ -70,9 +70,42 @@ function mapView(data, opts) {
     placed.push([m, b.lat, b.lng]);
     layerBranches.append(m);
   }
-  const relayout = () => { layout(); for (const [el, lat, lng, clamp] of placed) place(el, lat, lng, clamp); };
+  // подписи меток не обрезаются краем (замечание владельца 13.11): не влезает справа — ставим слева от метки, у верхнего края — ниже,
+  // у нижнего — выше; на телефоне (подпись под булавкой) — к краю или над булавкой. Из вариантов берём первый, где подпись целиком
+  // на карте и не закрывает чужие булавки и уже поставленные подписи.
+  const FLIPS = ['flip-x', 'flip-r', 'flip-down', 'flip-up'];
+  const fitLabels = () => {
+    const br = box.getBoundingClientRect();
+    if (!br.width || !br.height) return;
+    const pad = 4;
+    const markers = [...layerBranches.children, ...layerSites.children].filter(m => !m.classList.contains('off') && m.querySelector('.mlabel'));
+    const pins = markers.map(m => [m, m.querySelector('.pin').getBoundingClientRect()]);
+    const labels = [];
+    const inside = r => r.left >= br.left + pad && r.right <= br.right - pad && r.top >= br.top + pad && r.bottom <= br.bottom - pad;
+    const cross = (a, b) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+    for (const m of markers) {
+      const lab = m.querySelector('.mlabel');
+      m.classList.remove(...FLIPS);
+      const column = getComputedStyle(m).flexDirection.startsWith('column');
+      const variants = column ? ['', 'flip-x', 'flip-r', 'flip-up', 'flip-up flip-x', 'flip-up flip-r'] : ['', 'flip-x', 'flip-down', 'flip-up', 'flip-x flip-down', 'flip-x flip-up'];
+      let best = null;
+      for (const v of variants) {
+        m.classList.remove(...FLIPS);
+        if (v) m.classList.add(...v.split(' '));
+        const r = lab.getBoundingClientRect();
+        const score = (inside(r) ? 0 : 4) + pins.filter(([o, pr]) => o !== m && cross(r, pr)).length + labels.filter(l => cross(r, l)).length;
+        if (!best || score < best.score) best = { v, score, r };
+        if (!score) break;
+      }
+      m.classList.remove(...FLIPS);
+      if (best.v) m.classList.add(...best.v.split(' '));
+      labels.push(best.r);
+    }
+  };
+  const relayout = () => { layout(); for (const [el, lat, lng, clamp] of placed) place(el, lat, lng, clamp); fitLabels(); };
   relayout();
   scene.append(layerCountries, layerSites, layerBranches);
+  if (window.ResizeObserver) new ResizeObserver(() => fitLabels()).observe(box);   // размеры подписей известны после вставки в страницу
   const wrap = h('div', { class: 'mapwrap' }, box);
   if (opts.legend) {
     wrap.append(h('div', { class: 'row small muted mt8 legend' },

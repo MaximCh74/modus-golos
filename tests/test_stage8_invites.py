@@ -55,7 +55,7 @@ def test_add_worker_with_phone_invite_enters_once(c):
     assert r.status_code == 200 and r.json()["name"] == "Асхат Бекжанов" and r.json()["home"] == "/app"
     assert "mf_sid=" in r.headers["set-cookie"] and "Max-Age=31536000" in r.headers["set-cookie"]   # устройство помнит год
     me = c.get("/api/me").json()
-    assert me["id"] == u["id"] and me["points"] == 0 and me["branch"] == "Павлодар — производство"
+    assert me["id"] == u["id"] and me["points"] == 0 and me["branch"] == "Павлодар"   # только город (13.11)
     assert c.get(f"/api/public/invite/{token}").json()["status"] == "already_in"   # то же устройство открыло ссылку снова
     assert db.one("SELECT used_at FROM invites WHERE token=?", (db.token_hash(token),))["used_at"]   # в базе — хэш (аудит 12.11, F-15)
     assert not db.one("SELECT 1 FROM invites WHERE token=?", (token,))

@@ -32,7 +32,7 @@ def test_no_native_browser_elements_in_frontend():
     for f in (ROOT / "web").glob("*.html"):
         assert "<select" not in f.read_text(encoding="utf-8") and 'type="date"' not in f.read_text(encoding="utf-8"), f.name
     js = "\n".join(f.read_text(encoding="utf-8") for f in (ROOT / "web" / "a").glob("*.js"))
-    assert "tag-demo" not in js.replace("'tag-demo'", "") or "aiBadge" in js   # плашки «демо-разбор без ИИ» заменены значком
+    assert "tag-demo" not in js.replace("'tag-demo'", "") and "aiMark(" not in js and "aiBadge(" not in js   # ни плашек, ни значка ИИ: всё — в «?» (13.11)
 
 
 playwright = pytest.importorskip("playwright.sync_api")
@@ -102,7 +102,7 @@ def test_meeting_review_pick_and_datepick(server, browser):
             page.wait_for_timeout(200)
         page.goto(f"{base}/app#/meeting"); page.wait_for_selector("text=Режим совещания")
         assert _fits(page) and page.locator(".btn-primary:visible").count() == 1   # одна главная кнопка — «Начать запись»
-        assert page.locator(".tag-demo").count() == 0 and page.locator(".ai-ic").count() >= 1   # режим разбора — значок, не плашка
+        assert page.locator(".tag-demo").count() == 0 and page.locator(".ai-ic").count() == 0   # режим разбора — в подсказке «?», без значка ИИ
         page.goto(f"{base}/app#/meeting/{mid}"); page.wait_for_selector("button:has-text('Отправить')")
         assert _fits(page) and page.locator("select, input[type=date]").count() == 0
         assert page.locator(".btn-primary:visible").count() == 1   # «Отправить» — единственная главная

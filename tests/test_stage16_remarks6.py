@@ -94,7 +94,7 @@ def test_meetings_city_and_help_on_every_column(c):
     login(c, 1)
     c.post("/api/meetings", data={"title": "Планёрка п. 2", "transcript": "Решили обновить справочник. Олег, до пятницы."})
     rows = c.get("/api/meetings").json()
-    assert rows and all(r["city"] == "Омск" for r in rows if r["branch"] == "Омск — головной офис")
+    assert rows and all(" — " not in (r["branch"] or "") and (r["branch"] == r["city"] or r["branch"] == "объект") for r in rows)   # только город
     js = (ROOT / "web" / "a" / "panel.js").read_text(encoding="utf-8")
     cols = re.search(r"const cols = (\[\['Дата'.*?\]\]);", js, re.S).group(1)
     keys = re.findall(r"\['[^']+', '([a-z_]+)'", cols)
@@ -208,3 +208,47 @@ def test_admin_tables_numbered_and_help_everywhere():
 def test_boss_has_bell_with_counter():
     js = (ROOT / "web" / "a" / "boss.js").read_text(encoding="utf-8")
     assert "class: 'btn btn-sm btn-ghost bell'" in js and "ME.unread ? h('span', { class: 'n' }" in js
+
+
+# ---------- восьмой список 13.11: карта, «Уточнение», без значка ИИ, только город ----------
+
+def test_no_ai_mark_anywhere_help_says_it():
+    from mf import glossary
+    js = "\n".join(f.read_text(encoding="utf-8") for f in (ROOT / "web" / "a").glob("*.js"))
+    assert "aiMark(" not in js and "aiBadge(" not in js and "ai-ic" not in (ROOT / "web" / "a" / "style.css").read_text(encoding="utf-8")
+    t = glossary.TERMS
+    assert t["repeated_topics"]["hint"].startswith("Темы находит ИИ по смыслу обращений") and t["brief"]["hint"].startswith("Коротко — пересказ ИИ, исходный текст ниже")
+    for k in ("boss_greeting", "boss_answer", "command_result", "draft", "meeting_analysis"):
+        assert "ИИ" in t[k]["hint"], k
+    for k in ("repeated_topics", "brief", "summary", "similar", "meeting_title", "boss_greeting"):
+        assert not re.search(r"порог|\d[.,]\d|эмбедд|gpt|модел", t[k]["hint"], re.I), k   # без технических параметров
+    assert "Значок" not in t["meeting_title"]["hint"] and "значком" not in t["without_ai"]["hint"]
+
+
+def test_clarify_chip_without_question_icon():
+    css = (ROOT / "web" / "a" / "style.css").read_text(encoding="utf-8")
+    assert ".st-clarify::before" not in css and ".st-rejected::before" in css   # «Отклонено» с «×» остаётся
+
+
+def test_branch_is_city_in_api_everywhere(c):
+    login(c, 1)
+    bad = re.compile(r"— (головной )?офис|— производство|\(командировка\)")
+    for url in ("/api/panel/appeals?open=1", "/api/meetings", "/api/director/ideas", "/api/me", "/api/changes", "/api/staff/search?q=а"):
+        r = c.get(url)
+        assert r.status_code == 200 and not bad.search(r.text), url
+    lg = c.get("/api/panel/league").json()   # «name» в лиге — название из справочника, на экран идёт «city»
+    assert not any(bad.search(x.get("city") or "") for x in lg["items"]) and not any(bad.search(u.get("branch") or "") for u in lg["top"])
+    rows = c.get("/api/panel/appeals?open=1").json()
+    site = next(r for r in rows if r.get("site_city"))
+    assert c.get(f"/api/appeals/{site['id']}").json()["branch"] == "объект · " + site["site_city"]
+    from mf.ai import similar
+    for cl in similar.clusters().get("clusters", []):
+        assert not any(bad.search(b) for b in cl["branches"])
+
+
+def test_map_labels_flip_instead_of_clipping():
+    js = (ROOT / "web" / "a" / "mapview.js").read_text(encoding="utf-8")
+    assert "const fitLabels = () =>" in js and "'flip-x'" in js and "new ResizeObserver(() => fitLabels())" in js
+    css = (ROOT / "web" / "a" / "style.css").read_text(encoding="utf-8")
+    assert ".marker.flip-x { flex-direction: row-reverse;" in css and re.search(r"\.map-country \{[^}]*font-size: 19px", css)
+    assert "crop: { aspect: 1.9, top: 0.18 }" in (ROOT / "web" / "a" / "panel.js").read_text(encoding="utf-8")

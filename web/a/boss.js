@@ -24,7 +24,6 @@
   const toggleGreet = () => { const open = greetText.classList.toggle('open'); greetText.setAttribute('aria-expanded', open ? 'true' : 'false'); const bx = greetText.closest('.boss'); if (bx) bx.classList.toggle('greet-open', open); };
   greetText.addEventListener('click', toggleGreet);
   greetText.addEventListener('keydown', ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); toggleGreet(); } });
-  const greetMark = h('span', { class: 'boss-greet-mark' });
   const speakGreet = h('button', { type: 'button', class: 'btn btn-sm btn-ghost boss-speak', title: 'Озвучить приветствие', 'aria-label': 'Озвучить' }, icon('volume', { size: 18 }));
   const seg = h('div', { class: 'seg', role: 'tablist' },
     ['week', 'month'].map(p => h('button', { type: 'button', role: 'tab', class: 'seg-btn' + (S.period === p ? ' on' : ''), 'data-period': p, onclick: () => setPeriod(p) }, p === 'week' ? 'Неделя' : 'Месяц')));   // без календарей (образец 13.11)
@@ -44,7 +43,7 @@
     h('header', { class: 'boss-head' }, h('span', { class: 'boss-mark' }, h('img', { src: '/a/img/logo.svg', alt: 'Модус Трейд' })), h('span', { class: 'boss-title' }, 'Директор в кармане'), h('div', { class: 'spacer' }),
       h('a', { href: '/panel#/notifications', class: 'btn btn-sm btn-ghost bell', title: 'Уведомления', 'aria-label': 'Уведомления' }, icon('bell', { size: 18 }), ME.unread ? h('span', { class: 'n' }, String(ME.unread)) : null),   // красный счётчик, как в панели (13.11); «Панель на сайте» — ссылкой внизу
       h('a', { href: '/login?next=' + encodeURIComponent('/boss'), class: 'btn btn-sm btn-ghost', title: 'Сменить пользователя', 'aria-label': 'Сменить пользователя' }, icon('log-out', { size: 18 }))),
-    h('section', { class: 'card boss-greet' }, h('div', { class: 'boss-greet-row' }, h('span', { class: 'boss-name' }, ME.name), greetMark, h('div', { class: 'spacer' }), speakGreet), greetText),
+    h('section', { class: 'card boss-greet' }, h('div', { class: 'boss-greet-row' }, h('span', { class: 'boss-name' }, ME.name), helpBtn('boss_greeting'), h('div', { class: 'spacer' }), speakGreet), greetText),
     seg, tilesEl, askBox,
     h('footer', { class: 'boss-foot' }, h('a', { href: '/panel#/summary' }, iconText('external-link', 'Подробнее на сайте')), h('span', { class: 'muted' }, 'голосом или текстом · только директору · ', versionTag())));
   root.replaceChildren(screen);
@@ -73,7 +72,6 @@
           return h('li', {}, h('span', { class: 'linkish', role: 'button', tabindex: '0', onclick: go, onkeydown: ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); go(ev); } } }, kids), sub);
         })));
     } else greetText.textContent = g.text;
-    greetMark.replaceChildren(aiMark(g.engine === 'openai', 'приветствие ИИ, числа — из фактов сервера', 'без ИИ'));
     requestAnimationFrame(markFit);
   }
   // затухание внизу приветствия — только если список не влез целиком
@@ -213,7 +211,7 @@
       const body = parts.length > 1 ? parts.map(p => h('p', { class: 'boss-answer' }, p.answer)) : [h('p', { class: 'boss-answer' }, r.answer)];
       sheet(r.kind === 'answer' ? 'Ответ' : r.question_label[0].toUpperCase() + r.question_label.slice(1), h('div', {}, q, body,
         h('div', { class: 'row mt8 row-wrap' }, speakBtn(r), lists)),
-        { mark: aiMark(r.engine === 'openai', 'пересказ ИИ по фактам сервера, числа сверены', r.engine === 'mixed' ? 'часть ответа — шаблон без ИИ' : 'шаблон без ИИ — те же факты') });
+        { mark: helpBtn('boss_answer') });
       if (r.audio) speakText(null, '/api/boss/answer/' + r.id + '/audio', r.answer);
       return;
     }
@@ -229,7 +227,7 @@
     if (p.kind === 'briefing') {
       const speak = h('button', { type: 'button', class: 'btn btn-sm btn-primary' }, iconText('volume', 'Прочитать'));
       speak.addEventListener('click', async () => { try { await API.post('/api/director/command/' + r.plan_id + '/send', {}); } catch (e) { /* уже отправлено */ } speakText(speak, '/api/panel/director-summary/audio', p.sentences.map(s => s.text).join(' ')); });
-      sheet('Сводка', h('div', {}, q, p.sentences.map(s => h('p', { class: 'boss-answer small' }, s.text)), h('div', { class: 'row mt8' }, speak)), { mark: aiMark(p.engine === 'openai', 'пересказ ИИ по фактам', 'шаблон без ИИ') });
+      sheet('Сводка', h('div', {}, q, p.sentences.map(s => h('p', { class: 'boss-answer small' }, s.text)), h('div', { class: 'row mt8' }, speak)), { mark: helpBtn('summary') });
       return;
     }
     if (p.decision && (p.kind === 'open' || p.kind === 'clarify')) {   // отсылка к «На решение» (13.11): строка решения с «Принять / Отклонить»
@@ -254,7 +252,7 @@
       h('div', { class: 'hint' }, 'Отправится только после «Отправить». Получателей посчитал сервер.'),
       h('div', { class: 'boss-list' }, (p.recipients || []).map(rec => h('div', { class: 'boss-item' }, h('div', { class: 'row' }, h('b', {}, rec.name), h('span', { class: 'small muted' }, [rec.position, brCity(rec.branch)].filter(Boolean).join(' · '))), h('div', { class: 'small muted' }, rec.message)))),
       h('div', { class: 'row mt8' }, sendBtn, h('button', { type: 'button', class: 'btn btn-sm', onclick: closeSheet }, 'Отмена'))),
-      { mark: aiMark(r.command.engine === 'openai', 'разбор ИИ', 'по ключевым словам (без ИИ)') });
+      { mark: helpBtn('command_result') });
   }
 
   // ---------- озвучка: нейтральный голос OpenAI с кэшем; без ключа — голос браузера, если есть русский; иначе молча ----------

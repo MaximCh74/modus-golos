@@ -90,7 +90,7 @@ def parse_due(text: str | None, base: date) -> str | None:
 # ---------- чтение ----------
 
 def _row(meeting_id: int) -> dict:
-    m = db.one("""SELECT m.*, u.name AS creator, b.name AS branch FROM meetings m LEFT JOIN users u ON u.id=m.created_by
+    m = db.one("""SELECT m.*, u.name AS creator, """ + appeals.BRANCH_LABEL + """ AS branch FROM meetings m LEFT JOIN users u ON u.id=m.created_by
                   LEFT JOIN branches b ON b.id=m.branch_id WHERE m.id=?""", (meeting_id,))
     if not m:
         raise HTTPException(404, "Совещание не найдено")
@@ -159,7 +159,7 @@ def list_for(user: dict, overdue_only: bool = False) -> list[dict]:
     where, params = "", ()
     if user["role"] == "responsible":
         where, params = " WHERE m.created_by=?", (user["id"],)
-    rows = db.q("""SELECT m.*, u.name AS creator, b.name AS branch, b.city AS city FROM meetings m LEFT JOIN users u ON u.id=m.created_by
+    rows = db.q("""SELECT m.*, u.name AS creator, """ + appeals.BRANCH_LABEL + """ AS branch, b.city AS city FROM meetings m LEFT JOIN users u ON u.id=m.created_by
                    LEFT JOIN branches b ON b.id=m.branch_id""" + where + " ORDER BY m.id DESC", params)
     out = []
     for m in rows:
@@ -220,7 +220,7 @@ def process(mid: int) -> None:
 
 
 def _context():
-    users = db.q("""SELECT u.id, u.name, u.role, u.position, b.name AS branch, d.name AS department FROM users u
+    users = db.q("""SELECT u.id, u.name, u.role, u.position, """ + appeals.BRANCH_LABEL + """ AS branch, d.name AS department FROM users u
                     LEFT JOIN branches b ON b.id=u.branch_id LEFT JOIN departments d ON d.id=u.department_id WHERE u.active=1""")
     open_appeals = [{"id": a["id"], "number": a["number"], "text": appeals.short(a["text"], 160)} for a in
                     db.q("SELECT id, number, text FROM appeals WHERE status IN ('new','review','clarify','in_progress') ORDER BY id")]

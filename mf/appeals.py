@@ -119,8 +119,11 @@ def stage_for(a: dict) -> dict:
         note = "с причиной — см. ниже"
     return {"code": "rejected" if rejected else cur["code"], "label": cur["label"], "index": idx, "steps": steps, "note": note}
 
+# филиал на экране — город (db.BRANCH_LABEL); у обращения с объекта — «объект · Атырау» (13.11)
+BRANCH_LABEL = db.BRANCH_LABEL
 BASE_SELECT = """SELECT a.*, c.name AS category, c.sla_first_response_hours AS sla,
-  b.name AS branch, b.code AS branch_code, b.city AS branch_city, d.name AS department,
+  CASE WHEN b.kind='field' THEN 'объект' || COALESCE(' · ' || NULLIF(a.site_city, ''), '') ELSE COALESCE(NULLIF(b.city, ''), b.name) END AS branch,
+  b.name AS branch_name, b.code AS branch_code, b.city AS branch_city, d.name AS department,
   u.name AS responsible, u.position AS responsible_position,
   (SELECT COUNT(*) FROM supports s WHERE s.appeal_id = a.id) AS supports
   FROM appeals a
@@ -919,7 +922,7 @@ def summary(user: dict, days: int = 30, branch_id: int | None = None) -> dict:
             if r["status"] in OPEN and r["category"]:
                 cats[r["category"]] = cats.get(r["category"], 0) + 1
         top = max(cats.items(), key=lambda kv: kv[1])[0] if cats else None
-        by_branch.append({"id": b["id"], "code": b["code"], "name": b["name"], "city": b["city"], "lat": b["lat"], "lng": b["lng"], **block(items), "top_category": top})
+        by_branch.append({"id": b["id"], "code": b["code"], "name": b["name"], "city": b["city"], "kind": b["kind"], "lat": b["lat"], "lng": b["lng"], **block(items), "top_category": top})
     cat_counts: dict[str, int] = {}
     for r in rows:
         if r["status"] in OPEN and r["category"]:

@@ -369,7 +369,7 @@ function cardContent(a, id) {
     h('div', { class: 'row' }, h('span', { class: 'h1 num' }, a.number), badge(a.status), a.overdue ? h('span', { class: 'mini', title: 'Просрочен первый ответ' }, h('span', { class: 'dot-overdue' }), overdueText(a)) : null,
       a.is_anonymous ? tag('tag-anon', 'аноним') : null, h('div', { class: 'spacer' }), items.length ? menuButton(items) : null, closeBtn),
     tracker(a.status, true),
-    h('div', { class: 'small muted' }, [a.type_label, a.category || 'категория не определена', a.branch, a.site_city ? 'объект: ' + a.site_city : null].filter(Boolean).join(' · ')),
+    h('div', { class: 'small muted' }, [a.type_label, a.category || 'категория не определена', a.branch].filter(Boolean).join(' · ')),
     a.brief ? briefBlock(a, {}) : h('div', { class: 'mt8' }, h('p', { class: 'pre' }, a.text), a.proposed_solution ? h('div', { class: 'small' }, h('b', {}, 'Предлагаемое решение: '), a.proposed_solution) : null),
     primary || secondary ? h('div', { class: 'row mt8' }, primary, secondary) : null,
     formBox);
@@ -379,7 +379,7 @@ function cardContent(a, id) {
     h('div', { class: 'small mt8' }, h('b', {}, 'Что требуется: '), a.director_request_text), a.director_comment ? h('div', { class: 'small' }, h('b', {}, 'Комментарий: '), a.director_comment) : null) : null;
   const details = h('details', { class: 'card sect' }, h('summary', {}, 'Подробности'),
     h('div', { class: 'kv mt8' },
-      kv('Автор', userLink(a.author, 'sm')), kv('Филиал', [a.branch, a.site_city ? 'объект: ' + a.site_city : null].filter(Boolean).join(' · ') || '—'), kv('Подразделение', a.department || '—'), kv('Категория', a.category || 'не определена'),
+      kv('Автор', userLink(a.author, 'sm')), kv('Филиал', a.branch || '—'), kv('Подразделение', a.department || '—'), kv('Категория', a.category || 'не определена'),
       kv(h('span', {}, 'Оценка автора', helpBtn('author_assessment')), [a.author_urgency_label, a.author_scope_label].filter(Boolean).join(' · ') || 'не отвечал'), kv(h('span', {}, 'Приоритет', helpBtn('priority')), a.priority_label + (a.priority_manual ? ' (изменён ответственным)' : '')),
       a.supports ? kv('«У меня так же»', String(a.supports)) : null, a.thanks ? kv('«Спасибо»', String(a.thanks)) : null,
       a.news_days !== null && a.news_days !== undefined ? kv('Последняя новость автору', a.news_days < 1 ? 'сегодня' : Math.floor(a.news_days) + ' дн назад') : null,
@@ -404,7 +404,7 @@ async function meetingsList() {
     h('colgroup', {}, cols.map(([, , w]) => { const c = document.createElement('col'); if (w) c.style.width = w + 'px'; return c; })),
     h('thead', {}, h('tr', {}, cols.map(([t, key]) => h('th', {}, t, helpBtn(key))))),
     h('tbody', {}, list.map(m => h('tr', { onclick: () => { location.hash = '#/meetings/' + m.id; } },
-      h('td', { class: 'small' }, fmtDate(m.created_at)), h('td', {}, h('b', {}, m.title), ' ', aiBadge(m)),
+      h('td', { class: 'small' }, fmtDate(m.created_at)), h('td', {}, h('b', {}, m.title)),
       h('td', {}, m.city || m.branch || '—'), h('td', {}, m.creator || '—'), h('td', { class: 'small' }, m.summary_line || (m.error ? h('span', { class: 'muted' }, m.error) : '—')),
       h('td', {}, tag(st(m.status), m.status_label)),
       h('td', {}, m.counts.tasks ? 'выполнено ' + m.counts.tasks_done + ' / ' + m.counts.tasks : '', m.counts.tasks_overdue ? h('span', { class: 'mini' }, h('span', { class: 'dot-overdue' }), 'просрочено ' + m.counts.tasks_overdue) : null, m.counts.flags ? h('span', { class: 'mini' }, 'флагов ' + m.counts.flags) : null),
@@ -424,8 +424,8 @@ async function summary() {
   const [d, ds, md] = await Promise.all([API.get('/api/panel/summary?days=30'), API.get('/api/panel/director-summary').catch(() => null), API.get('/api/panel/map').catch(() => null)]);
   const l = (ds && ds.lines) || {};
   const sumBlock = ds ? summaryBlockPanel(ds) : null;
-  MAPVIEW = md ? mapView(md, { staff: true, legend: true, onBranch: b => { S.filters = { branch_id: b.id }; S.tab = 'open'; location.hash = '#/queue'; }, onSite: s => { S.filters = { q: s.city }; S.tab = 'open'; location.hash = '#/queue'; } }) : null;
-  const mapCard = h('div', { class: 'card' }, h('div', { class: 'row' }, h('b', {}, 'Карта'), h('span', { class: 'hint' }, 'клик по городу — очередь филиала')), MAPVIEW || h('div', { class: 'muted small' }, 'карта недоступна'));
+  MAPVIEW = md ? mapView(md, { staff: true, legend: true, crop: { aspect: 1.9, top: 0.18 }, onBranch: b => { S.filters = { branch_id: b.id }; S.tab = 'open'; location.hash = '#/queue'; }, onSite: s => { S.filters = { q: s.city }; S.tab = 'open'; location.hash = '#/queue'; } }) : null;
+  const mapCard = h('div', { class: 'card map-card' }, h('div', { class: 'row' }, h('b', {}, 'Карта'), h('span', { class: 'hint' }, 'клик по городу — очередь филиала')), MAPVIEW || h('div', { class: 'muted small' }, 'карта недоступна'));
   const pct = x => x === null || x === undefined ? '—' : Math.round(x * 100) + ' %';
   const attention = h('div', { class: 'card attention' }, attentionLine([[d.overdue, '#/queue?overdue=1', 'просрочено'], [d.unassigned, '#/queue?unassigned=1', 'без ответственного'], [l.decisions_over_threshold, '#/decisions', 'ждут решения'],
     [l.no_news, '#/queue?status=in_progress', 'без новостей'], [l.urgent_open, '#/queue?open=1&urgency=now', 'мешают работать'], [l.tasks_overdue, '#/meetings?overdue=1', 'поручения просрочены']]));
@@ -438,13 +438,13 @@ async function summary() {
     h('b', { class: 'mt16' }, 'По статусам'), h('div', { class: 'row mt8' }, STATUS_GROUPS.map(g => [g, g.value.split(',').reduce((n, s) => n + (d.by_status[s] || 0), 0)]).filter(([, n]) => n)
       .map(([g, n]) => h('span', { class: 'badge ' + g.cls }, g.label + ': ' + n))));
   const branches = h('div', { class: 'card' }, h('b', {}, 'Филиалы', helpBtn('by_branch')), h('div', { class: 'hint' }, 'Количество обращений филиал не ранжирует — лига по качеству во вкладке «Лига».'),
-    h('table', { class: 'tbl mt8' }, h('thead', {}, h('tr', {}, ['Филиал', 'Всего', 'Открыто', 'Просрочено', 'Рассмотрено', 'Первый ответ', 'Реализовано', 'Главная тема'].map(t => h('th', {}, t)))),
+    h('table', { class: 'tbl mt8 by-branch' }, h('thead', {}, h('tr', {}, ['Филиал', 'Всего', 'Открыто', 'Просрочено', 'Рассмотрено', 'Первый ответ', 'Реализовано', 'Главная тема'].map(t => h('th', {}, t)))),
       h('tbody', {}, d.by_branch.map(b => h('tr', { onclick: () => { S.filters = { branch_id: b.id }; S.tab = 'open'; location.hash = '#/queue'; } },
-        h('td', {}, b.city || brCity(b.name)), h('td', {}, b.total), h('td', {}, b.open), h('td', {}, b.overdue ? h('span', {}, h('span', { class: 'dot-overdue' }), String(b.overdue)) : ''),
+        h('td', {}, b.kind === 'field' ? 'Объекты' : b.city || brCity(b.name)), h('td', {}, b.total), h('td', {}, b.open), h('td', {}, b.overdue ? h('span', {}, h('span', { class: 'dot-overdue' }), String(b.overdue)) : ''),
         h('td', {}, pct(b.considered_share)), h('td', {}, fmtHours(b.avg_first_response_hours)), h('td', {}, b.done_total), h('td', { class: 'small' }, b.top_category || '—'))))));
   const clustersBox = h('div', { class: 'card' }, h('b', {}, 'Повторяющиеся темы'), h('div', { class: 'hint' }, 'Считаем…'));
   API.get('/api/panel/clusters').then(c => {
-    clustersBox.replaceChildren(h('div', { class: 'row' }, h('b', {}, 'Повторяющиеся темы', helpBtn('repeated_topics')), aiMark(c.engine === 'embeddings', 'похожие по смыслу (ИИ), порог ' + c.threshold, 'по ключевым словам (без ИИ), порог ' + c.threshold)),
+    clustersBox.replaceChildren(h('div', { class: 'row' }, h('b', {}, 'Повторяющиеся темы', helpBtn('repeated_topics'))),
       h('div', { class: 'hint' }, 'Группы из двух и более открытых обращений об одном и том же. Открытых всего: ' + c.open_total + '.'),
       c.clusters.length ? h('div', { class: 'mt8' }, c.clusters.map(k => h('div', { class: 'cluster' },
         h('div', { class: 'row' }, h('b', {}, plural(k.size, 'обращение', 'обращения', 'обращений')), k.category ? tag('tag-type', k.category) : null, k.supports ? h('span', { class: 'small muted' }, iconText('thumbs-up', String(k.supports))) : null, h('div', { class: 'spacer' }), h('span', { class: 'small muted' }, k.branches.join(' · '))),
@@ -457,7 +457,7 @@ async function summary() {
     ['Проверить просрочки сейчас', async () => { const r = await API.post('/api/panel/check-overdue'); toast(r.escalated.length ? 'Эскалировано: ' + r.escalated.join(', ') : 'Новых просрочек нет'); summary(); }],
     ds && ds.engine === 'openai' ? ['Показать сводку шаблоном без ИИ', async () => { const t = await API.get('/api/panel/director-summary?engine=template'); const box = document.querySelector('.summary-ai'); if (box) box.replaceWith(summaryBlockPanel(t)); }] : null]) : null;
   const command = ME.role === 'director' ? commandPanel({ decisionsHref: '#/decisions', compact: true }) : null;   // команды — только директору (F-21)
-  root.replaceChildren(h('div', { class: 'wrap wrap-wide' }, h('div', { class: 'row' }, h('div', { class: 'h1' }, 'Сводка'), h('div', { class: 'spacer' }), more), sumBlock, attention, command, kpis, h('div', { class: 'split mt16' }, h('div', {}, mapCard, branches, clustersBox, cats), byType)));
+  root.replaceChildren(h('div', { class: 'wrap wrap-wide' }, h('div', { class: 'row' }, h('div', { class: 'h1' }, 'Сводка'), h('div', { class: 'spacer' }), more), sumBlock, attention, command, kpis, h('div', { class: 'mt16' }, mapCard), h('div', { class: 'split' }, h('div', {}, branches, clustersBox, cats), byType)));   // карта — на всю ширину (13.11)
 }
 
 function summaryBlockPanel(d) {
@@ -465,7 +465,7 @@ function summaryBlockPanel(d) {
   speakBtn.addEventListener('click', () => speakSummary(speakBtn, d.sentences));
   const refreshBtn = h('button', { class: 'btn btn-sm', onclick: async () => { refreshBtn.disabled = true; try { await API.get('/api/panel/director-summary?refresh=1'); summary(); } catch (e) { toast(e.message, 'bad'); refreshBtn.disabled = false; } } }, iconText('refresh', 'Обновить'));
   return h('div', { class: 'card summary-ai mt16' },
-    h('div', { class: 'row' }, h('div', { class: 'lbl' }, 'Сводка для директора'), helpBtn('summary'), aiMark(d.engine === 'openai', 'приветствие ИИ, числа — из фактов сервера', 'без ИИ'), h('div', { class: 'spacer' }), h('span', { class: 'small muted' }, fmtDate(d.at)), speakBtn, refreshBtn),
+    h('div', { class: 'row' }, h('div', { class: 'lbl' }, 'Сводка для директора'), helpBtn('summary'), h('div', { class: 'spacer' }), h('span', { class: 'small muted' }, fmtDate(d.at)), speakBtn, refreshBtn),
     summaryBody(d, href => href.startsWith('/panel') ? href.slice(6) : href));
 }
 
@@ -555,7 +555,7 @@ async function adminScreen() {
         h('div', { class: 'card' }, h('b', {}, 'Настройки', helpBtn('adm_settings')), h('div', { class: 'grid2 mt8' }, inputs), dirAdminRow, h('div', { class: 'mt8' }, saveBtn), h('div', { class: 'hint mt8' }, 'Пороги похожести и повторяющихся тем — для режима ИИ; без ключа действуют пороги по ключевым словам.')),
         bitrixCard,
         h('div', { class: 'card' }, h('div', { class: 'row' }, h('b', {}, 'Филиалы и QR', helpBtn('adm_branches')), h('div', { class: 'spacer' }), h('a', { href: '/api/admin/branches/posters.pdf', class: 'btn btn-sm btn-primary', target: '_blank', rel: 'noopener' }, iconText('printer', 'Все плакаты PDF'))),
-          h('div', { class: 'list mt8' }, d.branches.map((b, bi) => h('div', { class: 'item branch-item noclick' }, h('div', { class: 'row' }, rowNumSpan(bi), h('img', { src: b.qr_svg, alt: 'QR ' + b.name, class: 'qr-thumb' }), h('div', { class: 'spacer' }, h('b', {}, b.city || b.name), h('div', { class: 'small muted' }, b.kind_label)),
+          h('div', { class: 'list mt8' }, d.branches.map((b, bi) => h('div', { class: 'item branch-item noclick' }, h('div', { class: 'row' }, rowNumSpan(bi), h('img', { src: b.qr_svg, alt: 'QR ' + (b.kind === 'field' ? 'объект' : b.city || brCity(b.name)), class: 'qr-thumb' }), h('div', { class: 'spacer' }, h('b', {}, b.kind === 'field' ? 'Объект' : b.city || brCity(b.name)), b.kind === 'field' ? h('div', { class: 'small muted' }, 'город укажут в форме') : null),
             h('div', { class: 'row' }, h('a', { href: b.poster_url, class: 'btn btn-sm', target: '_blank', rel: 'noopener', title: 'Плакат A4 с QR для печати' }, iconText('printer', 'Плакат PDF')),
               h('button', { class: 'btn btn-sm', title: 'Скопировать ссылку на форму', onclick: async () => { try { await navigator.clipboard.writeText(b.form_url); toast('Ссылка скопирована: ' + b.form_url); } catch (e) { toast('Скопируйте вручную: ' + b.form_url); } } }, iconText('link', 'Скопировать ссылку')),
               h('a', { href: '/q/' + b.code, class: 'btn btn-sm btn-ghost', target: '_blank', rel: 'noopener', title: 'Открыть форму обращения' }, iconText('external-link', 'Открыть форму')))))))),

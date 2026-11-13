@@ -281,7 +281,7 @@ class LoginAs(BaseModel):
 async def auth_users():
     if not auth.demo_login_enabled():
         raise HTTPException(404, "Демо-вход выключен")
-    rows = db.q("""SELECT u.id, u.name, u.role, u.position, b.name AS branch, d.name AS department
+    rows = db.q("""SELECT u.id, u.name, u.role, u.position, """ + appeals.BRANCH_LABEL + """ AS branch, d.name AS department
                    FROM users u LEFT JOIN branches b ON b.id=u.branch_id LEFT JOIN departments d ON d.id=u.department_id
                    WHERE u.active=1 ORDER BY CASE u.role WHEN 'director' THEN 0 WHEN 'admin' THEN 1 WHEN 'responsible' THEN 2 ELSE 3 END, u.id""")
     for r in rows:
@@ -422,7 +422,7 @@ async def thank(appeal_id: int, request: Request):
 @router.get("/users/{user_id}/profile")
 async def profile(user_id: int, request: Request):
     auth.require(request)
-    u = db.one("""SELECT u.id, u.name, u.position, u.avatar, u.role, b.name AS branch, b.city, d.name AS department FROM users u
+    u = db.one("""SELECT u.id, u.name, u.position, u.avatar, u.role, """ + appeals.BRANCH_LABEL + """ AS branch, b.city, d.name AS department FROM users u
                   LEFT JOIN branches b ON b.id=u.branch_id LEFT JOIN departments d ON d.id=u.department_id WHERE u.id=? AND u.active=1""", (user_id,))
     if not u:
         raise HTTPException(404, "Сотрудник не найден")

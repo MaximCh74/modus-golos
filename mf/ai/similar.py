@@ -96,7 +96,8 @@ def cosine(a: list[float], b: list[float]) -> float:
 # ---------- публичные функции ----------
 
 def _open_rows(exclude_id: int | None = None) -> list[dict]:
-    rows = db.q("""SELECT a.id, a.number, a.text, a.status, a.category_id, c.name AS category, b.name AS branch, a.branch_id,
+    rows = db.q("""SELECT a.id, a.number, a.text, a.status, a.category_id, c.name AS category,
+                   CASE WHEN b.kind='field' THEN 'объект' || COALESCE(' · ' || NULLIF(a.site_city, ''), '') ELSE COALESCE(NULLIF(b.city, ''), b.name) END AS branch, a.branch_id,
                    (SELECT COUNT(*) FROM supports s WHERE s.appeal_id=a.id) AS supports
                    FROM appeals a LEFT JOIN categories c ON c.id=a.category_id LEFT JOIN branches b ON b.id=a.branch_id
                    WHERE a.status IN ('new','review','clarify','in_progress') AND a.type != 'praise' ORDER BY a.id""")

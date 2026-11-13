@@ -1,8 +1,8 @@
 'use strict';
 // Режим совещания (ТЗ v1.1 §6.2): общий код для /app и /panel — старт/запись/обработка, экран разбора с правкой пунктов,
 // «Мои поручения», «На решение» у директора. Использует глобальные ME, DICTS, root, h, API, toast из страницы.
-// Упрощено по правилам этапа 9 (пункт 4 очереди 12.11): одна главная кнопка на экран, служебные плашки про режим разбора — значок
-// с подсказкой (aiMark), нули не показываем, никаких нативных элементов (списки — pick, срок — datePick), без горизонтальной прокрутки.
+// Упрощено по правилам этапа 9 (пункт 4 очереди 12.11): одна главная кнопка на экран, служебные плашки про режим разбора — подсказка «?»
+// (значка ИИ нет, 13.11), нули не показываем, никаких нативных элементов (списки — pick, срок — datePick), без горизонтальной прокрутки.
 const MEETING = { rec: null, stream: null, chunks: [], timer: null, startedAt: 0, poll: null };
 const KIND_LABEL = { decision: 'Решения', task: 'Поручения', idea: 'Идеи и проблемы', linked: 'Связанные обращения' };
 const TASK_ST = { draft: 'Черновик', assigned: 'Назначено', in_progress: 'В работе', done: 'Выполнено' };
@@ -11,18 +11,13 @@ function add(el, ...kids) { for (const k of kids.flat(Infinity)) if (k !== null 
 function back(href, label) { return h('a', { href, class: 'small ict' }, icon('arrow-left', { size: 14 }), label || 'Назад'); }
 function fmtDue(d) { if (!d) return ''; const [y, m, dd] = d.split('-'); return dd + '.' + m + '.' + y; }
 // «ИИ / без ИИ» — маленькая иконка с подсказкой, не цветной бейдж (правило 5)
-function aiBadge(m) {
-  if (!m) return null;
-  if (m.fallback) return aiMark(false, '', m.demo ? 'разбор без ИИ: заскриптованный демо-разбор планёрки из ТЗ' : 'разбор без ИИ: грубая эвристика — проверьте пункты');
-  return aiMark(true, 'разбор ИИ' + (m.llm_engine ? ' · ' + m.llm_engine : ''));
-}
 
 // ---------- старт / запись / загрузка ----------
 
 async function meetingStart(opts) {
   opts = opts || {};
   stopPoll();
-  const [list, ai] = await Promise.all([API.get('/api/meetings'), API.get('/api/ai/status')]);
+  const list = await API.get('/api/meetings');
   const title = h('input', { type: 'text', placeholder: 'Название встречи (необязательно), например «Планёрка продаж»' });
   const canRecord = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder);
   const recBtn = h('button', { class: 'btn btn-primary btn-big', disabled: !canRecord }, iconText('mic', 'Начать запись'));
@@ -33,9 +28,7 @@ async function meetingStart(opts) {
   const demoBtn = h('button', { class: 'btn btn-sm', onclick: () => { ta.value = DEMO_TRANSCRIPT; } }, 'Подставить демо-планёрку');
   file.addEventListener('change', () => { if (file.files && file.files[0]) submitMeeting({ title: title.value, audio: file.files[0] }, opts); });
   recBtn.addEventListener('click', () => startRecording(title.value, opts));
-  const sttTitle = ai.stt.local ? 'расшифровка: локальная модель на GPU' + (ai.stt.openai ? ', запасная — облако' : '') : ai.stt.openai ? 'расшифровка: облако' : 'расшифровка недоступна — вставьте текст';
-  const llmTitle = ai.llm ? 'разбор ИИ: ' + ai.llm_model : 'без ключа ИИ — заскриптованный демо-разбор';
-  root.replaceChildren(h('div', { class: 'wrap' }, back(opts.backHref || '#/'), h('div', { class: 'row' }, h('div', { class: 'h1' }, 'Режим совещания', helpBtn('meeting')), h('div', { class: 'spacer' }), aiMark(ai.llm, llmTitle + ' · ' + sttTitle, llmTitle + ' · ' + sttTitle)),
+  root.replaceChildren(h('div', { class: 'wrap' }, back(opts.backHref || '#/'), h('div', { class: 'row' }, h('div', { class: 'h1' }, 'Режим совещания', helpBtn('meeting'))),
     h('div', { class: 'card' }, field('Название', title),
       h('div', { class: 'grid2' }, recBtn, uploadBtn), file,
       h('div', { class: 'hint mt8' }, canRecord ? 'Участники уведомлены о записи. Аудио и видео удаляются сразу после расшифровки — хранится только текст.' : 'Запись с микрофона доступна по HTTPS или на localhost — загрузите файл или вставьте текст. Аудио удаляется после расшифровки.')),
@@ -49,7 +42,7 @@ function meetingRow(m, opts) {
   const bits = [c.tasks ? 'поручения ' + (c.tasks_done || 0) + '/' + c.tasks : null, c.ideas_accepted ? 'идей принято ' + c.ideas_accepted : null, c.ideas_pending ? 'на решении ' + c.ideas_pending : null, c.tasks_overdue ? 'просрочено ' + c.tasks_overdue : null].filter(Boolean);
   return h('div', { class: 'item', onclick: () => { location.hash = (opts.cardPrefix || '#/meeting/') + m.id; } },
     h('div', { class: 'row' }, h('b', {}, m.title), tag('st-' + (m.status === 'sent' ? 'done' : m.status === 'review' ? 'review' : m.status === 'failed' ? 'rejected' : 'new'), m.status_label),
-      aiBadge(m), h('div', { class: 'spacer' }), h('span', { class: 'small muted' }, fmtDate(m.created_at))),
+      h('div', { class: 'spacer' }), h('span', { class: 'small muted' }, fmtDate(m.created_at))),
     m.summary_line ? h('div', { class: 'small muted' }, m.summary_line) : null,
     bits.length ? h('div', { class: 'small' }, c.tasks_overdue ? h('span', { class: 'dot-overdue' }) : null, bits.join(' · ')) : null);
 }
@@ -118,7 +111,7 @@ async function meetingCard(id, opts) {
   for (const i of m.items) (groups[i.kind] = groups[i.kind] || []).push(i);
   const meta = [m.creator, brCity(m.branch), fmtDate(m.created_at), m.duration_sec ? Math.round(m.duration_sec / 60) + ' мин' : null].filter(Boolean).join(' · ');
   const head = h('div', { class: 'card' },
-    h('div', { class: 'row' }, h('span', { class: 'h1 num' }, m.title), tag('st-' + (m.status === 'sent' ? 'done' : m.status === 'failed' ? 'rejected' : 'review'), m.status_label), aiBadge(m)),
+    h('div', { class: 'row' }, h('span', { class: 'h1 num' }, m.title), tag('st-' + (m.status === 'sent' ? 'done' : m.status === 'failed' ? 'rejected' : 'review'), m.status_label), helpBtn('meeting_analysis')),
     h('div', { class: 'small muted' }, meta),
     m.error ? h('div', { class: 'card card-warn small mt8' }, m.error) : null);
   if (m.status === 'failed') {

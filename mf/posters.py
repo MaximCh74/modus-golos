@@ -55,7 +55,7 @@ def posters_pdf(branches: list[dict], base: str) -> bytes:
         rgb(FRAME); c.setLineWidth(0.8); c.roundRect(x - 6 * mm, y - 6 * mm, size + 12 * mm, size + 12 * mm, 6 * mm, stroke=1, fill=0)
         c.drawImage(ImageReader(img), x, y, width=size, height=size)
         rgb(NAVY); c.setFont(fonts["extrabold"], 20)
-        c.drawCentredString(W / 2, y - 16 * mm, (b["city"] or b["name"]) if b["kind"] != "field" else "Объект · командировка")
+        c.drawCentredString(W / 2, y - 16 * mm, (b["city"] or b["name"]) if b["kind"] != "field" else "Объект")   # только город; объект — без «(командировка)» (13.11)
         if b["kind"] == "field":
             rgb(MUTED); c.setFont(fonts["regular"], 11); c.drawCentredString(W / 2, y - 29 * mm, "Укажите город или объект в форме — геолокация не нужна")
         rgb(MUTED); c.setFont(fonts["regular"], 10); c.drawCentredString(W / 2, y - 23 * mm, url)

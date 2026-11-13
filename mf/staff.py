@@ -133,7 +133,7 @@ def status_of(i: dict, now=None) -> str:
 def _decorate(i: dict | None) -> dict | None:
     if not i:
         return None
-    u = db.one("""SELECT u.id, u.name, u.active, u.bitrix_id, u.position, b.city, b.name AS branch, b.kind, d.name AS department
+    u = db.one("""SELECT u.id, u.name, u.active, u.bitrix_id, u.position, b.city, """ + db.BRANCH_LABEL + """ AS branch, b.kind, d.name AS department
                   FROM users u LEFT JOIN branches b ON b.id=u.branch_id LEFT JOIN departments d ON d.id=u.department_id WHERE u.id=?""", (i["user_id"],))
     out = {k: v for k, v in i.items() if k != "token"}   # хэш наружу не отдаём
     out["token"] = fresh_token(i["id"])   # ссылка — только час после выдачи (F-15)

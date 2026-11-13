@@ -187,6 +187,11 @@ def ex(sql: str, params=()) -> int:
     return cur.lastrowid
 
 
+# Филиал на экране — только город, без «— головной офис», «— производство», «(командировка)»; объект — «объект» (замечание владельца
+# 13.11). SQL-выражение для запросов с JOIN branches b; полное название (branches.name) остаётся для импорта и администрирования.
+BRANCH_LABEL = "CASE WHEN b.kind='field' THEN 'объект' ELSE COALESCE(NULLIF(b.city, ''), b.name) END"
+
+
 def setting(key: str, default=None):
     row = one("SELECT value FROM settings WHERE key=?", (key,))
     return json.loads(row["value"]) if row else default

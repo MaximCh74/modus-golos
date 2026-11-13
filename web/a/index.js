@@ -26,7 +26,7 @@
   function cityCard(b) {
     const field = b.kind === 'field';
     return h('div', { class: 'citycard' },
-      h('div', { class: 'cc-head' }, h('div', { class: 'cc-name' }, h('b', {}, field ? 'Объект' : b.city), h('span', {}, field ? 'командировка, любой город' : b.kind_label)),
+      h('div', { class: 'cc-head' }, h('div', { class: 'cc-name' }, h('b', {}, field ? 'Объект' : b.city), field ? h('span', {}, 'любой город') : null),
         h('img', { class: 'cc-qr', src: b.qr_svg, alt: 'QR ' + (b.city || b.name) })),
       field ? h('p', { class: 'small muted' }, 'Для командированных на объектах по всему Казахстану: город или объект укажете в форме.')
         : h('div', { class: 'cc-tiles' },
