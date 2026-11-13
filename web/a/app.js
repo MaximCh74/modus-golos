@@ -9,7 +9,7 @@ async function boot() {
   [DICTS] = await Promise.all([API.get('/api/dicts'), loadGlossary()]);
   window.HELP_HREF = ME.role === 'employee' ? null : '/panel#/help';   // «Справка» живёт в панели; сотруднику — только подсказки «?»
   renderTop();
-  if (!document.getElementById('foot')) document.body.append(h('div', { id: 'foot', class: 'foot' }, 'демо · данные синтетические, имена вымышленные · разработано Cyber QALQAN Systems'));
+  if (!document.getElementById('foot')) document.body.append(h('div', { id: 'foot', class: 'foot' }, 'демо · данные синтетические, имена вымышленные · разработано Cyber QALQAN Systems', ' · ', versionTag()));
   window.addEventListener('hashchange', route);
   await route();
   API.sse(ev => {

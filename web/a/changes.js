@@ -2,7 +2,7 @@
 // «Результаты обращений» без входа (этап 7, шаг 1): реализованные обращения — что было и что сделали. Без авторов: имена видны только после входа.
 (async function () {
   const root = document.getElementById('root');
-  const [rows, me, cfg] = await Promise.all([API.get('/api/public/changes'), API.me(), API.get('/api/public/config').catch(() => ({}))]);
+  const [rows, me, cfg] = await Promise.all([API.get('/api/public/changes'), API.me(), publicConfig()]);
   root.replaceChildren(siteHeader(me, cfg, { next: '/app#/changes' }), h('main', { class: 'home' }, h('span', { class: 'dash' }), h('h1', { class: 'display' }, 'Результаты обращений'),
     h('p', { class: 'lead' }, 'Уже сделано по идеям и проблемам сотрудников. ' + (me ? '' : 'После входа видно, кто предложил, и можно сказать «спасибо».')),
     h('div', { class: 'mt16' }, rows.length ? rows.map(r => h('div', { class: 'card' },

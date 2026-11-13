@@ -19,7 +19,7 @@ async function boot() {
   }
   [DICTS] = await Promise.all([API.get('/api/dicts'), loadGlossary()]);
   renderTop();
-  if (!document.getElementById('foot')) document.body.append(h('div', { id: 'foot', class: 'foot' }, 'демо · данные синтетические, имена вымышленные · разработано Cyber QALQAN Systems'));
+  if (!document.getElementById('foot')) document.body.append(h('div', { id: 'foot', class: 'foot' }, 'демо · данные синтетические, имена вымышленные · разработано Cyber QALQAN Systems', ' · ', versionTag()));
   window.addEventListener('hashchange', route);
   await route();
   API.sse(ev => {

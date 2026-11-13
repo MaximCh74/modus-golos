@@ -46,7 +46,7 @@
       h('a', { href: '/login?next=' + encodeURIComponent('/boss'), class: 'btn btn-sm btn-ghost', title: 'Сменить пользователя', 'aria-label': 'Сменить пользователя' }, icon('log-out', { size: 18 }))),
     h('section', { class: 'card boss-greet' }, h('div', { class: 'boss-greet-row' }, h('span', { class: 'boss-name' }, ME.name), greetMark, h('div', { class: 'spacer' }), speakGreet), greetText),
     seg, tilesEl, askBox,
-    h('footer', { class: 'boss-foot' }, h('a', { href: '/panel#/summary' }, iconText('external-link', 'Подробнее на сайте')), h('span', { class: 'muted' }, 'голосом или текстом · только директору')));
+    h('footer', { class: 'boss-foot' }, h('a', { href: '/panel#/summary' }, iconText('external-link', 'Подробнее на сайте')), h('span', { class: 'muted' }, 'голосом или текстом · только директору · ', versionTag())));
   root.replaceChildren(screen);
 
   // ---------- данные ----------

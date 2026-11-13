@@ -148,6 +148,10 @@ function toast(msg, kind) {
   _toastTimer = setTimeout(() => { t.className = 'toast'; }, 3500);
 }
 function plural(n, one, few, many) { const m10 = n % 10, m100 = n % 100; return n + ' ' + (m10 === 1 && m100 !== 11 ? one : m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20) ? few : many); }
+// Номер версии в подвале (13.11, п. 0): короткий хэш коммита из /api/public/config — видно, свежая ли версия открыта.
+let _cfgP = null;
+function publicConfig() { return _cfgP || (_cfgP = API.get('/api/public/config').catch(() => ({}))); }
+function versionTag() { const s = h('span', { class: 'ver' }); publicConfig().then(c => { if (c && c.version) s.textContent = 'версия ' + c.version; }); return s; }
 function qs(name) { return new URLSearchParams(location.search).get(name); }
 // подпись + поле; для стилизованных компонентов (pick, personPicker, filePicker) — div, а не label: иначе клик по пункту списка
 // срабатывал бы ещё раз как клик по кнопке списка

@@ -11,7 +11,7 @@
   const main = h('main', { class: 'home' }, h('div', { class: 'home-arc', 'aria-hidden': 'true' }, h('i'), h('i')), hero, mapSlot, featsSlot);
   root.replaceChildren(siteHeader(null, {}), main);
 
-  const [map, me, cfg] = await Promise.all([API.get('/api/public/map'), API.me(), API.get('/api/public/config').catch(() => ({}))]);
+  const [map, me, cfg] = await Promise.all([API.get('/api/public/map'), API.me(), publicConfig()]);
   root.firstChild.replaceWith(siteHeader(me, cfg));
   let selected = null;
   const isMobile = () => window.matchMedia('(max-width: 768px)').matches;
@@ -67,6 +67,6 @@
   const stats = h('a', { href: statsHref, class: 'feat' }, icon('bar-chart', { size: 26 }), h('div', {}, h('b', {}, 'Статистика'), h('span', {}, 'Открытые и решённые')), icon('chevron-right', { size: 20, cls: 'chev' }));
   featsSlot.replaceChildren(submit, changes, stats);
   main.append(h('div', { class: 'home-foot' }, h('span', {}, h('a', { href: '/rules' }, 'Как начисляются баллы'), ' — прозрачные правила вместо разовых премий'),
-    h('span', {}, 'разработано ', h('b', {}, 'Cyber QALQAN Systems'), ' · данные демонстрационные')));
+    h('span', {}, 'разработано ', h('b', {}, 'Cyber QALQAN Systems'), ' · данные демонстрационные · ', versionTag())));
   if (!isMobile() && map.branches.length) select(map.branches[0]);   // на ноутбуке сразу показываем головной офис, как на макете
 })();

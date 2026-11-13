@@ -14,7 +14,7 @@ from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, Reque
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
-from . import ai, appeals, auth, boss, commands, db, demo, director, glossary, images, meetings, posters, realtime, staff
+from . import ai, appeals, auth, boss, commands, db, demo, director, glossary, images, meetings, posters, realtime, staff, version
 from .ai import llm, similar, stt
 from .integrations import bitrix
 from . import config
@@ -142,10 +142,11 @@ async def public_glossary():
 
 @router.get("/public/config")
 async def public_config(request: Request):
-    """Что доступно без входа: подключён ли Битрикс24 (кнопка «Войти через Битрикс24»), публичный адрес."""
+    """Что доступно без входа: подключён ли Битрикс24 (кнопка «Войти через Битрикс24»), публичный адрес, версия (подвал) и отпечаток
+    сборки (pwa.js перезагружает открытую страницу после обновления)."""
     return {"bitrix": bitrix.configured(), "bitrix_login": "/bitrix/login" if bitrix.configured() else None,
             "bitrix_portal": bitrix.portal() if bitrix.configured() else None, "public_url": base_url(request),
-            "demo_login": auth.demo_login_enabled()}
+            "demo_login": auth.demo_login_enabled(), "version": version.commit(), "build": version.build()}
 
 
 @router.get("/public/branches")

@@ -14,7 +14,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Redirect
 from fastapi.staticfiles import StaticFiles
 from starlette.datastructures import MutableHeaders
 
-from . import api, appeals, auth, db, meetings, seed
+from . import api, appeals, auth, db, meetings, seed, version
 from .ai import stt
 from .config import PUBLIC_URL, ROOT
 from .integrations import bitrix
@@ -181,8 +181,9 @@ app.include_router(api.router, prefix="/api")
 app.mount("/a", StaticFiles(directory=WEB / "a"), name="assets")
 
 
-def page(name: str) -> FileResponse:
-    return FileResponse(WEB / name, media_type="text/html")
+def page(name: str) -> HTMLResponse:
+    """Страница с отпечатками в ссылках на статику (`mf/version.py`): после обновления браузер берёт новые файлы, а не кэш."""
+    return HTMLResponse(version.page(name))
 
 
 @app.get("/")
@@ -244,7 +245,9 @@ async def boss_page(rest: str = ""):
 
 @app.get("/sw.js")
 async def service_worker():
-    return FileResponse(WEB / "sw.js", media_type="application/javascript", headers={"Service-Worker-Allowed": "/", "Cache-Control": "no-cache"})
+    """Имя кэша оболочки — отпечаток сборки: изменилась статика — изменился sw.js, браузер ставит новый и удаляет старый кэш."""
+    js = (WEB / "sw.js").read_text(encoding="utf-8").replace("__BUILD__", version.build())
+    return Response(js, media_type="application/javascript", headers={"Service-Worker-Allowed": "/", "Cache-Control": "no-cache"})
 
 
 @app.get("/q/{code}")
@@ -307,7 +310,7 @@ async def bitrix_login(request: Request, next: str = ""):
     if dest == "document":   # обычная вкладка — сразу на портал
         return RedirectResponse(url, status_code=302)
     # заголовка нет (старый браузер, переход скриптом): решает страница — во фрейме восстановление, в окне переход на портал
-    html = (WEB / "bitrix_login.html").read_text(encoding="utf-8").replace("__AUTHORIZE__", url.replace("&", "&amp;").replace('"', "&quot;"))
+    html = version.page("bitrix_login.html").replace("__AUTHORIZE__", url.replace("&", "&amp;").replace('"', "&quot;"))
     return HTMLResponse(html)
 
 
