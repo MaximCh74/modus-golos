@@ -32,7 +32,7 @@ function renderTop() {
     h('div', { class: 'spacer' }),
     showPoints() ? pointsTag(ME.points || 0, '#/u/' + ME.id) : null,
     h('a', { href: '#/notifications', class: 'btn btn-sm bell', title: 'Уведомления' }, icon('bell'), ME.unread ? h('span', { class: 'n' }, String(ME.unread)) : null),
-    h('a', { href: '/login', class: 'btn btn-sm', title: 'Сменить пользователя' }, ME.name.split(' ')[0])].filter(Boolean));
+    userMenu(ME)].filter(Boolean));
   renderBottomNav();
 }
 

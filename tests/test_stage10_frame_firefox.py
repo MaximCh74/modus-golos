@@ -94,7 +94,11 @@ def test_frame_login_survives_navigation_reload_and_logout_in_firefox(stack):
         frame.wait_for_selector(".topbar", timeout=20000); frame.wait_for_timeout(800)
         assert "/login" not in frame.url and "Мои обращения" in frame.inner_text("body")
         # выход: страница входа внутри фрейма без кнопки OAuth, с подсказкой «откройте из меню портала»
-        frame.click(".topbar a[href='/login']")
+        if frame.locator(".topbar .user-btn").is_visible():   # меню пользователя (13.11): «Сменить пользователя»
+            frame.click(".topbar .user-btn")
+        else:
+            frame.click(".topbar .nav-toggle")
+        frame.click(".user-wrap.open .um-item:has-text('Сменить пользователя'), .nav-panel.open .um-item:has-text('Сменить пользователя')")
         frame.wait_for_selector(".user-grid", timeout=20000)
         frame.click("button:has-text('Выйти')")
         page.wait_for_timeout(1500)

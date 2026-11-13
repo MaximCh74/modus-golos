@@ -1141,3 +1141,20 @@ html.panel-page .map::after { content: ''; position: absolute; inset: 0; border-
 .ava-tile.ask .ava-ask { display: block; }
 .ava-ask-btns { display: flex; gap: 6px; justify-content: center; margin-top: 6px; }
 @media (max-width: 900px) { .ava-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } .ava-name { font-size: 12px; } }
+
+/* меню пользователя во всех шапках (замечание владельца 13.11): «Кирилл · сотрудник» — «Сменить пользователя», «Выйти», в демо — «Быстро
+   войти как»; на телефоне в кнопке — только имя; в панели на телефоне те же пункты — в меню разделов */
+.user-wrap { position: relative; display: inline-block; }
+.user-btn .um-role { color: var(--muted); font-weight: var(--w-body); }
+.user-menu { display: none; position: absolute; right: 0; top: calc(100% + 6px); z-index: 40; min-width: 270px; max-width: calc(100vw - 16px); padding: 6px; background: var(--white); border: 1px solid var(--line-soft); border-radius: var(--radius-btn); box-shadow: var(--shadow-2); text-align: left; }
+.user-wrap.open .user-menu { display: block; }
+.um-item { display: block; width: 100%; padding: 10px 12px; border: 0; border-radius: var(--radius-sm); background: none; font: inherit; font-size: 15px; font-weight: var(--w-body); color: var(--ink); text-align: left; text-decoration: none; cursor: pointer; white-space: nowrap; }
+.um-item:hover { background: var(--bg-soft); text-decoration: none; }
+.um-item:disabled, .um-item.on { color: var(--muted-2); cursor: default; background: none; }
+.um-quick .um-role { color: var(--muted); }
+.um-label { padding: 8px 12px 4px; font-size: 12px; color: var(--muted); }
+.um-sep { height: 1px; background: var(--line-soft); margin: 6px 4px; }
+.nav-panel .nav-user { padding: 10px 10px 2px; font-size: 13px; color: var(--muted); }
+.nav-panel .um-item { padding: 12px 10px; font-weight: var(--w-bold); }
+.nav-panel .um-label { padding: 8px 10px 2px; }
+@media (max-width: 480px) { .user-btn .um-role { display: none; } }

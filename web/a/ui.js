@@ -329,10 +329,50 @@ function brandLock(href, title, cls) {
 
 // Шапка публичных страниц (стартовая, «Результаты обращений», /design): фирменный блок слева; справа — одна кнопка «Войти»
 // (вход через Битрикс24 — на странице входа; замечание владельца 12.11).
+// ---------- меню пользователя во всех шапках (замечание владельца 13.11): кнопка «Кирилл · сотрудник» → «Сменить пользователя», «Выйти»;
+// при включённом демо-входе — «Быстро войти как» (директор, ответственный, сотрудник, администратор): одно нажатие — вход и стартовый экран ----------
+const QUICK_USERS = [[1, 'Сергей Михайлович', 'директор'], [2, 'Олег Савельев', 'ответственный'], [6, 'Сауле Абишева', 'сотрудник'], [15, 'Игорь Лебедев', 'администратор']];
+function startPath(role) { return { employee: '/app', admin: '/panel#/admin', director: '/panel#/summary' }[role] || '/panel'; }
+async function quickLogin(uid, role) {
+  try { await API.post('/api/auth/login-as', { user_id: uid }); location.href = startPath(role); } catch (e) { toast(e.message, 'bad'); }
+}
+async function logoutNow() { try { await API.post('/api/auth/logout'); } catch (e) { /* уже вышли */ } location.href = '/'; }
+function userMenuItems(me, opts) {
+  opts = opts || {};
+  const box = h('div', { class: 'um-items' },
+    opts.appLink ? h('a', { href: startPath(me.role), role: 'menuitem', class: 'um-item' }, me.role === 'employee' ? 'Открыть приложение' : 'Открыть панель') : null,
+    h('a', { href: '/login' + (opts.next ? '?next=' + encodeURIComponent(opts.next) : ''), role: 'menuitem', class: 'um-item' }, 'Сменить пользователя'),
+    h('button', { type: 'button', role: 'menuitem', class: 'um-item', onclick: logoutNow }, 'Выйти'));
+  publicConfig().then(c => {   // в пилоте (MF_DEMO_LOGIN=0) блока нет
+    if (!c.demo_login) return;
+    box.append(h('div', { class: 'um-sep' }), h('div', { class: 'um-label' }, 'Быстро войти как'),
+      ...QUICK_USERS.map(([uid, name, role]) => h('button', { type: 'button', role: 'menuitem', class: 'um-item um-quick' + (uid === me.id ? ' on' : ''), disabled: uid === me.id,
+        onclick: () => quickLogin(uid, { 'директор': 'director', 'ответственный': 'responsible', 'сотрудник': 'employee', 'администратор': 'admin' }[role]) },
+        h('span', {}, name), h('span', { class: 'um-role' }, ' · ' + role))));
+  });
+  return box;
+}
+function closeUserMenus() { document.querySelectorAll('.user-wrap.open').forEach(w => { w.classList.remove('open'); const b = w.querySelector('.user-btn'); if (b) b.setAttribute('aria-expanded', 'false'); }); }
+document.addEventListener('click', ev => { if (!ev.target.closest('.user-wrap')) closeUserMenus(); });
+document.addEventListener('keydown', ev => { if (ev.key === 'Escape') closeUserMenus(); });
+function userMenu(me, opts) {
+  opts = opts || {};
+  const btn = h('button', { type: 'button', class: 'btn btn-sm user-btn', 'aria-haspopup': 'menu', 'aria-expanded': 'false', title: me.name + ' · ' + (me.role_label || '') },
+    h('span', { class: 'um-name' }, String(me.name || '').split(' ')[0]), h('span', { class: 'um-role' }, ' · ' + String(me.role_label || '').toLowerCase()));
+  const wrap = h('div', { class: 'user-wrap' + (opts.cls ? ' ' + opts.cls : '') }, btn, h('div', { class: 'user-menu', role: 'menu' }, userMenuItems(me, opts)));
+  btn.addEventListener('click', ev => {
+    ev.stopPropagation();
+    const open = !wrap.classList.contains('open');
+    closeUserMenus(); if (typeof closeMenus === 'function') closeMenus();
+    wrap.classList.toggle('open', open); btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+  return wrap;
+}
+
 function siteHeader(me, cfg, opts) {
   opts = opts || {};
   const right = me
-    ? h('div', { class: 'row' }, h('span', { class: 'small muted' }, me.name.split(' ')[0]), h('a', { href: me.role === 'employee' ? '/app' : '/panel', class: 'btn btn-sm' }, me.role === 'employee' ? 'Приложение' : 'Панель'))
+    ? userMenu(me, { appLink: true, next: opts.next })   // главная после входа остаётся главной: в шапке — имя и меню (13.11)
     : h('a', { href: '/login' + (opts.next ? '?next=' + encodeURIComponent(opts.next) : ''), class: 'btn btn-outline' }, 'Войти');
   return h('header', { class: 'site-head' },
     brandLock('/', 'Модус Голос — на главную'), h('div', { class: 'spacer' }), right);

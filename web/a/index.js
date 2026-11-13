@@ -12,7 +12,7 @@
   root.replaceChildren(siteHeader(null, {}), main);
 
   const [map, me, cfg] = await Promise.all([API.get('/api/public/map'), API.me(), publicConfig()]);
-  root.firstChild.replaceWith(siteHeader(me, cfg));
+  root.firstChild.replaceWith(siteHeader(me, cfg, { next: '/' }));   // «Войти» и «Сменить пользователя» с главной — обратно на главную (13.11)
   let selected = null;
   const isMobile = () => window.matchMedia('(max-width: 768px)').matches;
   // одна подложка и одна рамка карты везде (замечание владельца 13.11): как у директора — 46…86° в. д., 45…62° с. ш., на всю ширину блока;

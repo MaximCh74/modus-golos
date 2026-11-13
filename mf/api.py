@@ -300,8 +300,11 @@ async def login_as(body: LoginAs, request: Request, response: Response):
     """Демо-вход «Войти как…» (F-03): сессия помечается как демо; MF_DEMO_LOGIN=0 — выключен; ограничение частоты по адресу."""
     if not auth.demo_login_enabled():
         raise HTTPException(404, "Демо-вход выключен — войдите через Битрикс24 или по личному приглашению")
-    login_limit.check(client_ip(request))
-    auth.logout(request.cookies.get(auth.COOKIE))
+    cur = request.cookies.get(auth.COOKIE)
+    switching = bool(cur and db.one("SELECT 1 FROM sessions WHERE token=? AND demo=1", (cur,)))
+    if not switching:   # «Быстро войти как» (13.11): ведущий с уже открытой демо-сессией переключается — сессия заменяется, не копится; лимит — на новые входы
+        login_limit.check(client_ip(request))
+    auth.logout(cur)
     auth.set_cookie(response, auth.login(body.user_id, demo=True), request=request)
     return auth.public(auth.user_by_id(body.user_id))
 

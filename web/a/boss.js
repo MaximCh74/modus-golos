@@ -42,7 +42,7 @@
     // на телефоне у логотипа только знак — заголовок «Директор в кармане» влезает целиком на 360–390 (образец 13.11)
     h('header', { class: 'boss-head' }, h('span', { class: 'boss-mark' }, h('img', { src: '/a/img/logo.svg', alt: 'Модус Трейд' })), h('span', { class: 'boss-title' }, 'Директор в кармане'), h('div', { class: 'spacer' }),
       h('a', { href: '/panel#/notifications', class: 'btn btn-sm btn-ghost bell', title: 'Уведомления', 'aria-label': 'Уведомления' }, icon('bell', { size: 18 }), ME.unread ? h('span', { class: 'n' }, String(ME.unread)) : null),   // красный счётчик, как в панели (13.11); «Панель на сайте» — ссылкой внизу
-      h('a', { href: '/login?next=' + encodeURIComponent('/boss'), class: 'btn btn-sm btn-ghost', title: 'Сменить пользователя', 'aria-label': 'Сменить пользователя' }, icon('log-out', { size: 18 }))),
+      userMenu(ME, { cls: 'boss-user' })),   // меню пользователя, как во всех шапках (13.11)
     h('section', { class: 'card boss-greet' }, h('div', { class: 'boss-greet-row' }, h('span', { class: 'boss-name' }, ME.name), helpBtn('boss_greeting'), h('div', { class: 'spacer' }), speakGreet), greetText),
     seg, tilesEl, askBox,
     h('footer', { class: 'boss-foot' }, h('a', { href: '/panel#/summary' }, iconText('external-link', 'Подробнее на сайте')), h('span', { class: 'muted' }, 'голосом или текстом · только директору · ', versionTag())));

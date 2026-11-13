@@ -54,7 +54,7 @@ function renderTop() {
   const panel = h('div', { class: 'nav-panel', id: 'nav-panel', role: 'menu' },
     nav.map(([href, label]) => h('a', { href, role: 'menuitem', class: isActive(href) ? 'active' : '', onclick: () => toggleNav(false) }, label)),
     h('div', { class: 'nav-sep' }), h('a', { href: '/app', role: 'menuitem' }, 'Приложение'),
-    h('a', { href: '/login', role: 'menuitem', class: 'muted' }, ME.name + ' · ' + ME.role_label));
+    h('div', { class: 'nav-user' }, ME.name + ' · ' + String(ME.role_label || '').toLowerCase()), userMenuItems(ME));   // телефон: меню пользователя — в «☰»
   const toggle = h('button', { type: 'button', class: 'btn btn-sm nav-toggle', 'aria-label': 'Меню', 'aria-expanded': 'false', 'aria-controls': 'nav-panel',
     onclick: ev => { ev.stopPropagation(); toggleNav(!panel.classList.contains('open')); } }, icon('menu'));
   function toggleNav(open) { panel.classList.toggle('open', open); toggle.setAttribute('aria-expanded', open ? 'true' : 'false'); }
@@ -65,7 +65,7 @@ function renderTop() {
     h('a', { href: '#/help', class: 'btn btn-sm' + (hash.startsWith('#/help') ? ' on' : ''), title: 'Справка: термины простым языком', 'aria-label': 'Справка' }, icon('help-circle')),
     h('a', { href: '#/notifications', class: 'btn btn-sm bell', title: 'Уведомления' }, icon('bell'), ME.unread ? h('span', { class: 'n' }, String(ME.unread)) : null),
     h('a', { href: '/app', class: 'btn btn-sm top-app' }, 'Приложение'),
-    h('a', { href: '/login', class: 'btn btn-sm top-user', title: ME.name + ' · ' + ME.role_label }, h('span', {}, ME.name), h('span', { class: 'role-lbl' }, ' · ' + ME.role_label)),
+    userMenu(ME, { cls: 'top-user' }),
     toggle, panel);
 }
 document.addEventListener('click', ev => { const p = document.getElementById('nav-panel'); if (p && p.classList.contains('open') && !ev.target.closest('#nav-panel')) { p.classList.remove('open'); const t = document.querySelector('.nav-toggle'); if (t) t.setAttribute('aria-expanded', 'false'); } });

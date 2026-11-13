@@ -259,7 +259,7 @@ def test_F03_demo_actions_are_not_duplicated_to_bitrix(c, fake_bitrix):
 def test_F03_demo_login_rate_limited_and_switch_off(c, monkeypatch):
     from mf import api
     anon(c)
-    codes = [c.post("/api/auth/login-as", json={"user_id": 6}).status_code for _ in range(35)]
+    codes = [(c.cookies.clear(), c.post("/api/auth/login-as", json={"user_id": 6}).status_code)[1] for _ in range(35)]   # новые входы, без сессии
     assert codes.count(429) >= 1
     api.login_limit.hits.clear()
     monkeypatch.setenv("MF_DEMO_LOGIN", "0")
@@ -321,7 +321,7 @@ def test_F06_staff_search_similar_and_login_are_limited(c):
     anon(c)
     assert 429 in [c.get("/api/public/staff", params={"q": "ан"}).status_code for _ in range(65)]
     assert 429 in [c.post("/api/public/similar", json={"text": "проблема с номенклатурой и спецификациями"}).status_code for _ in range(65)]
-    assert 429 in [c.post("/api/auth/login-as", json={"user_id": 6}).status_code for _ in range(35)]
+    assert 429 in [(c.cookies.clear(), c.post("/api/auth/login-as", json={"user_id": 6}).status_code)[1] for _ in range(35)]   # новые входы (13.11: переключение с открытой демо-сессией лимит не тратит)
 
 
 def test_F06_limits_use_real_client_address():
