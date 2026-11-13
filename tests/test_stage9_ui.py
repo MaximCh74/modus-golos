@@ -78,7 +78,7 @@ def test_queue_no_horizontal_scroll_and_card_placement(server, browser, width, p
     try:
         m = page.evaluate(MEASURE)
         assert m["doc"] <= width and m["table"] <= m["container"], m   # правило 1: нет горизонтальной прокрутки
-        assert page.locator("table thead th").count() == 4   # четыре колонки по умолчанию
+        assert page.locator("table thead th").count() == 3   # три колонки по умолчанию: «Возраст» убран (замечание владельца 13.11)
         page.click("tbody tr >> nth=0")
         page.wait_for_selector(".appeal-card")
         m = page.evaluate(MEASURE)

@@ -62,3 +62,26 @@ def test_build_changes_when_static_changes(tmp_path, monkeypatch):
     b1, p1 = version.build(), version.page("p.html")
     (web / "a" / "x.js").write_text("22")
     assert version.build() != b1 and version.page("p.html") != p1 and "/a/x.js?v=" in p1
+
+
+# ---------- п. 1: очередь ----------
+
+def test_queue_overdue_days_and_urgent_first(c):
+    login(c, 1)
+    rows = c.get("/api/panel/appeals?open=1").json()
+    od = [r for r in rows if r["overdue"]]
+    assert od and all(r["overdue_days"] >= 1 for r in od) and all(r["overdue_days"] is None for r in rows if not r["overdue"])
+    assert rows[:len(od)] == od   # срочные сверху: сначала просроченные
+    days = [r["overdue_days"] for r in od]
+    assert days == sorted(days, reverse=True)   # дольше просрочено — выше
+    new = c.get("/api/panel/appeals?open=1&sort=new").json()
+    created = [r["created_at"] for r in new]
+    assert created == sorted(created, reverse=True)
+    card = c.get(f"/api/appeals/{od[0]['id']}").json()
+    assert card["overdue_days"] == od[0]["overdue_days"]
+
+
+def test_queue_has_no_age_column():
+    js = (ROOT / "web" / "a" / "panel.js").read_text(encoding="utf-8")
+    assert "'Возраст'" not in js and "q-age" not in js
+    assert "'просрочено на ' + r.overdue_days + ' дн'" in js and "overdueDot(r), h('span', { class: 'num' }" in js

@@ -478,7 +478,10 @@ tr.muted td { opacity: .6; }
 .tbl.queue .brief { color: var(--muted); }
 .tbl.queue .tic { color: var(--muted-2); vertical-align: -2px; margin-right: 6px; }
 .tbl.queue .q-resp .avatar-sm { vertical-align: middle; margin-right: 4px; }
-.tbl.queue .q-age { color: var(--muted); }
+.qcard .od-text { white-space: nowrap; flex-shrink: 0; }   /* «просрочено на N дн» в карточке очереди на телефоне (13.11) */
+.qcard .num, .qcard .dot-overdue, .qcard .tic { flex-shrink: 0; white-space: nowrap; }
+.qcard .dot-overdue { margin-right: -2px; }
+.qcard .q-city { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .dot-overdue { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--red); margin-right: 6px; vertical-align: 1px; }
 .mini { display: inline-flex; align-items: center; gap: 2px; font-size: 11px; color: var(--muted); margin-left: 6px; vertical-align: 1px; }
 .ai-ic { display: inline-flex; color: var(--muted-2); cursor: help; vertical-align: middle; }

@@ -189,7 +189,7 @@ function filterLabel(k) {
   if (k === 'responsible_id') return name(DICTS.users || [], v) || 'Ответственный';
   if (k === 'status') { const g = STATUS_GROUPS.find(x => x.value === String(v)); return g ? g.label : STATUS[v] ? STATUS[v][0] : v; }
   if (k === 'days') return v + ' дн';
-  if (k === 'sort') return 'По приоритету';
+  if (k === 'sort') return v === 'new' ? 'Сначала новые' : 'По приоритету';
   if (k === 'cluster_id') return 'Тема';
   return FILTER_LABELS[k] || k;
 }
@@ -210,7 +210,7 @@ function filtersDrawer() {
     sel('status', STATUS_GROUPS.map(g => ({ value: g.value, label: g.label })), 'Статус'),
     sel('responsible_id', staff.map(u => ({ value: u.id, label: u.name })), 'Ответственный'),
     sel('days', [{ value: 7, label: '7 дней' }, { value: 14, label: '14 дней' }, { value: 30, label: '30 дней' }], 'Срок', 'Всё время'),
-    sel('sort', [{ value: 'priority', label: 'По приоритету' }], 'Сортировка', 'По дате'),
+    sel('sort', [{ value: 'priority', label: 'По приоритету' }, { value: 'new', label: 'Сначала новые' }], 'Сортировка', 'Срочные сверху'),
     h('div', { class: 'col mt8' }, chk('overdue', 'Только просроченные'), chk('unassigned', 'Без ответственного'), h('label', { class: 'check' }, urg, 'Мешают работать сейчас')),
     h('div', { class: 'row mt16' }, apply, reset));
   openDrawer(content, { narrow: true, label: 'Фильтры' });
@@ -245,17 +245,20 @@ function extraCell(r, code) {
   return h('td', {}, r.supports ? String(r.supports) : '');
 }
 
+// просрочка (замечание владельца 13.11): в списке — красная точка у номера, в карточке — «просрочено на N дн»
+function overdueText(r) { return r.overdue_days ? 'просрочено на ' + r.overdue_days + ' дн' : 'просрочено'; }
+function overdueDot(r) { return r.overdue ? h('span', { class: 'dot-overdue', title: overdueText(r) }) : null; }
+
 function queueRow(r, cols) {
   const tIcon = r.type === 'problem' ? 'alert-circle' : r.type === 'suggestion' ? 'lightbulb' : 'heart';
   const text = r.brief_line || r.text || '';
   const first = h('td', { class: 'q-main', title: r.number + ' · ' + r.type_label + ' · ' + text },
-    icon(tIcon, { size: 14, cls: 'tic', title: r.type_label }), h('span', { class: 'num' }, r.number), r.city ? h('span', { class: 'q-city' }, ' · ' + r.city) : null,
+    icon(tIcon, { size: 14, cls: 'tic', title: r.type_label }), overdueDot(r), h('span', { class: 'num' }, r.number), r.city ? h('span', { class: 'q-city' }, ' · ' + r.city) : null,
     r.priority === 'high' ? h('span', { class: 'mini', title: 'Высокий приоритет' }, icon('alert', { size: 11 })) : null,
     r.supports ? h('span', { class: 'mini', title: '«У меня так же»: ' + r.supports }, icon('thumbs-up', { size: 11 }), String(r.supports)) : null,
     h('span', { class: 'brief' }, ' · ' + text));
   const tds = [first, h('td', {}, badge(r.status)),
-    h('td', { class: 'q-resp fit-box', title: r.responsible || 'не назначен' }, r.responsible ? h('span', { class: 'ulink' }, avatarEl({ name: r.responsible }, 'sm'), ' ', fitName(r.responsible)) : h('span', { class: 'muted' }, '—')),
-    h('td', { class: 'q-age', title: fmtDate(r.created_at) + (r.overdue ? ' · просрочено' : '') }, r.overdue ? h('span', { class: 'dot-overdue', title: 'Просрочено' }) : null, fmtHours(r.age_hours))];
+    h('td', { class: 'q-resp fit-box', title: r.responsible || 'не назначен' }, r.responsible ? h('span', { class: 'ulink' }, avatarEl({ name: r.responsible }, 'sm'), ' ', fitName(r.responsible)) : h('span', { class: 'muted' }, '—'))];
   for (const c of EXTRA_COLS) if (cols.has(c[0])) tds.push(extraCell(r, c[0]));
   return h('tr', { class: S.selected === r.id ? 'sel' : '', onclick: () => { location.hash = '#/appeal/' + r.id; } }, ...tds);
 }
@@ -263,11 +266,11 @@ function queueRow(r, cols) {
 function queueCard(r) {
   const tIcon = r.type === 'problem' ? 'alert-circle' : r.type === 'suggestion' ? 'lightbulb' : 'heart';
   return h('button', { type: 'button', class: 'qcard' + (S.selected === r.id ? ' sel' : ''), onclick: () => { location.hash = '#/appeal/' + r.id; } },
-    h('div', { class: 'row' }, icon(tIcon, { size: 14, cls: 'tic', title: r.type_label }), h('b', { class: 'num' }, r.number), r.city ? h('span', { class: 'q-city' }, '· ' + r.city) : null,
+    h('div', { class: 'row' }, icon(tIcon, { size: 14, cls: 'tic', title: r.type_label }), overdueDot(r), h('b', { class: 'num' }, r.number), r.city ? h('span', { class: 'q-city' }, '· ' + r.city) : null,
       r.priority === 'high' ? h('span', { class: 'mini', title: 'Высокий приоритет' }, icon('alert', { size: 11 })) : null,
-      h('div', { class: 'spacer' }), r.overdue ? h('span', { class: 'dot-overdue', title: 'Просрочено' }) : null, h('span', { class: 'small muted' }, fmtHours(r.age_hours))),
+      h('div', { class: 'spacer' })),
     h('div', { class: 'qcard-text' }, r.brief_line || r.text || ''),
-    h('div', { class: 'row small' }, badge(r.status), h('span', { class: 'muted one-line fit-box', title: r.responsible ? 'ответственный: ' + r.responsible : '' }, r.responsible ? fitName(r.responsible, 'отв. ') : 'без ответственного')));   // автора в списке нет — он в открытой карточке
+    h('div', { class: 'row small' }, badge(r.status), r.overdue ? h('span', { class: 'muted od-text' }, overdueText(r)) : null, h('span', { class: 'muted one-line fit-box', title: r.responsible ? 'ответственный: ' + r.responsible : '' }, r.responsible ? fitName(r.responsible, 'отв. ') : 'без ответственного')));   // автора в списке нет — он в открытой карточке
 }
 
 async function loadQueue(flashId) {
@@ -279,15 +282,15 @@ async function loadQueue(flashId) {
   const overdue = rows.filter(r => r.overdue).length, unassigned = rows.filter(r => r.unassigned).length;
   const counts = document.getElementById('queue-counts');
   if (counts) counts.replaceChildren(plural(rows.length, 'обращение', 'обращения', 'обращений') + (overdue ? ' · просрочено ' + overdue : '') + (unassigned ? ' · без ответственного ' + unassigned : ''), helpBtn(S.tab === 'attention' ? 'attention' : 'queue'));
-  const heads = ['Обращение', 'Статус', 'Ответственный', 'Возраст'].concat(EXTRA_COLS.filter(c => cols.has(c[0])).map(c => c[1]));
-  const widths = [null, 176, 190, 92].concat(EXTRA_COLS.filter(c => cols.has(c[0])).map(c => c[2]));
+  const heads = ['Обращение', 'Статус', 'Ответственный'].concat(EXTRA_COLS.filter(c => cols.has(c[0])).map(c => c[1]));   // «Возраст» убран (13.11)
+  const widths = [null, 176, 190].concat(EXTRA_COLS.filter(c => cols.has(c[0])).map(c => c[2]));
   const tbl = h('table', { class: 'tbl queue' },
     h('colgroup', {}, widths.map(w => { const c = document.createElement('col'); if (w) c.style.width = w + 'px'; return c; })),
     h('thead', {}, h('tr', {}, heads.map(t => h('th', {}, t)))),
     h('tbody', {}, rows.map(r => { const tr = queueRow(r, cols); if (flashId === r.id) tr.classList.add('flash'); return tr; })));
   const empty = { attention: 'Ничего не требует внимания — посмотрите «Все открытые».', open: 'Открытых обращений нет.', mine: 'На вас сейчас ничего не назначено.', closed: 'Закрытых обращений нет.' };
   if (!rows.length) { table.replaceChildren(h('div', { class: 'card' }, h('div', { class: 'muted' }, empty[S.tab] || 'Ничего не найдено'))); return; }
-  // телефон: карточки вместо таблицы — номер, «Коротко», статус, ответственный, возраст (замечание владельца 12.11)
+  // телефон: карточки вместо таблицы — номер, «Коротко», статус, ответственный, «просрочено на N дн» (замечания владельца 12.11, 13.11)
   if (PHONE.matches) { table.replaceChildren(h('div', { class: 'qcards' }, rows.map(r => { const c = queueCard(r); if (flashId === r.id) c.classList.add('flash'); return c; }))); fitNames(table); return; }
   table.replaceChildren(h('div', { class: 'card' }, tbl));
   fitNames(table);
@@ -358,7 +361,7 @@ function cardContent(a, id) {
   const closeBtn = sideCard() ? null : h('button', { class: 'btn btn-sm btn-ghost', title: 'Закрыть (Esc)', 'aria-label': 'Закрыть', onclick: () => { const cb = OVERLAY && OVERLAY.onClose; closeOverlay(); if (cb) cb(); } }, icon('x'));
   const kv = (k, v) => v === null || v === undefined || v === '' ? null : h('div', { class: 'kv-row' }, h('span', { class: 'k' }, k), h('span', { class: 'v' }, v));
   const head = h('div', { class: 'card' },
-    h('div', { class: 'row' }, h('span', { class: 'h1 num' }, a.number), badge(a.status), a.overdue ? h('span', { class: 'mini', title: 'Просрочен первый ответ' }, h('span', { class: 'dot-overdue' }), 'просрочено') : null,
+    h('div', { class: 'row' }, h('span', { class: 'h1 num' }, a.number), badge(a.status), a.overdue ? h('span', { class: 'mini', title: 'Просрочен первый ответ' }, h('span', { class: 'dot-overdue' }), overdueText(a)) : null,
       a.is_anonymous ? tag('tag-anon', 'аноним') : null, h('div', { class: 'spacer' }), items.length ? menuButton(items) : null, closeBtn),
     tracker(a.status, true),
     h('div', { class: 'small muted' }, [a.type_label, a.category || 'категория не определена', a.branch, a.site_city ? 'объект: ' + a.site_city : null].filter(Boolean).join(' · ')),

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import secrets
 from datetime import timedelta
 
@@ -166,11 +167,20 @@ def is_overdue(a: dict) -> bool:
     return created + timedelta(hours=a.get("sla") or DEFAULT_SLA) < db.now()
 
 
+def overdue_days(a: dict) -> int | None:
+    """На сколько дней просрочен первый ответ (замечание владельца 13.11: «просрочено на N дн»): неполный день — как день."""
+    if not is_overdue(a):
+        return None
+    due = db.parse(a["created_at"]) + timedelta(hours=a.get("sla") or DEFAULT_SLA)
+    return max(1, math.ceil((db.now() - due).total_seconds() / 86400))
+
+
 def decorate(a: dict) -> dict:
     """Производные поля для списков и карточки."""
     created = db.parse(a["created_at"])
     a["age_hours"] = round((db.now() - created).total_seconds() / 3600, 1)
     a["overdue"] = is_overdue(a)
+    a["overdue_days"] = overdue_days(a)
     a["unassigned"] = a["responsible_id"] is None and a["status"] in OPEN
     a["status_label"] = STATUS_DISPLAY.get(a["status"], a["status"])   # на экране — пять статусов
     a["type_label"] = TYPES.get(a["type"], a["type"])
@@ -733,7 +743,7 @@ def view(a: dict, user: dict | None = None, public: bool = False) -> dict:
                              "department_id", "department", "text", "proposed_solution", "priority", "priority_label", "status",
                              "status_label", "responsible_id", "responsible", "responsible_position", "is_anonymous", "source",
                              "meeting_id", "resolution_text", "created_at", "updated_at", "first_response_at", "closed_at",
-                             "escalated_at", "supports", "age_hours", "overdue", "unassigned", "sla", "first_response_hours", "site_city",
+                             "escalated_at", "supports", "age_hours", "overdue", "overdue_days", "unassigned", "sla", "first_response_hours", "site_city",
                              "director_request_text", "director_requested_at", "director_decision", "director_comment", "director_decided_at",
                              "author_urgency", "author_scope", "priority_manual", "brief_engine", "brief_at", "last_news_at", "input_mode")}
     out["director_decision_label"] = DIRECTOR_DECISIONS.get(a["director_decision"]) if a["director_decision"] else None
@@ -806,13 +816,15 @@ def list_for(user: dict, f: dict) -> list[dict]:
         order = "CASE a.priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END, a.created_at DESC"
     sql = BASE_SELECT + (" WHERE " + " AND ".join(where) if where else "") + " ORDER BY " + order
     rows = [decorate(r) for r in db.q(sql, params)]
+    if not f.get("sort"):   # по умолчанию — срочные сверху: просроченные (дольше — выше), «мешает сейчас», высокий приоритет, затем новые
+        rows.sort(key=lambda r: (-(r["overdue_days"] or 0), r.get("author_urgency") != "now", r["priority"] != "high"))
     if f.get("overdue"):
         rows = [r for r in rows if r["overdue"]]
     if f.get("attention"):   # этап 9: вкладка «Требуют внимания» — просроченные, без ответственного, «мешают сейчас», ждут уточнения
         rows = [r for r in rows if r["overdue"] or r["unassigned"] or r.get("author_urgency") == "now" or r["status"] == "clarify"]
     keep = ("id", "number", "type", "type_label", "category", "category_id", "branch", "branch_code", "branch_id", "department",
             "status", "status_label", "responsible", "responsible_id", "priority", "priority_label", "created_at", "age_hours",
-            "overdue", "unassigned", "supports", "is_anonymous", "source", "first_response_hours", "text", "site_city", "director_decision")
+            "overdue", "overdue_days", "unassigned", "supports", "is_anonymous", "source", "first_response_hours", "text", "site_city", "director_decision")
     out = []
     for r in rows:
         o = {k: r.get(k) for k in keep}
