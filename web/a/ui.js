@@ -82,18 +82,12 @@ function badge(status) { const s = STATUS[status] || [status, '']; return h('spa
 function aiMark(isAi, aiLabel, plainLabel) { return h('span', { class: 'ai-ic', title: isAi ? (aiLabel || 'ИИ') : (plainLabel || 'без ИИ'), 'aria-label': isAi ? (aiLabel || 'ИИ') : (plainLabel || 'без ИИ') }, icon(isAi ? 'sparkles' : 'file-text', { size: 14 })); }
 function tag(cls, text) { return h('span', { class: 'badge ' + cls }, text); }
 
+// трекер в карточке — те же пять статусов, что на экране везде (13.11): Новое → В работе (или Уточнение) → Решено (или Отклонено)
 function tracker(status, narrow) {
-  const steps = [['new', 'Новое'], ['review', 'Рассмотрение'], ['in_progress', 'В работе'], ['done', 'Реализовано'], ['closed', 'Закрыто']];
-  let cur = status === 'clarify' ? 'review' : status;
-  let idx = steps.findIndex(s => s[0] === cur);
-  if (status === 'rejected') idx = 4;
+  const idx = status === 'new' ? 0 : ['review', 'in_progress', 'clarify'].includes(status) ? 1 : 2;
+  const labels = ['Новое', status === 'clarify' ? 'Уточнение' : 'В работе', status === 'rejected' ? 'Отклонено' : 'Решено'];
   const el = h('div', { class: 'tracker ' + (status === 'rejected' ? 'rejected' : status === 'clarify' ? 'clarify' : '') + (narrow ? ' narrow' : '') });
-  steps.forEach((s, i) => {
-    let label = s[1];
-    if (status === 'rejected' && i === 4) label = 'Отклонено';
-    if (status === 'clarify' && i === 1) label = 'Уточнение';
-    el.append(h('div', { class: 'step ' + (i < idx ? 'done' : i === idx ? 'cur' : '') }, h('div', { class: 'bar' }), label));
-  });
+  labels.forEach((label, i) => el.append(h('div', { class: 'step ' + (i < idx ? 'done' : i === idx ? 'cur' : '') }, h('div', { class: 'bar' }), label)));
   return el;
 }
 

@@ -167,3 +167,15 @@ def test_employee_home_single_main_button():
     assert "[['problem', 'Проблема'], ['suggestion', 'Идея'], ['praise', 'Спасибо']]" in js   # переключатель в форме, как в QR-форме
     css = (ROOT / "web" / "a" / "style.css").read_text(encoding="utf-8")
     assert ".type-switch.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }" in css
+
+
+# ---------- дополнительно: пять статусов везде ----------
+
+def test_no_old_statuses_on_screen():
+    ui = (ROOT / "web" / "a" / "ui.js").read_text(encoding="utf-8")
+    tracker = ui.split("function tracker(")[1].split("\n}\n")[0]
+    assert "'Новое'" in tracker and "'Решено'" in tracker and "'Уточнение'" in tracker and "'Отклонено'" in tracker
+    for old in ("Рассмотрение", "Реализовано", "Закрыто"):
+        assert old not in tracker, old
+    labels = re.search(r"const STATUS = \{(.*?)\};", ui, re.S).group(1)
+    assert set(re.findall(r"\['([^']+)', 'st-", labels)) == {"Новое", "В работе", "Уточнение", "Решено", "Отклонено"}
