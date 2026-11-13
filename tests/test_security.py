@@ -313,21 +313,21 @@ def test_F19_avatar_rejects_decompression_bomb(c):
 def test_F06_spoofed_forwarded_for_does_not_bypass_limits(c):
     anon(c)
     codes = [c.post("/api/public/appeals", headers={"X-Forwarded-For": f"203.0.113.{100 + i}"},
-                    data={"type": "problem", "text": f"Спам номер {i} про парковку", "branch_code": "PVL"}).status_code for i in range(12)]
+                    data={"type": "problem", "text": f"Спам номер {i} про парковку", "branch_code": "PVL"}).status_code for i in range(35)]
     assert codes.count(429) >= 1
 
 
 def test_F06_staff_search_similar_and_login_are_limited(c):
     anon(c)
     assert 429 in [c.get("/api/public/staff", params={"q": "ан"}).status_code for _ in range(65)]
-    assert 429 in [c.post("/api/public/similar", json={"text": "проблема с номенклатурой и спецификациями"}).status_code for _ in range(35)]
+    assert 429 in [c.post("/api/public/similar", json={"text": "проблема с номенклатурой и спецификациями"}).status_code for _ in range(65)]
     assert 429 in [c.post("/api/auth/login-as", json={"user_id": 6}).status_code for _ in range(35)]
 
 
 def test_F06_limits_use_real_client_address():
     """Разные настоящие адреса (их ставит uvicorn за туннелем) — разные счётчики."""
     with TestClient(app, client=("198.51.100.1", 1)) as a, TestClient(app, client=("198.51.100.2", 1)) as b:
-        for _ in range(10):
+        for _ in range(30):   # площадка 13.11: до 30 обращений в минуту с адреса (телефоны жюри в одном Wi-Fi), дальше — спам
             assert a.post("/api/public/appeals", data={"type": "problem", "text": "Сломан принтер на складе", "branch_code": "PVL"}).status_code == 200
         assert a.post("/api/public/appeals", data={"type": "problem", "text": "Сломан принтер на складе", "branch_code": "PVL"}).status_code == 429
         assert b.post("/api/public/appeals", data={"type": "problem", "text": "Сломан принтер на складе", "branch_code": "PVL"}).status_code == 200

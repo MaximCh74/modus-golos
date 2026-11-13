@@ -56,13 +56,16 @@ def _content_ok(mime: str, data: bytes) -> bool:
 class RateLimit:
     """QR-форма без входа: не больше limit обращений с одного IP за window секунд (защита от спама, ТЗ v1.1 §14)."""
 
-    def __init__(self, limit: int, window: int, message: str = "Слишком много обращений подряд — попробуйте через несколько минут"):
-        self.limit, self.window, self.hits, self.message = limit, window, {}, message
+    def __init__(self, limit: int, window: int, message: str = "Слишком много обращений подряд — попробуйте через несколько минут",
+                 burst: tuple[int, int] | None = None):
+        self.limit, self.window, self.hits, self.message, self.burst = limit, window, {}, message, burst
 
     def check(self, key: str) -> None:
         now = time.time()
         arr = [t for t in self.hits.get(key, []) if now - t < self.window]
         if len(arr) >= self.limit:
+            raise HTTPException(429, self.message)
+        if self.burst and sum(1 for t in arr if now - t < self.burst[1]) >= self.burst[0]:   # всплеск: не больше burst[0] за burst[1] секунд
             raise HTTPException(429, self.message)
         arr.append(now)
         self.hits[key] = arr
@@ -71,14 +74,17 @@ class RateLimit:
                 self.hits.pop(k, None)
 
 
-qr_limit = RateLimit(10, 600)
-stt_limit = RateLimit(20, 600)
-similar_limit = RateLimit(30, 600, "Слишком много запросов подряд — попробуйте через несколько минут")   # F-06: «похожие» без входа
-staff_limit = RateLimit(60, 600, "Слишком много запросов подряд — попробуйте через несколько минут")     # F-06: поиск адресата без входа
-ai_user_limit = RateLimit(60, 600, "Слишком много запросов к ИИ подряд — подождите несколько минут")      # F-07: ИИ для вошедших, на человека
+# Площадка хакатона (13.11): телефоны жюри в одном Wi-Fi — для сервера один адрес. Сценарий «10–15 человек, у каждого 1–2 обращения
+# голосом за 10 минут» проходит; явный спам (поток с одного адреса) упирается в минутное окно burst. Расход ИИ сверху держит
+# суточный лимит вызовов (настройка «Вызовов ИИ в сутки», ai/budget). Тест — tests/test_stage17_venue_limits.py.
+qr_limit = RateLimit(60, 600, burst=(30, 60))
+stt_limit = RateLimit(120, 600, burst=(60, 60))
+similar_limit = RateLimit(120, 600, burst=(60, 60), message="Слишком много запросов подряд — попробуйте через несколько минут")   # F-06: «похожие» без входа
+staff_limit = RateLimit(300, 600, burst=(60, 60), message="Слишком много запросов подряд — попробуйте через несколько минут")     # F-06: поиск адресата без входа
+ai_user_limit = RateLimit(150, 600, message="Слишком много запросов к ИИ подряд — подождите несколько минут")      # F-07: ИИ для вошедших, на человека
 meeting_limit = RateLimit(10, 3600, "Слишком много совещаний подряд — не больше 10 в час")                # F-07: разбор совещаний, на человека
 invite_limit = RateLimit(30, 600)   # страница приглашения: токены случайные 256 бит, лимит — гигиена
-login_limit = RateLimit(30, 600, "Слишком много входов подряд — попробуйте через несколько минут")   # F-03: демо-вход
+login_limit = RateLimit(100, 600, burst=(30, 60), message="Слишком много входов подряд — попробуйте через несколько минут")   # F-03: демо-вход
 
 
 def client_ip(request: Request) -> str:
