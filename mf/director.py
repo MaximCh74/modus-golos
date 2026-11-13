@@ -272,6 +272,15 @@ def top_employees(limit: int = 10) -> list[dict]:
     return rows
 
 
+def my_place(user_id: int) -> dict:
+    """Место пользователя среди сотрудников по баллам (как в топе: больше баллов — выше; равные делят место) — для строки «Вы — N место»
+    в лиге, когда пользователь не в топ-10 (образец владельца 13.11)."""
+    pts = int(db.one("SELECT COALESCE(SUM(amount), 0) AS s FROM points_ledger WHERE user_id=?", (user_id,))["s"])
+    above = db.one("""SELECT COUNT(*) AS n FROM (SELECT u.id, COALESCE(SUM(l.amount), 0) AS p FROM users u LEFT JOIN points_ledger l ON l.user_id=u.id
+                      WHERE u.active=1 GROUP BY u.id HAVING p > ?)""", (pts,))["n"]
+    return {"id": user_id, "rank": above + 1, "points": pts}
+
+
 # ---------- карта ----------
 
 def map_data() -> dict:

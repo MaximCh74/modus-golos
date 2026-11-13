@@ -352,10 +352,9 @@ async function rewardsScreen() {
 
 async function leagueScreen() {
   const d = await API.get('/api/panel/league');
-  // этап 9 (пункт 4): список вместо таблицы — на телефоне без горизонтальной прокрутки; нули не показываем; 13.11 (п. 3) — общая вёрстка с панелью
-  root.replaceChildren(h('div', { class: 'wrap wrap-league' }, h('a', { href: '#/', class: 'small ict' }, icon('arrow-left', { size: 14 }), 'Назад'), h('div', { class: 'h1' }, 'Лига филиалов', helpBtn('league')), tabs('#/league'),
-    h('div', { class: 'hint' }, 'По качеству работы с обращениями, а не по их числу: реализовано ' + Math.round(d.weights.done * 100) + ' % · рассмотрено ' + Math.round(d.weights.considered * 100) + ' % · скорость первого ответа ' + Math.round(d.weights.speed * 100) + ' %.'),
-    ...leagueSplit(leagueBranches(d.items), leagueTop(d.top, u => { location.hash = '#/u/' + u.id; }))));
+  // лига по образцу владельца 13.11 — общая вёрстка с панелью (ui.js): пьедестал, топ сотрудников со своей строкой, витрина наград
+  root.replaceChildren(h('div', { class: 'wrap wrap-league' }, h('a', { href: '#/', class: 'small ict' }, icon('arrow-left', { size: 14 }), 'Назад'), h('div', { class: 'h1' }, 'Лига', helpBtn('league')), tabs('#/league'),
+    ...leagueSplit(leagueBranches(d.items), leagueTop(d.top, u => { location.hash = '#/u/' + u.id; }, d.me)), awardCard('#/rewards')));
 }
 
 boot();

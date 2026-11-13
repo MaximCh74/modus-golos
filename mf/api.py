@@ -1044,8 +1044,10 @@ async def panel_map(request: Request):
 
 @router.get("/panel/league")
 async def panel_league(request: Request):
-    auth.require(request)
-    return {**director.league(), "top": director.top_employees()}
+    user = auth.require(request)
+    me = director.my_place(user["id"])
+    me["show"] = user["role"] == "employee" or me["points"] > 0   # строка «Вы — N место» — тем, кто копит баллы
+    return {**director.league(), "top": director.top_employees(), "me": me}
 
 
 @router.get("/rewards")

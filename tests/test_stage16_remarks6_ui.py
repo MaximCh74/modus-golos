@@ -115,7 +115,8 @@ def test_meetings_help_on_every_column(base, browser):
 def test_league_desktop_split_and_phone_tabs(base, browser):
     ctx, page, errors = _open(browser, base, 1, 1440, "/panel#/league")
     try:
-        page.wait_for_selector("table.league tbody tr")
+        page.wait_for_selector(".pod-step")
+        page.click(".lg-more"); page.wait_for_selector("table.league tbody tr")   # метрики — под «Подробнее» (лига по образцу 13.11)
         assert not page.locator(".lg-seg").is_visible()
         left, right = page.locator(".lg-col-branches").bounding_box(), page.locator(".lg-col-top").bounding_box()
         assert right["x"] > left["x"] + left["width"] - 1   # «Филиалы» слева, «Сотрудники» справа

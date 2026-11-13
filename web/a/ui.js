@@ -228,7 +228,7 @@ function similarBlock(r, opts) {
 
 // Аватарка: своя картинка или инициалы на фирменном фоне; анонимным — нейтральная иконка.
 function avatarEl(u, size) {
-  const cls = 'avatar' + (size === 'sm' ? ' avatar-sm' : size === 'lg' ? ' avatar-lg' : '');
+  const cls = 'avatar' + (size === 'sm' ? ' avatar-sm' : size === 'lg' ? ' avatar-lg' : size === 'card' ? ' avatar-card' : '');
   if (!u) return h('span', { class: cls + ' avatar-anon', title: 'Анонимно' }, icon('user', { size: size === 'lg' ? 36 : 14 }));
   if (u.avatar) return h('img', { class: cls, src: u.avatar, alt: u.name || '' });
   const parts = String(u.name || '?').split(' ');
@@ -429,33 +429,100 @@ function personPicker(opts) {
 // «#» — узкая колонка моноширинными цифрами по правому краю, сразу за ней город; топ сотрудников по линейке: место фиксированной ширины
 // («10.» не сдвигает строку), звёзды и «внедрено» одной колонкой справа. Компьютер — «Филиалы» слева, «Сотрудники» справа;
 // телефон — вкладки «Филиалы / Сотрудники».
-function leagueBits(b) {
-  const pct = (label, x) => label + '\u00a0' + Math.round(x * 100) + '\u00a0%';   // «скорость 91 %» не разрывается по строкам
-  return [b.done_share ? pct('реализовано', b.done_share) : null, b.considered_share ? pct('рассмотрено', b.considered_share) : null,
-    b.speed ? pct('скорость', b.speed) : null, b.open ? 'открыто\u00a0' + b.open : null, b.overdue ? 'просрочено\u00a0' + b.overdue : null].filter(Boolean).join(' · ');
+// ---------- Лига по образцу владельца 13.11 («Лучшие голоса компании»), общая для панели и приложения: филиалы — пьедестал 2–1–3
+// с венками, места 4+ списком, метрики под «Подробнее»; топ-3 сотрудников — карточки с фото, места 4–10 строками по линейке, своя строка
+// подсвечена (не в топ-10 — строка «Вы — N место»); внизу витрина наград ----------
+const NS_SVG = 'http://www.w3.org/2000/svg';
+const PODIUM = { 1: 'gold', 2: 'silver', 3: 'bronze' };
+// лавровый венок в стиле линии (как иконки Lucide): две ветви-дуги с листьями наружу, номер места — текстом в середине
+function laurelEl(n) {
+  const svg = document.createElementNS(NS_SVG, 'svg');
+  svg.setAttribute('viewBox', '0 0 100 84'); svg.setAttribute('class', 'laurel-svg'); svg.setAttribute('aria-hidden', 'true');
+  const add = d => { const p = document.createElementNS(NS_SVG, 'path'); p.setAttribute('d', d); svg.append(p); };
+  const cx = 50, cy = 44, r = 31, f = x => x.toFixed(1);
+  for (const side of [1, -1]) {   // 1 — левая ветвь, −1 — правая (зеркально)
+    const X = x => side === 1 ? x : 100 - x;
+    const pt = deg => { const a = deg * Math.PI / 180; return [cx + r * Math.cos(a), cy + r * Math.sin(a)]; };
+    const [x0, y0] = pt(102), [x1, y1] = pt(242);
+    add('M' + f(X(x0)) + ' ' + f(y0) + ' A' + r + ' ' + r + ' 0 0 ' + (side === 1 ? 1 : 0) + ' ' + f(X(x1)) + ' ' + f(y1));
+    for (let k = 0; k < 6; k++) {
+      const deg = 114 + k * 24, a = deg * Math.PI / 180, [bx, by] = pt(deg);
+      let ax = 0.72 * Math.cos(a) - 0.69 * Math.sin(a), ay = 0.72 * Math.sin(a) + 0.69 * Math.cos(a);   // наружу и вверх по ветви
+      const len = Math.hypot(ax, ay), L = 13 - k * 0.6, w = 4.2;
+      ax /= len; ay /= len;
+      const tx = bx + L * ax, ty = by + L * ay, mx = (bx + tx) / 2, my = (by + ty) / 2;
+      add('M' + f(X(bx)) + ' ' + f(by) + ' Q' + f(X(mx - w * ay)) + ' ' + f(my + w * ax) + ' ' + f(X(tx)) + ' ' + f(ty) +
+        ' Q' + f(X(mx + w * ay)) + ' ' + f(my - w * ax) + ' ' + f(X(bx)) + ' ' + f(by));
+    }
+  }
+  return h('span', { class: 'laurel' }, svg, h('span', { class: 'laurel-n' }, String(n)));
 }
-function leagueBranches(items, onOpen, cls) {
-  return h('div', { class: 'card list lg-list' + (cls ? ' ' + cls : '') }, items.map(b => h('div', { class: 'item lg-row' + (onOpen ? '' : ' noclick'), onclick: onOpen ? () => onOpen(b) : null },
-    h('div', { class: 'lg-line' }, h('span', { class: 'lg-place' }, String(b.rank)),
-      h('div', { class: 'lg-who' }, h('b', {}, b.city || brCity(b.name)), h('div', { class: 'small muted' }, b.total ? plural(b.total, 'обращение', 'обращения', 'обращений') + (b.enough ? '' : ' · мало данных') : 'обращений нет')),
-      h('span', { class: 'lg-score', title: 'балл лиги' }, b.overdue ? h('span', { class: 'dot-overdue', title: 'просрочено ' + b.overdue }) : null, h('b', {}, String(b.score)))),
-    h('div', { class: 'small muted lg-bits' }, leagueBits(b)))));
+// карточка-ссылка без <button>: клавиатура — Enter и пробел
+function clickable(attrs, onOpen) {
+  if (!onOpen) return attrs;
+  return { ...attrs, role: 'link', tabindex: '0', onclick: onOpen, onkeydown: ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); onOpen(); } } };
 }
-function leagueTop(top, onOpen) {
-  if (!top.length) return h('div', { class: 'card muted' }, 'Баллов пока ни у кого нет');
-  return h('div', { class: 'card list lg-emps' }, top.map((u, i) => h('div', { class: 'item lg-emp', onclick: () => onOpen(u) },
-    h('span', { class: 'lg-place' }, (i + 1) + '.'), avatarEl(u),
-    h('div', { class: 'lg-who' }, h('b', { class: 'one-line' }, u.name), h('div', { class: 'small muted one-line' }, [u.position, u.city || brCity(u.branch)].filter(Boolean).join(' · '))),
-    h('div', { class: 'lg-stats' }, pointsTag(u.points, null, 'lg-pts'),
-      u.implemented ? h('span', { class: 'small muted' }, 'внедрено ' + u.implemented) : null))));
+// метрики лиги таблицей — под «Подробнее»; на телефоне строки карточками с подписями (data-label)
+function leagueTable(items, onOpen) {
+  const cols = [['#', 36], ['Филиал', null], ['Балл', 76, 'league_score'], ['Реализовано', 112], ['Рассмотрено', 116], ['Скорость', 108, 'league_speed'], ['Открыто', 86], ['Просрочено', 104]];
+  const pct = x => Math.round(x * 100) + ' %';
+  const cell = (i, v, cls) => h('td', { class: cls || null, 'data-label': i > 1 ? cols[i][0] : '' }, v);
+  return h('table', { class: 'tbl league' },
+    h('colgroup', {}, cols.map(([, w]) => { const c = document.createElement('col'); if (w) c.style.width = w + 'px'; return c; })),
+    h('thead', {}, h('tr', {}, cols.map(([t, , help]) => h('th', { class: t === '#' ? 'lg-place' : '' }, t, help ? helpBtn(help) : null)))),
+    h('tbody', {}, items.map(b => h('tr', { class: onOpen ? '' : 'noclick', onclick: onOpen ? () => onOpen(b) : null }, cell(0, String(b.rank), 'lg-place'),
+      cell(1, h('span', {}, h('b', {}, b.city || brCity(b.name)), h('div', { class: 'small muted' }, plural(b.total, 'обращение', 'обращения', 'обращений') + (b.enough ? '' : ' · мало данных')))),
+      cell(2, h('b', {}, String(b.score)), 'score'), cell(3, pct(b.done_share)), cell(4, pct(b.considered_share)), cell(5, pct(b.speed)),
+      cell(6, b.open ? String(b.open) : ''), cell(7, b.overdue ? h('span', {}, h('span', { class: 'dot-overdue' }), String(b.overdue)) : '')))));
 }
+function leagueBranches(items, onOpen) {
+  const top = items.filter(b => b.enough).slice(0, 3);   // на пьедестал — только филиалы с данными; меньше трёх — сколько есть
+  const open = b => onOpen ? () => onOpen(b) : null;
+  const podium = top.length ? h('div', { class: 'podium' }, h('div', { class: 'pod-steps' }, [top[1], top[0], top[2]].filter(Boolean).map(b =>
+    h('div', clickable({ class: 'pod-step pod-' + b.rank + ' ' + PODIUM[b.rank], 'data-rank': b.rank, title: 'балл лиги ' + b.score }, open(b)),
+      laurelEl(b.rank), h('b', { class: 'pod-city' }, b.city || brCity(b.name)), h('span', { class: 'pod-score' }, String(b.score))))),
+    h('div', { class: 'pod-base' })) : null;
+  const rest = items.filter(b => !top.includes(b));
+  const restEl = rest.length ? h('div', { class: 'lg-rest' }, rest.map(b => h('div', clickable({ class: 'lg-rest-row' }, open(b)),
+    h('span', { class: 'lg-place' }, String(b.rank)), h('span', { class: 'lg-rest-city' }, b.city || brCity(b.name), b.enough ? null : h('span', { class: 'small muted' }, ' · мало данных')),
+    h('b', { class: 'lg-rest-score' }, String(b.score))))) : null;
+  const box = h('div', { class: 'lg-details' });
+  const more = h('button', { type: 'button', class: 'btn btn-sm lg-more', 'aria-expanded': 'false' }, 'Подробнее');
+  more.addEventListener('click', () => {
+    const show = !box.firstChild;
+    box.replaceChildren(...(show ? [leagueTable(items, onOpen)] : []));
+    more.textContent = show ? 'Свернуть' : 'Подробнее'; more.setAttribute('aria-expanded', show ? 'true' : 'false');
+  });
+  return h('div', { class: 'lg-branches' }, podium, restEl, h('div', { class: 'lg-more-row' }, more), box);
+}
+function leagueTop(top, onOpen, me) {
+  if (!top.length) return h('div', { class: 'muted' }, 'Баллов пока ни у кого нет');
+  const mine = u => !!me && u.id === me.id;
+  const city = u => u.city || brCity(u.branch);
+  const cards = top.slice(0, 3).map((u, i) => h('div', clickable({ class: 'emp-card' + (mine(u) ? ' me' : ''), 'data-place': i + 1 }, () => onOpen(u)),
+    avatarEl(u, 'card'), h('div', { class: 'lg-who' }, h('b', { class: 'one-line' }, u.name), h('div', { class: 'muted one-line' }, city(u))),
+    h('div', { class: 'lg-stats big' }, pointsTag(u.points, null, 'lg-pts'), u.implemented ? h('span', { class: 'muted' }, 'внедрено ' + u.implemented) : null)));
+  const rows = top.slice(3).map((u, i) => h('div', clickable({ class: 'item lg-emp' + (mine(u) ? ' me' : '') }, () => onOpen(u)),
+    h('span', { class: 'lg-place' }, String(i + 4)), avatarEl(u, 'sm'), h('b', { class: 'lg-who one-line' }, u.name), h('span', { class: 'lg-city one-line' }, city(u)),
+    h('div', { class: 'lg-stats' }, pointsTag(u.points, null, 'lg-pts'))));
+  const me10 = me && me.show && !top.some(mine) ? h('div', { class: 'lg-me me' }, h('b', {}, 'Вы — ' + me.rank + ' место'), pointsTag(me.points, null, 'lg-pts')) : null;
+  return h('div', { class: 'lg-top' }, h('div', { class: 'emp-cards' }, cards), rows.length ? h('div', { class: 'list lg-emps' }, rows) : null, me10);
+}
+// компьютер: филиалы слева, сотрудники справа; телефон — вкладки «Филиалы / Сотрудники»
 function leagueSplit(branchesEl, topEl) {
-  const box = h('div', { class: 'lg-split', 'data-tab': 'branches' });
+  const box = h('div', { class: 'card lg-split', 'data-tab': 'branches' });
   const seg = h('div', { class: 'seg lg-seg', role: 'tablist' }, [['branches', 'Филиалы'], ['top', 'Сотрудники']].map(([k, t]) => h('button', { type: 'button', role: 'tab', class: 'seg-btn' + (k === 'branches' ? ' on' : ''), 'data-tab': k,
     onclick: () => { box.dataset.tab = k; for (const b of seg.children) b.classList.toggle('on', b.dataset.tab === k); } }, t)));
-  box.append(h('section', { class: 'lg-col lg-col-branches' }, h('div', { class: 'lbl lg-head' }, 'Филиалы'), branchesEl),
-    h('section', { class: 'lg-col lg-col-top' }, h('div', { class: 'lbl lg-head' }, 'Сотрудники', helpBtn('top_employees')), topEl));
+  box.append(h('section', { class: 'lg-col lg-col-branches' }, h('div', { class: 'lg-head' }, 'Лига филиалов'), branchesEl),
+    h('section', { class: 'lg-col lg-col-top' }, h('div', { class: 'lg-head' }, 'Топ сотрудников', helpBtn('top_employees')), topEl));
   return [seg, box];
+}
+// витрина наград: баллы за внедрённые идеи — премия, выходной, обучение (стрелка — значок, не символ); нажатие — «Награды»
+function awardCard(href) {
+  return h('a', { href, class: 'card award-card', 'aria-label': 'Витрина наград — открыть награды' },
+    h('span', { class: 'award-ic' }, icon('trophy', { size: 30 })), h('b', { class: 'award-title' }, 'Витрина наград'),
+    h('span', { class: 'award-text' }, h('span', { class: 'award-line' }, 'Баллы за внедрённые идеи', icon('arrow-right', { size: 18, cls: 'award-arrow' }), 'премия, выходной, обучение'),
+      h('span', { class: 'award-note' }, 'состав наград утверждает компания')));
 }
 
 let GLOSSARY = null, _glossaryP = null, _helpOpenedAt = 0;

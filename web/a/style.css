@@ -23,6 +23,12 @@
   --seg-on: linear-gradient(180deg, #123b64 0%, var(--navy) 55%, var(--navy-deep) 100%);   /* активная половина: глубокий тёмно-синий, темнее книзу */
   --ic-ring: 0 3px 8px rgba(8, 39, 66, .10), inset 0 1px 0 rgba(255, 255, 255, .9);
   --ic-new: linear-gradient(180deg, #f6f9fe 0%, #d9e7f8 100%); --ic-done: linear-gradient(180deg, #f5fbf7 0%, #d2eedc 100%); --ic-late: linear-gradient(180deg, #fff7f7 0%, #f7dada 100%);
+  /* лига по образцу владельца 13.11: мягкие фоны ступеней пьедестала — золото, серебро, бронза; цвет венка и номера места */
+  --pod-gold-bg: linear-gradient(180deg, #fbefc8 0%, #fff9ea 100%); --pod-gold-ink: #c79a12;
+  --pod-silver-bg: linear-gradient(180deg, #e4e9f2 0%, #f4f6fa 100%); --pod-silver-ink: #8a94a6;
+  --pod-bronze-bg: linear-gradient(180deg, #f6e0d0 0%, #fcf2eb 100%); --pod-bronze-ink: #b5693c;
+  --pod-base-bg: linear-gradient(180deg, #ffffff 0%, #edf1f6 100%); --pod-base-shadow: 0 10px 22px -10px rgba(8, 39, 66, .28);
+  --pod-step-shadow: 0 -4px 22px -12px rgba(199, 154, 18, .45); --pod-pill-shadow: 0 6px 14px -6px rgba(8, 39, 66, .22);
   --map-ok: #1f9a55; --map-none: #8a95a6;   /* метки карты директора: зелёная — просрочек нет, красная — есть просрочки; серая контурная — объект без данных */
   /* приглушённые статусные */
   --ok: #1f7a46; --warn: #9a5b00; --bad: #7a1f1f;
@@ -664,39 +670,119 @@ select { appearance: none; -webkit-appearance: none; padding-right: 34px; backgr
 .datepick { display: flex; flex-direction: column; gap: 6px; }
 .datepick .date-other { width: 120px; padding: 8px 10px; font-size: 14px; }
 /* лига (13.11, п. 3): «#» — узкая колонка моноширинными цифрами по правому краю, сразу город; топ сотрудников по линейке */
-.lg-place { width: 28px; flex: none; text-align: right; font-variant-numeric: tabular-nums; font-feature-settings: 'tnum' 1; font-weight: var(--w-bold); color: var(--navy); }
+.lg-place { width: 28px; flex: none; text-align: right; font-variant-numeric: tabular-nums; font-feature-settings: 'tnum' 1; font-weight: var(--w-semi); color: var(--navy); }
 .tbl.league { table-layout: fixed; }
 .tbl.league th.lg-place, .tbl.league td.lg-place { width: auto; padding-right: 6px; text-align: right; }
 .tbl.league td.lg-place { font-size: 15px; }
-.lg-line { display: flex; align-items: center; gap: 12px; min-width: 0; }
-.lg-who { flex: 1; min-width: 0; }
-.lg-who > b { display: block; }
-.lg-score { display: inline-flex; align-items: center; gap: 6px; }
-.lg-score .dot-overdue { margin: 0; }
-.lg-score b { font-size: 22px; color: var(--navy); font-variant-numeric: tabular-nums; }
-.lg-bits { margin-top: 4px; padding-left: 40px; }
-.lg-emp { display: grid; grid-template-columns: 28px 32px minmax(0, 1fr) 92px; gap: 12px; align-items: center; }
-.lg-stats { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; text-align: right; white-space: nowrap; }
-.lg-pts { font-weight: var(--w-bold); color: var(--navy); font-variant-numeric: tabular-nums; }
-.seg.lg-seg { display: none; margin: var(--s2) 0 var(--s1); }
-.lg-split { display: grid; grid-template-columns: minmax(0, 1fr) 440px; gap: var(--s2); align-items: start; margin-top: var(--s2); }
-.lg-split > * { min-width: 0; }
-.lg-head { margin-bottom: 8px; display: flex; align-items: center; }
-.lg-alt { display: none; }
+.tbl.league td.score b { font-weight: var(--w-semi); }
+.tbl.league tr.noclick { cursor: default; }
+/* Лига по образцу владельца 13.11 («Лучшие голоса компании»): одна карточка — слева «Лига филиалов» (пьедестал 2–1–3, места 4+,
+   «Подробнее» — таблица метрик), справа «Топ сотрудников» (топ-3 карточками с фото, места 4–10 строками по линейке); витрина наград
+   на всю ширину ниже. Телефон (до 760 px) — вкладки «Филиалы / Сотрудники», витрина под ними. Цифры — 600, красного текста нет */
 .wrap-league { max-width: 1240px; }
-@media (max-width: 1279px) { .lg-split { grid-template-columns: 1fr; } }
+.seg.lg-seg { display: none; margin: var(--s2) 0 var(--s1); }
+.lg-split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0; align-items: stretch; margin-top: var(--s2); padding: var(--s3) 0; }
+.lg-split > * { min-width: 0; }
+.lg-col { padding: 0 var(--s3); }
+.lg-col-top { border-left: 1px solid var(--line-soft); }
+.lg-head { display: flex; align-items: center; gap: 4px; margin-bottom: var(--s3); font-size: var(--fs-h2); font-weight: var(--w-bold); color: var(--navy); }
+.lg-who { min-width: 0; }
+.lg-who > b { display: block; }
+/* пьедестал: ступени 2–1–3, центр выше; мягкие фоны золото / серебро / бронза; венок с номером, город, балл в белой «таблетке» */
+.podium { padding: 0 6px; }
+.pod-steps { display: flex; align-items: flex-end; justify-content: center; }
+.pod-step { flex: 1 1 0; max-width: 200px; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 18px 8px 20px; border-radius: 18px 18px 0 0; text-align: center; }
+.pod-step[role=link] { cursor: pointer; }
+.pod-step:focus-visible { outline: 2px solid var(--navy); outline-offset: 2px; }
+.pod-1 { min-height: 268px; background: var(--pod-gold-bg); position: relative; z-index: 1; box-shadow: var(--pod-step-shadow); }
+.pod-2 { min-height: 222px; background: var(--pod-silver-bg); }
+.pod-3 { min-height: 196px; background: var(--pod-bronze-bg); }
+.pod-base { height: 18px; margin: 0 -6px; border-radius: 10px; background: var(--pod-base-bg); box-shadow: var(--pod-base-shadow); position: relative; z-index: 2; }
+.laurel { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 86px; height: 72px; flex: none; }
+.pod-1 .laurel { width: 104px; height: 88px; }
+.laurel-svg { position: absolute; inset: 0; width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.laurel-n { position: relative; margin-top: -6px; font-size: 32px; line-height: 1; font-weight: var(--w-semi); font-variant-numeric: tabular-nums; }
+.pod-1 .laurel-n { font-size: 42px; }
+.pod-step.gold .laurel { color: var(--pod-gold-ink); }
+.pod-step.silver .laurel { color: var(--pod-silver-ink); }
+.pod-step.bronze .laurel { color: var(--pod-bronze-ink); }
+.pod-city { font-size: 20px; line-height: 1.2; color: var(--navy); overflow-wrap: anywhere; }
+.pod-score { display: inline-block; min-width: 76px; padding: 4px 18px; border-radius: 14px; background: var(--white); box-shadow: var(--pod-pill-shadow); font-size: 26px; line-height: 1.25; font-weight: var(--w-semi); color: var(--navy); font-variant-numeric: tabular-nums; }
+.lg-rest { margin-top: var(--s3); }
+.lg-rest-row { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px 6px; border-bottom: 1px solid var(--line-soft); }
+.lg-rest-row:last-child { border-bottom: 0; }
+.lg-rest-row[role=link] { cursor: pointer; }
+.lg-rest-row[role=link]:hover { background: var(--bg-soft); }
+.lg-rest-city { font-weight: var(--w-bold); color: var(--navy); min-width: 0; }
+.lg-rest-score { font-size: 18px; font-weight: var(--w-semi); color: var(--navy); font-variant-numeric: tabular-nums; }
+.lg-more-row { margin-top: var(--s2); }
+.lg-details:not(:empty) { margin-top: var(--s2); }
+/* топ сотрудников: топ-3 — крупные карточки (круглое фото, имя, город; справа звезда и баллы крупно, под ними «внедрено N»); места
+   4–10 — строки по линейке: номер, маленький аватар, имя, город, звезда и баллы; своя строка подсвечена */
+.emp-cards { display: flex; flex-direction: column; gap: 12px; }
+.emp-card { display: grid; grid-template-columns: 72px minmax(0, 1fr) auto; gap: 16px; align-items: center; padding: 12px 18px 12px 14px; border-radius: var(--radius); background: var(--white); border: 1px solid var(--line-soft); border-top-color: var(--white); box-shadow: var(--card-hi), var(--shadow-card); cursor: pointer; }
+.emp-card .lg-who b { font-size: 18px; color: var(--navy); }
+.emp-card .lg-who .muted { font-size: 15px; }
+.avatar-card { width: 72px; height: 72px; font-size: 24px; }
+.lg-stats { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; text-align: right; white-space: nowrap; }
+.lg-stats.big .pts { font-size: 26px; gap: 6px; }
+.lg-stats.big .pts .ic { width: 24px; height: 24px; }
+.lg-stats.big .muted { font-size: 14px; }
+.lg-stats .muted { font-weight: var(--w-body); }
+.lg-pts { color: var(--navy); font-variant-numeric: tabular-nums; }
+.lg-pts b { font-weight: var(--w-semi); }
+.lg-emps { margin-top: var(--s2); }
+.lg-emp { display: grid; grid-template-columns: 28px 28px minmax(0, 1.25fr) minmax(0, 1fr) 84px; gap: 12px; align-items: center; padding: 8px 6px; border-radius: 10px; }
+.lg-emp .avatar-sm { width: 28px; height: 28px; }
+.lg-emp .lg-who { color: var(--navy); }
+.lg-emp .lg-city { color: var(--muted); font-size: 14px; min-width: 0; }
+.lg-emp .lg-stats { justify-self: end; }
+.lg-top .me { background: var(--tint); box-shadow: inset 3px 0 0 var(--navy); }
+.emp-card.me { border-color: var(--tint-line); box-shadow: inset 3px 0 0 var(--navy), var(--shadow-card); }
+.lg-me { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 10px; padding: 10px 12px 10px 15px; border-radius: 10px; color: var(--navy); }
+/* витрина наград: значок кубка, «Витрина наград», текст; разделители — тонкие линии */
+.award-card { display: grid; grid-template-columns: auto auto minmax(0, 1fr); align-items: center; padding: 14px 20px 14px 14px; margin-top: var(--s2); text-decoration: none; color: var(--ink); transition: border-color var(--t-fast) var(--ease); }
+a.award-card:hover { text-decoration: none; border-color: var(--tint-line); }
+.award-ic { width: 60px; height: 60px; border-radius: 14px; background: var(--tint); color: var(--navy); display: inline-flex; align-items: center; justify-content: center; }
+.award-title { font-size: 20px; color: var(--navy); padding: 6px 22px; margin-left: 18px; border-left: 1px solid var(--line-soft); border-right: 1px solid var(--line-soft); white-space: nowrap; }
+.award-text { display: flex; flex-direction: column; gap: 2px; padding-left: 22px; min-width: 0; }
+.award-line { font-size: 17px; color: var(--ink); }
+.award-arrow { vertical-align: -3px; margin: 0 6px; color: var(--muted); }
+.award-note { font-size: 13px; color: var(--muted); }
+@media (max-width: 1279px) {
+  .lg-split { grid-template-columns: minmax(0, 1fr); }
+  .lg-col-top { border-left: 0; border-top: 1px solid var(--line-soft); margin-top: var(--s3); padding-top: var(--s3); }
+}
 @media (max-width: 760px) {
   .seg.lg-seg { display: grid; }
-  .lg-split { margin-top: 0; }
+  .lg-split { margin-top: 0; padding: var(--s2) 0; }
+  .lg-col { padding: 0 14px; }
+  .lg-col-top { border-top: 0; margin-top: 0; padding-top: 0; }
   .lg-split[data-tab=branches] .lg-col-top, .lg-split[data-tab=top] .lg-col-branches { display: none; }
   .lg-head { display: none; }
-  .lg-table { display: none; }
-  .lg-alt { display: block; }
-  .lg-emp { grid-template-columns: 24px 32px minmax(0, 1fr) 84px; gap: 8px; }
-  .lg-stats { padding-left: 8px; }
-  .card.lg-emps, .card.lg-list { padding-left: 14px; padding-right: 14px; }
-  .lg-bits { padding-left: 36px; }
-  .lg-line { gap: 8px; }
+  .podium { padding: 0 2px; }
+  .pod-step { padding: 14px 4px 16px; gap: 6px; border-radius: 14px 14px 0 0; }
+  .pod-1 { min-height: 214px; } .pod-2 { min-height: 178px; } .pod-3 { min-height: 158px; }
+  .laurel { width: 62px; height: 52px; } .pod-1 .laurel { width: 76px; height: 64px; }
+  .laurel-n { font-size: 24px; margin-top: -4px; } .pod-1 .laurel-n { font-size: 30px; }
+  .pod-city { font-size: 15px; }
+  .pod-score { min-width: 0; padding: 3px 12px; font-size: 20px; border-radius: 11px; }
+  .pod-base { height: 14px; }
+  .emp-card { grid-template-columns: 56px minmax(0, 1fr) auto; gap: 12px; padding: 10px 12px 10px 10px; }
+  .avatar-card { width: 56px; height: 56px; font-size: 20px; }
+  .emp-card .lg-who b { font-size: 16px; }
+  .emp-card .lg-who .muted { font-size: 14px; }
+  .lg-stats.big .pts { font-size: 22px; }
+  .lg-stats.big .pts .ic { width: 20px; height: 20px; }
+  .lg-emp { grid-template-columns: 22px 28px minmax(0, 1fr) 70px; gap: 8px; }
+  .lg-emp .lg-city { display: none; }   /* узко: город — только у топ-3; у строк 4–10 — имя и баллы */
+  .emp-card .lg-who b, .lg-emp .lg-who { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; line-height: 1.25; }   /* имя целиком, в две строки */
+  .lg-stats.big .muted { font-size: 13px; }
+  .award-card { grid-template-columns: auto minmax(0, 1fr); row-gap: 12px; padding: 12px 14px; }
+  .award-ic { width: 48px; height: 48px; border-radius: 12px; }
+  .award-title { border: 0; padding: 0; margin-left: 14px; font-size: 18px; }
+  .award-text { grid-column: 1 / -1; padding-left: 0; }
+  .award-line { font-size: 15px; }
 }
 .stats.n1 { grid-template-columns: 1fr; } .stats.n2 { grid-template-columns: repeat(2, 1fr); } .stats.n3 { grid-template-columns: repeat(3, 1fr); }
 @media (max-width: 480px) { .mi-fields { grid-template-columns: 1fr; } .stats.n3 { grid-template-columns: repeat(3, 1fr); } }

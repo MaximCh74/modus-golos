@@ -506,24 +506,13 @@ function summaryBlockPanel(d) {
     summaryBody(d, href => href.startsWith('/panel') ? href.slice(6) : href));
 }
 
+// лига по образцу владельца 13.11: заголовок «Лига», пояснение — в «?», пьедестал филиалов и топ сотрудников, витрина наград внизу
 async function leaguePanel() {
   const d = await API.get('/api/panel/league');
-  root.replaceChildren(h('div', { class: 'wrap wrap-wide' }, h('div', { class: 'h1' }, 'Лига филиалов', helpBtn('league')),
-    h('div', { class: 'hint' }, 'Качество работы с обращениями, не их число: реализовано ' + Math.round(d.weights.done * 100) + ' % · рассмотрено ' + Math.round(d.weights.considered * 100) + ' % · скорость первого ответа ' + Math.round(d.weights.speed * 100) + ' % (веса — в настройках).'),
-    ...leagueSplit(h('div', {}, leagueTable(d.items, openBranch), leagueBranches(d.items, openBranch, 'lg-alt')), leagueTop(d.top, u => { location.href = '/app#/u/' + u.id; }))));
+  root.replaceChildren(h('div', { class: 'wrap wrap-league' }, h('div', { class: 'h1' }, 'Лига', helpBtn('league')),
+    ...leagueSplit(leagueBranches(d.items, openBranch), leagueTop(d.top, u => { location.href = '/app#/u/' + u.id; }, d.me)), awardCard('/app#/rewards')));
 }
 function openBranch(b) { S.filters = { branch_id: b.id }; location.hash = '#/queue'; }
-// таблица лиги на компьютере: «#» узкой колонкой, сразу город; на телефоне вместо неё — список (leagueBranches, класс lg-alt)
-function leagueTable(items, onOpen) {
-  const cols = [['#', 36], ['Филиал', null], ['Балл', 76, 'league_score'], ['Реализовано', 112], ['Рассмотрено', 116], ['Скорость', 108, 'league_speed'], ['Открыто', 86], ['Просрочено', 104]];
-  return h('div', { class: 'card lg-table' }, h('table', { class: 'tbl league' },
-    h('colgroup', {}, cols.map(([, w]) => { const c = document.createElement('col'); if (w) c.style.width = w + 'px'; return c; })),
-    h('thead', {}, h('tr', {}, cols.map(([t, , help]) => h('th', { class: t === '#' ? 'lg-place' : '' }, t, help ? helpBtn(help) : null)))),
-    h('tbody', {}, items.map(b => h('tr', { onclick: () => onOpen(b) }, h('td', { class: 'lg-place' }, String(b.rank)),
-      h('td', {}, h('b', {}, b.city || brCity(b.name)), h('div', { class: 'small muted' }, plural(b.total, 'обращение', 'обращения', 'обращений') + (b.enough ? '' : ' · мало данных'))),
-      h('td', { class: 'score' }, h('b', {}, String(b.score))), h('td', {}, Math.round(b.done_share * 100) + ' %'), h('td', {}, Math.round(b.considered_share * 100) + ' %'),
-      h('td', {}, Math.round(b.speed * 100) + ' %'), h('td', {}, b.open ? String(b.open) : ''), h('td', {}, b.overdue ? h('span', {}, h('span', { class: 'dot-overdue' }), String(b.overdue)) : ''))))));
-}
 
 async function adminScreen() {
   const d = await API.get('/api/admin/settings');

@@ -133,8 +133,8 @@ def test_tasks_decisions_profile_league_rewards_on_phone(server, browser):
         assert page.locator("button:has-text('Принять')").count() >= 2 and page.locator(".btn-danger").count() == 0   # отказ — нейтральный
         page.goto(f"{base}/app#/u/6"); page.wait_for_selector(".profile-head"); page.wait_for_timeout(300)
         assert _fits(page) and "0" not in [b.inner_text() for b in page.locator(".stat b").all()]   # нули не показываем
-        page.goto(f"{base}/app#/league"); page.wait_for_selector(".lg-row"); page.wait_for_timeout(300)
-        assert _fits(page) and page.locator("table").count() == 0 and page.locator(".lg-row").count() >= 5
+        page.goto(f"{base}/app#/league"); page.wait_for_selector(".pod-step"); page.wait_for_timeout(300)
+        assert _fits(page) and page.locator("table").count() == 0 and page.locator(".pod-step").count() + page.locator(".lg-rest-row").count() >= 5   # пьедестал + места 4+
         assert "открыто 0" not in page.locator("#root").inner_text()
         page.request.post(f"{base}/api/auth/login-as", data={"user_id": 17})   # у Ольги 130 баллов — «Мерч компании» доступен
         page.goto(f"{base}/app#/rewards"); page.wait_for_selector("text=Награды"); page.wait_for_timeout(300)
