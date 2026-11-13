@@ -108,7 +108,7 @@ def test_employee_home_my_tasks_counter_phone(server, browser):
         page.request.post(f"{server}/api/auth/login-as", data={"user_id": 3})
         page.goto(server + "/app"); page.wait_for_selector("#my-tasks .count")
         assert page.locator("#my-tasks .count").inner_text() == "1" and "1 невыполненное" in page.locator("#my-tasks").inner_text()
-        assert "Мои поручения · 1" in page.locator(".tabs").inner_text()
+        assert page.locator("#bottom-nav .bn-item[href='#/tasks'] .n").inner_text() == "1"   # телефон: счётчик в нижней панели (13.11, п. 6)
         assert page.evaluate("document.documentElement.scrollWidth") <= 390
         page.click("#my-tasks"); page.wait_for_selector("text=Поручения с совещаний")
         page.click(".help-btn[data-term=my_tasks]"); page.wait_for_selector(".help-wrap.open .help-pop")

@@ -33,10 +33,25 @@ function renderTop() {
     showPoints() ? h('span', { class: 'small muted', title: 'Мои баллы' }, iconText('star', String(ME.points || 0))) : null,
     h('a', { href: '#/notifications', class: 'btn btn-sm bell', title: 'Уведомления' }, icon('bell'), ME.unread ? h('span', { class: 'n' }, String(ME.unread)) : null),
     h('a', { href: '/login', class: 'btn btn-sm', title: 'Сменить пользователя' }, ME.name.split(' ')[0])].filter(Boolean));
+  renderBottomNav();
+}
+
+// Нижняя панель на телефоне (замечание владельца 13.11, п. 6): ряд вкладок не влезал («Сове…»). Пять разделов с иконками; «Награды» —
+// в профиле, «Совещание» и «На решение» — с главной у ответственных и директора. На компьютере — ряд вкладок, как раньше (CSS).
+function renderBottomNav() {
+  let nav = document.getElementById('bottom-nav');
+  if (!nav) { nav = h('nav', { class: 'bottom-nav', id: 'bottom-nav', 'aria-label': 'Разделы приложения' }); document.body.append(nav); document.body.classList.add('has-bnav'); }
+  const hash = (location.hash || '#/').split('?')[0];
+  const mine = '#/u/' + ME.id;
+  const items = [['#/', 'home', 'Главная'], ['#/tasks', 'list-checks', 'Поручения', ME.tasks_open], ['#/changes', 'check-circle', 'Результаты'], ['#/league', 'trophy', 'Лига'], [mine, 'user', 'Профиль']];
+  const on = href => href === '#/' ? (hash === '#/' || hash === '#' || hash === '') : href === mine ? (hash === mine || hash === '#/rewards' || hash === '#/points') : hash.startsWith(href);
+  nav.replaceChildren(...items.map(([href, ic, label, n]) => h('a', { href, class: 'bn-item' + (on(href) ? ' active' : ''), 'aria-current': on(href) ? 'page' : null },
+    h('span', { class: 'bn-ic' }, icon(ic, { size: 22 }), n ? h('span', { class: 'n' }, String(n)) : null), h('span', { class: 'bn-label' }, label))));
 }
 
 async function route() {
   const hash = location.hash || '#/';
+  if (ME) renderBottomNav();
   const [path, qstr] = hash.slice(1).split('?');
   const p = path.split('/').filter(Boolean);
   const params = new URLSearchParams(qstr || '');
@@ -73,7 +88,7 @@ function tabs(active) {
   items.push(['#/tasks', 'Мои поручения' + (ME.tasks_open ? ' · ' + ME.tasks_open : '')], ['#/u/' + ME.id, 'Мой профиль']);
   if (ME.role !== 'employee') items.push(['#/meeting', 'Совещание']);
   if (ME.role === 'director' || ME.role === 'admin') items.push(['#/decisions', 'На решение']);
-  return h('div', { class: 'tabs' }, items.map(([href, label]) => h('a', { href, class: href === active ? 'active' : '' }, label)));
+  return h('div', { class: 'tabs app-tabs' }, items.map(([href, label]) => h('a', { href, class: href === active ? 'active' : '' }, label)));   // на телефоне — нижняя панель
 }
 
 function item(a) {
@@ -95,12 +110,16 @@ async function home() {
     h('div', { class: 'spacer' }, h('b', {}, 'Мои поручения'), h('div', { class: 'small muted' }, ME.tasks_open ? plural(ME.tasks_open, 'невыполненное', 'невыполненных', 'невыполненных') + (ME.tasks_overdue ? ' · просрочено ' + ME.tasks_overdue : '') : 'невыполненных нет')),
     ME.tasks_open ? h('span', { class: 'count' + (ME.tasks_overdue ? ' late' : '') }, String(ME.tasks_open)) : null, icon('chevron-right', { size: 18, cls: 'chev' }));
   const command = ME.role === 'director' ? commandPanel({ decisionsHref: '#/decisions' }) : null;   // команды — только директору (F-21)
+  // «Совещание» — у ответственных и директора с главной (на телефоне его нет в нижней панели, 13.11, п. 6)
+  const meetingCard = ME.role !== 'employee' ? h('a', { href: '#/meeting', class: 'card taskbar', id: 'home-meeting' }, icon('mic', { size: 24 }),
+    h('div', { class: 'spacer' }, h('b', {}, 'Совещание'), h('div', { class: 'small muted' }, 'Записать или загрузить планёрку')), icon('chevron-right', { size: 18, cls: 'chev' })) : null;
   root.replaceChildren(h('div', { class: 'wrap' }, summary ? summaryBlock(summary, () => route()) : null, command, decisions,
     // одна главная кнопка (замечание владельца 13.11, п. 5): «Проблема / Идея / Спасибо» — переключателем внутри формы, как в QR-форме
     h('a', { href: '#/new', class: 'btn btn-primary btn-big home-cta', id: 'home-cta' }, iconText('message-circle', 'Есть идея или проблема?', { size: 20 })),
-    showPoints() ? h('div', { class: 'row mt8 mb8' }, h('div', { class: 'spacer' }),
+    showPoints() ? h('div', { class: 'row mb8' }, h('div', { class: 'spacer' }),
       h('a', { href: '#/points', class: 'chip chip-points' }, iconText('star', 'Мои баллы: '), h('b', {}, String(pts.balance)))) : null,   // чип, а не ссылка (замечание владельца 12.11)
     tasksCard,
+    meetingCard,
     tabs(null),
     h('div', { class: 'lbl mt16' }, 'Мои обращения'),
     h('div', { class: 'card list' }, mine.length ? mine.map(item) : h('div', { class: 'muted' }, 'Пока нет обращений — нажмите «Есть идея или проблема?».'))));
@@ -314,6 +333,9 @@ async function profileScreen(uid) {
     h('div', { class: 'card' }, h('div', { class: 'profile-head' }, avatarEl(u, 'lg'), h('div', { class: 'spacer' }, h('div', { class: 'h1' }, u.name), h('div', { class: 'small muted' }, [u.position, u.city || brCity(u.branch), u.department].filter(Boolean).join(' · ')),
       mine ? h('div', { class: 'row mt8' }, h('button', { class: 'btn btn-sm btn-outline', onclick: () => file.click() }, iconText('user', u.avatar ? 'Сменить аватарку' : 'Загрузить аватарку')), file) : null), adminMenu),
       h('div', { class: 'stats mt16 n' + stats.length }, stats.map(([n, label, help]) => h('div', { class: 'stat' }, h('b', {}, String(n)), h('span', { class: 'small muted' }, label, help ? helpBtn(help) : null))))),
+    // «Награды» — внутри профиля (на телефоне их нет в нижней панели, 13.11, п. 6); баллы и награды — только сотрудникам
+    mine && showPoints() ? h('a', { href: '#/rewards', class: 'card taskbar', id: 'profile-rewards' }, icon('star', { size: 24 }),
+      h('div', { class: 'spacer' }, h('b', {}, 'Награды'), h('div', { class: 'small muted' }, 'На что хватает баллов: ' + (ME.points || 0))), icon('chevron-right', { size: 18, cls: 'chev' })) : null,
     u.praises && u.praises.length ? h('div', { class: 'lbl mt16' }, 'Благодарности коллег') : null,
     u.praises && u.praises.length ? h('div', { class: 'card list' }, u.praises.map(pr => h('div', { class: 'item', onclick: () => { location.hash = '#/appeal/' + pr.id; } }, h('div', { class: 'row' }, iconText('heart', pr.from || 'Коллега'), h('div', { class: 'spacer' }), h('span', { class: 'small muted' }, fmtDate(pr.created_at))), h('div', { class: 'small' }, pr.text)))) : null,
     h('div', { class: 'lbl mt16' }, 'Внедрённые идеи'),

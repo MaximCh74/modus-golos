@@ -108,7 +108,7 @@ b, strong { font-weight: var(--w-bold); }
 .btn-ghost { border-color: transparent; background: transparent; }
 .btn-ghost:hover { background: var(--bg-soft); }
 .btn-big { width: 100%; padding: 16px; font-size: 17px; border-radius: var(--radius-btn); }
-.home-cta { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 20px 16px; font-size: 18px; }   /* одна главная кнопка сотрудника (13.11, п. 5) */
+.home-cta { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 20px 16px; font-size: 18px; margin-bottom: 12px; }   /* одна главная кнопка сотрудника (13.11, п. 5) */
 .home-cta .ict { gap: 10px; }
 .btn-danger, .btn-ok { color: var(--ink); border-color: var(--line); }   /* отказ и удаление — нейтральные, не красные */
 .btn-sm { padding: 6px 12px; font-size: 13px; min-height: 36px; }
@@ -185,6 +185,28 @@ input[type=file] { font: inherit; font-size: 14px; }
 .tabs.more-right { -webkit-mask-image: linear-gradient(to right, var(--navy) calc(100% - 40px), transparent); mask-image: linear-gradient(to right, var(--navy) calc(100% - 40px), transparent); }   /* ряд листается — край затухает */
 .tabs a { padding: 8px 12px; border-radius: var(--radius-pill); background: var(--white); border: 1px solid var(--line); text-decoration: none; color: var(--ink); white-space: nowrap; font-size: 13px; font-weight: var(--w-bold); }
 .tabs a.active { background: var(--navy); color: var(--white); border-color: var(--navy); }
+/* приложение (13.11, п. 6): на компьютере ряд вкладок переносится, слова не режутся; на телефоне вместо него — нижняя панель с иконками */
+.tabs.app-tabs { flex-wrap: wrap; overflow: visible; }
+.tabs.app-tabs.more-right { -webkit-mask-image: none; mask-image: none; }
+.bottom-nav { display: none; }
+@media (max-width: 640px) {
+  .tabs.app-tabs { display: none; }
+  body.has-bnav { padding-bottom: calc(66px + env(safe-area-inset-bottom)); }
+  .bottom-nav { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); position: fixed; left: 0; right: 0; bottom: 0; z-index: 15; background: var(--white);
+    border-top: 1px solid var(--line-soft); box-shadow: var(--shadow-2); padding: 6px 4px calc(6px + env(safe-area-inset-bottom)); }
+  .bn-item { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 4px 0; text-decoration: none; color: var(--muted); font-size: 11px; font-weight: var(--w-bold); min-width: 0; border-radius: var(--radius-sm); }
+  .bn-item:hover { text-decoration: none; }
+  .bn-item.active { color: var(--navy); }
+  .bn-item.active .bn-ic { background: var(--tint); }
+  .bn-ic { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 30px; border-radius: var(--radius-pill); }
+  .bn-ic .n { position: absolute; top: -4px; right: 2px; background: var(--navy); color: var(--white); font-size: 10px; border-radius: var(--radius-pill); padding: 0 5px; line-height: 15px; }
+  .bn-label { max-width: 100%; white-space: nowrap; }
+  body.has-bnav .toast { bottom: calc(84px + env(safe-area-inset-bottom)); }   /* подсказка не прячется за панелью */
+}
+@media (max-width: 360px) {
+  .bn-label { font-size: 10px; }
+  .bn-ic { width: 40px; }
+}
 
 .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
 .kpi { background: var(--white); border: 1px solid var(--line-soft); border-radius: var(--radius); padding: 14px; }
