@@ -1,9 +1,13 @@
 'use strict';
 // Общие элементы интерфейса: словари, конструктор элементов, трекер статуса, история, тост.
+// Статусы на экране — пять (решение владельца 13.11): внутренние коды датасета не меняются, только отображение (таблица — CONCEPT.md).
 const STATUS = {
-  new: ['Новое', 'st-new'], review: ['На рассмотрении', 'st-review'], clarify: ['Ожидает уточнения', 'st-clarify'],
-  in_progress: ['В работе', 'st-work'], done: ['Реализовано', 'st-done'], closed: ['Закрыто', 'st-closed'], rejected: ['Отклонено', 'st-rejected'],
+  new: ['Новое', 'st-new'], review: ['В работе', 'st-work'], in_progress: ['В работе', 'st-work'], clarify: ['Уточнение', 'st-clarify'],
+  done: ['Решено', 'st-done'], closed: ['Решено', 'st-done'], rejected: ['Отклонено', 'st-rejected'],
 };
+// пять групп для фильтра очереди и «По статусам»: значение — внутренние коды через запятую
+const STATUS_GROUPS = [{ value: 'new', label: 'Новое', cls: 'st-new' }, { value: 'review,in_progress', label: 'В работе', cls: 'st-work' },
+  { value: 'clarify', label: 'Уточнение', cls: 'st-clarify' }, { value: 'done,closed', label: 'Решено', cls: 'st-done' }, { value: 'rejected', label: 'Отклонено', cls: 'st-rejected' }];
 const TYPES = { problem: 'Проблема', suggestion: 'Предложение', praise: 'Положительный отзыв' };
 
 // Поля ввода растут по тексту (замечание владельца 13.11): все textarea — по высоте под текст до ~8 строк, дальше прокрутка; ручной

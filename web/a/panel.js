@@ -187,7 +187,7 @@ function filterLabel(k) {
   if (k === 'department_id') return name(DICTS.departments, v) || 'Подразделение';
   if (k === 'category_id') return name(DICTS.categories, v) || 'Категория';
   if (k === 'responsible_id') return name(DICTS.users || [], v) || 'Ответственный';
-  if (k === 'status') return STATUS[v] ? STATUS[v][0] : v;
+  if (k === 'status') { const g = STATUS_GROUPS.find(x => x.value === String(v)); return g ? g.label : STATUS[v] ? STATUS[v][0] : v; }
   if (k === 'days') return v + ' дн';
   if (k === 'sort') return 'По приоритету';
   if (k === 'cluster_id') return 'Тема';
@@ -207,7 +207,7 @@ function filtersDrawer() {
     sel('branch_id', DICTS.branches.map(b => ({ value: b.id, label: b.name })), 'Филиал'),
     sel('department_id', DICTS.departments.map(d => ({ value: d.id, label: d.name })), 'Подразделение'),
     sel('category_id', DICTS.categories.map(c => ({ value: c.id, label: c.name })), 'Категория'),
-    sel('status', Object.entries(STATUS).map(([v, l]) => ({ value: v, label: l[0] })), 'Статус'),
+    sel('status', STATUS_GROUPS.map(g => ({ value: g.value, label: g.label })), 'Статус'),
     sel('responsible_id', staff.map(u => ({ value: u.id, label: u.name })), 'Ответственный'),
     sel('days', [{ value: 7, label: '7 дней' }, { value: 14, label: '14 дней' }, { value: 30, label: '30 дней' }], 'Срок', 'Всё время'),
     sel('sort', [{ value: 'priority', label: 'По приоритету' }], 'Сортировка', 'По дате'),
@@ -337,7 +337,7 @@ function cardContent(a, id) {
   let primary = null, secondary = null;
   const next = (a.allowed_next || []).map(n => n.code);
   if (a.can_manage) {
-    if (a.status === 'new') primary = a.unassigned ? btnP('Назначить', () => show(assignForm())) : btnP('Взять в работу', () => statusChange('review', 'На рассмотрении'));
+    if (a.status === 'new') primary = a.unassigned ? btnP('Назначить', () => show(assignForm())) : btnP('Взять в работу', () => statusChange('review', 'В работении'));
     else if (a.status === 'review') { primary = btnP('Принять решение', () => show(decisionForm())); secondary = btnS('Сообщить о ходе', () => show(progressForm())); }
     else if (a.status === 'clarify') primary = btnP('Напомнить автору', () => act(() => post('/clarify', { text: 'Напоминание: ' + (a.pending_question || 'ждём вашего ответа') }), 'Напоминание отправлено автору'));
     else if (a.status === 'in_progress') { primary = btnP('Сообщить о ходе', () => show(progressForm())); secondary = btnS('Готово', () => statusChange('done', 'Реализовано')); }
@@ -423,7 +423,8 @@ async function summary() {
     h('div', { class: 'kpi' }, h('b', {}, fmtHours(d.avg_first_response_hours)), h('span', {}, 'среднее время первого ответа', helpBtn('kpi_first_response'))),
     h('div', { class: 'kpi' }, h('b', {}, String(d.done_period)), h('span', {}, 'реализовано за 30 дней', helpBtn('kpi_done_period'))));
   const byType = h('div', { class: 'card' }, h('b', {}, 'По типам'), h('div', { class: 'row mt8' }, Object.entries(d.by_type).filter(([, n]) => n).map(([t, n]) => h('span', { class: 'badge tag-type' }, TYPES[t] + ': ' + n))),
-    h('b', { class: 'mt16' }, 'По статусам'), h('div', { class: 'row mt8' }, Object.entries(d.by_status).filter(([, n]) => n).map(([s, n]) => h('span', { class: 'badge ' + STATUS[s][1] }, STATUS[s][0] + ': ' + n))));
+    h('b', { class: 'mt16' }, 'По статусам'), h('div', { class: 'row mt8' }, STATUS_GROUPS.map(g => [g, g.value.split(',').reduce((n, s) => n + (d.by_status[s] || 0), 0)]).filter(([, n]) => n)
+      .map(([g, n]) => h('span', { class: 'badge ' + g.cls }, g.label + ': ' + n))));
   const branches = h('div', { class: 'card' }, h('b', {}, 'Филиалы', helpBtn('by_branch')), h('div', { class: 'hint' }, 'Количество обращений филиал не ранжирует — лига по качеству во вкладке «Лига».'),
     h('table', { class: 'tbl mt8' }, h('thead', {}, h('tr', {}, ['Филиал', 'Всего', 'Открыто', 'Просрочено', 'Рассмотрено', 'Первый ответ', 'Реализовано', 'Главная тема'].map(t => h('th', {}, t)))),
       h('tbody', {}, d.by_branch.map(b => h('tr', { onclick: () => { S.filters = { branch_id: b.id }; S.tab = 'open'; location.hash = '#/queue'; } },

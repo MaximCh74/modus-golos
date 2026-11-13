@@ -15,6 +15,12 @@ STATUSES = {
     "new": "Новое", "review": "На рассмотрении", "clarify": "Ожидает уточнения", "in_progress": "В работе",
     "done": "Реализовано", "closed": "Закрыто", "rejected": "Отклонено",
 }
+# На экране — пять статусов (решение владельца 13.11): внутренние коды и STATUSES не меняются, только отображение. Таблица — CONCEPT.md.
+STATUS_DISPLAY = {"new": "Новое", "review": "В работе", "in_progress": "В работе", "clarify": "Уточнение", "done": "Решено", "closed": "Решено",
+                  "rejected": "Отклонено"}
+# пункты меню смены статуса у ответственного: два «В работе» различаются уточнением
+NEXT_LABELS = {"review": "В работе: рассматриваем", "in_progress": "В работе: выполняем", "clarify": "Уточнение у автора", "done": "Решено: реализовано",
+               "closed": "Решено: закрыть", "rejected": "Отклонено"}
 # Новое → На рассмотрении ⇄ Ожидает уточнения → В работе → Реализовано → Закрыто; «Отклонено» — из любого незакрытого
 TRANSITIONS = {
     "new": ("review", "rejected"),
@@ -166,7 +172,7 @@ def decorate(a: dict) -> dict:
     a["age_hours"] = round((db.now() - created).total_seconds() / 3600, 1)
     a["overdue"] = is_overdue(a)
     a["unassigned"] = a["responsible_id"] is None and a["status"] in OPEN
-    a["status_label"] = STATUSES.get(a["status"], a["status"])
+    a["status_label"] = STATUS_DISPLAY.get(a["status"], a["status"])   # на экране — пять статусов
     a["type_label"] = TYPES.get(a["type"], a["type"])
     a["priority_label"] = PRIORITIES.get(a["priority"], a["priority"])
     fr = db.parse(a["first_response_at"])
@@ -471,7 +477,7 @@ def set_status(appeal_id: int, actor: dict, status: str, text: str | None = None
     if status == "done":
         award(a, "done")
     touch_news(appeal_id)
-    msg = f"{a['number']}: статус «{STATUSES[status]}»" + (f" — {text}" if text else "")
+    msg = f"{a['number']}: статус «{STATUS_DISPLAY[status]}»" + (f" — {text}" if text else "")
     notify(author_id(appeal_id), msg, f"/app#/appeal/{appeal_id}")
     realtime.publish_roles(("director", "admin"), {"type": "appeal_updated", "id": appeal_id, "status": status})
     return get(appeal_id)
@@ -763,7 +769,7 @@ def view(a: dict, user: dict | None = None, public: bool = False) -> dict:
         nxt = list(TRANSITIONS[a["status"]])
         if a["type"] == "praise" and a["status"] == "new":
             nxt.append("closed")
-        out["allowed_next"] = [{"code": s, "label": STATUSES[s]} for s in nxt]
+        out["allowed_next"] = [{"code": s, "label": NEXT_LABELS[s]} for s in nxt]
     pending = [e for e in events if e["kind"] == "clarification_requested"]
     out["pending_question"] = pending[-1]["payload"].get("text") if (a["status"] == "clarify" and pending) else None
     return out
@@ -779,7 +785,8 @@ def list_for(user: dict, f: dict) -> list[dict]:
     for key, col in (("branch_id", "a.branch_id"), ("department_id", "a.department_id"), ("category_id", "a.category_id"),
                      ("responsible_id", "a.responsible_id"), ("status", "a.status"), ("type", "a.type")):
         if f.get(key):
-            where.append(f"{col}=?"); params.append(f[key])
+            vals = [v for v in str(f[key]).split(",") if v] if key == "status" else [f[key]]   # статус — группой: «review,in_progress» = «В работе»
+            where.append(f"{col} IN ({','.join('?' * len(vals))})"); params += vals
     if f.get("unassigned"):
         where.append("a.responsible_id IS NULL AND a.status IN ('new','review','clarify','in_progress')")
     if f.get("open") or f.get("attention"):

@@ -7,7 +7,7 @@
   const token = n => cs.getPropertyValue(n).trim();
   const groups = [
     ['Бренд', ['--navy', '--red', '--red-dark', '--ink', '--muted', '--muted-2', '--line', '--line-soft', '--bg-soft', '--tint', '--white']],
-    ['Статусы (схема 13.11)', ['--st-new-bg', '--st-new-fg', '--st-review-bg', '--st-review-fg', '--st-clarify-bg', '--st-clarify-fg', '--st-work-bg', '--st-work-fg', '--st-done-bg', '--st-done-fg', '--st-closed-bg', '--st-closed-fg', '--st-rejected-bg', '--st-rejected-fg', '--tag-neutral-bg', '--tag-neutral-fg']],
+    ['Статусы — пять на экране (13.11)', ['--st-fg', '--st-new-bg', '--st-work-bg', '--st-clarify-bg', '--st-done-bg', '--st-rejected-bg', '--tag-neutral-bg', '--tag-neutral-fg']],
     ['Карточки-состояния и карта', ['--ok-bg', '--ok-line', '--warn-bg', '--warn-line', '--bad-bg', '--bad-line', '--tint-line', '--map-water', '--map-label']],
   ];
   const swatches = groups.map(([title, names]) => h('div', { class: 'ds-section' }, h('div', { class: 'h2' }, title),
@@ -39,7 +39,7 @@
     h('div', { class: 'cc-theme mt8' }, icon('layers', { size: 18 }), h('span', {}, 'Главная тема: ', h('b', {}, 'Номенклатура и спецификации'))));
   const chips = h('div', { class: 'ds-section' }, h('div', { class: 'h2' }, 'Чипы и статусы'),
     h('div', { class: 'chips' }, h('button', { class: 'chip on' }, 'Прямо сейчас мешает'), h('button', { class: 'chip' }, 'Мешает, но обхожусь'), h('button', { class: 'chip' }, 'Мелочь')),
-    h('div', { class: 'row mt8' }, Object.entries(STATUS).map(([k, v]) => h('span', { class: 'badge ' + v[1] }, v[0])), h('span', { class: 'badge st-done' }, 'Принято'), h('span', { class: 'badge tag-overdue' }, 'Просрочено'), h('span', { class: 'badge tag-unassigned' }, 'Без ответственного'), h('span', { class: 'badge tag-ai' }, 'пересказ ИИ'), h('span', { class: 'badge tag-demo' }, 'без ИИ')));
+    h('div', { class: 'row mt8' }, STATUS_GROUPS.map(g => h('span', { class: 'badge ' + g.cls }, g.label)), h('span', { class: 'badge tag-overdue' }, 'Просрочено'), h('span', { class: 'badge tag-unassigned' }, 'Без ответственного'), h('span', { class: 'badge tag-ai' }, 'пересказ ИИ'), h('span', { class: 'badge tag-demo' }, 'без ИИ')));
   const tracker = h('div', { class: 'ds-section' }, h('div', { class: 'h2' }, 'Таймлайн стадий (словами собственника)'),
     stageTracker({ code: 'elaboration', label: 'Проработка', index: 1, note: null, steps: [{ code: 'accepted', label: 'Принято', state: 'done' }, { code: 'elaboration', label: 'Проработка', state: 'cur' }, { code: 'decision', label: 'Принятие решения', state: 'future' }, { code: 'implementation', label: 'Реализация', state: 'future' }, { code: 'done', label: 'Готово', state: 'future' }] }));
   const inputs = h('div', { class: 'ds-section' }, h('div', { class: 'h2' }, 'Поля ввода'),
