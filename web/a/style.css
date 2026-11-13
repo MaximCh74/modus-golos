@@ -603,11 +603,41 @@ select { appearance: none; -webkit-appearance: none; padding-right: 34px; backgr
 .mi-rm { color: var(--muted); }
 .datepick { display: flex; flex-direction: column; gap: 6px; }
 .datepick .date-other { width: 120px; padding: 8px 10px; font-size: 14px; }
-.lg-rank { width: 28px; height: 28px; border-radius: 50%; background: var(--bg-soft); color: var(--navy); font-weight: var(--w-bold); display: inline-flex; align-items: center; justify-content: center; font-size: 13px; flex: none; }
-.lg-score { display: inline-flex; align-items: center; gap: 2px; }
-.lg-score b { font-size: 22px; color: var(--navy); }
-.lg-bits { margin-top: 4px; padding-left: 38px; }
-.lg-top { gap: 10px; }
+/* лига (13.11, п. 3): «#» — узкая колонка моноширинными цифрами по правому краю, сразу город; топ сотрудников по линейке */
+.lg-place { width: 28px; flex: none; text-align: right; font-variant-numeric: tabular-nums; font-feature-settings: 'tnum' 1; font-weight: var(--w-bold); color: var(--navy); }
+.tbl.league { table-layout: fixed; }
+.tbl.league th.lg-place, .tbl.league td.lg-place { width: auto; padding-right: 6px; text-align: right; }
+.tbl.league td.lg-place { font-size: 15px; }
+.lg-line { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.lg-who { flex: 1; min-width: 0; }
+.lg-who > b { display: block; }
+.lg-score { display: inline-flex; align-items: center; gap: 6px; }
+.lg-score .dot-overdue { margin: 0; }
+.lg-score b { font-size: 22px; color: var(--navy); font-variant-numeric: tabular-nums; }
+.lg-bits { margin-top: 4px; padding-left: 40px; }
+.lg-emp { display: grid; grid-template-columns: 28px 32px minmax(0, 1fr) 92px; gap: 12px; align-items: center; }
+.lg-stats { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; text-align: right; white-space: nowrap; }
+.lg-pts { font-weight: var(--w-bold); color: var(--navy); font-variant-numeric: tabular-nums; }
+.seg.lg-seg { display: none; margin: var(--s2) 0 var(--s1); }
+.lg-split { display: grid; grid-template-columns: minmax(0, 1fr) 440px; gap: var(--s2); align-items: start; margin-top: var(--s2); }
+.lg-split > * { min-width: 0; }
+.lg-head { margin-bottom: 8px; display: flex; align-items: center; }
+.lg-alt { display: none; }
+.wrap-league { max-width: 1240px; }
+@media (max-width: 1279px) { .lg-split { grid-template-columns: 1fr; } }
+@media (max-width: 760px) {
+  .seg.lg-seg { display: grid; }
+  .lg-split { margin-top: 0; }
+  .lg-split[data-tab=branches] .lg-col-top, .lg-split[data-tab=top] .lg-col-branches { display: none; }
+  .lg-head { display: none; }
+  .lg-table { display: none; }
+  .lg-alt { display: block; }
+  .lg-emp { grid-template-columns: 24px 32px minmax(0, 1fr) 84px; gap: 8px; }
+  .lg-stats { padding-left: 8px; }
+  .card.lg-emps, .card.lg-list { padding-left: 14px; padding-right: 14px; }
+  .lg-bits { padding-left: 36px; }
+  .lg-line { gap: 8px; }
+}
 .stats.n1 { grid-template-columns: 1fr; } .stats.n2 { grid-template-columns: repeat(2, 1fr); } .stats.n3 { grid-template-columns: repeat(3, 1fr); }
 @media (max-width: 480px) { .mi-fields { grid-template-columns: 1fr; } .stats.n3 { grid-template-columns: repeat(3, 1fr); } }
 

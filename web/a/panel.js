@@ -468,10 +468,19 @@ async function leaguePanel() {
   const d = await API.get('/api/panel/league');
   root.replaceChildren(h('div', { class: 'wrap wrap-wide' }, h('div', { class: 'h1' }, 'Лига филиалов', helpBtn('league')),
     h('div', { class: 'hint' }, 'Качество работы с обращениями, не их число: реализовано ' + Math.round(d.weights.done * 100) + ' % · рассмотрено ' + Math.round(d.weights.considered * 100) + ' % · скорость первого ответа ' + Math.round(d.weights.speed * 100) + ' % (веса — в настройках).'),
-    h('div', { class: 'split mt16' },
-      h('div', { class: 'card' }, h('table', { class: 'tbl league' }, h('thead', {}, h('tr', {}, ['#', 'Филиал', 'Балл', 'Реализовано', 'Рассмотрено', 'Скорость', 'Открыто', 'Просрочено'].map(t => h('th', {}, t, t === 'Балл' ? helpBtn('league_score') : t === 'Скорость' ? helpBtn('league_speed') : null)))),
-        h('tbody', {}, d.items.map(b => h('tr', { onclick: () => { S.filters = { branch_id: b.id }; location.hash = '#/queue'; } }, h('td', {}, String(b.rank)), h('td', {}, h('b', {}, b.name), h('div', { class: 'small muted' }, b.total + ' обращений' + (b.enough ? '' : ' — мало данных'))), h('td', { class: 'score' }, h('b', {}, String(b.score))), h('td', {}, Math.round(b.done_share * 100) + ' %'), h('td', {}, Math.round(b.considered_share * 100) + ' %'), h('td', {}, Math.round(b.speed * 100) + ' %'), h('td', {}, b.open ? String(b.open) : ''), h('td', {}, b.overdue ? h('span', {}, h('span', { class: 'dot-overdue' }), String(b.overdue)) : '')))))),
-      h('div', { class: 'card' }, h('b', {}, 'Топ сотрудников'), h('div', { class: 'list mt8' }, d.top.map((u, i) => h('div', { class: 'item', onclick: () => { location.href = '/app#/u/' + u.id; } }, h('div', { class: 'row' }, h('b', {}, (i + 1) + '.'), avatarEl(u), h('div', {}, h('b', {}, u.name), h('div', { class: 'small muted' }, [u.position, u.branch].filter(Boolean).join(' · '))), h('div', { class: 'spacer' }), h('span', { class: 'small row' }, iconText('star', String(u.points)), 'внедрено ' + u.implemented, iconText('heart', String(u.thanks)))))))))));
+    ...leagueSplit(h('div', {}, leagueTable(d.items, openBranch), leagueBranches(d.items, openBranch, 'lg-alt')), leagueTop(d.top, u => { location.href = '/app#/u/' + u.id; }))));
+}
+function openBranch(b) { S.filters = { branch_id: b.id }; location.hash = '#/queue'; }
+// таблица лиги на компьютере: «#» узкой колонкой, сразу город; на телефоне вместо неё — список (leagueBranches, класс lg-alt)
+function leagueTable(items, onOpen) {
+  const cols = [['#', 36], ['Филиал', null], ['Балл', 76, 'league_score'], ['Реализовано', 112], ['Рассмотрено', 116], ['Скорость', 108, 'league_speed'], ['Открыто', 86], ['Просрочено', 104]];
+  return h('div', { class: 'card lg-table' }, h('table', { class: 'tbl league' },
+    h('colgroup', {}, cols.map(([, w]) => { const c = document.createElement('col'); if (w) c.style.width = w + 'px'; return c; })),
+    h('thead', {}, h('tr', {}, cols.map(([t, , help]) => h('th', { class: t === '#' ? 'lg-place' : '' }, t, help ? helpBtn(help) : null)))),
+    h('tbody', {}, items.map(b => h('tr', { onclick: () => onOpen(b) }, h('td', { class: 'lg-place' }, String(b.rank)),
+      h('td', {}, h('b', {}, b.city || brCity(b.name)), h('div', { class: 'small muted' }, plural(b.total, 'обращение', 'обращения', 'обращений') + (b.enough ? '' : ' · мало данных'))),
+      h('td', { class: 'score' }, h('b', {}, String(b.score))), h('td', {}, Math.round(b.done_share * 100) + ' %'), h('td', {}, Math.round(b.considered_share * 100) + ' %'),
+      h('td', {}, Math.round(b.speed * 100) + ' %'), h('td', {}, b.open ? String(b.open) : ''), h('td', {}, b.overdue ? h('span', {}, h('span', { class: 'dot-overdue' }), String(b.overdue)) : ''))))));
 }
 
 async function adminScreen() {

@@ -112,3 +112,20 @@ def test_branch_is_city_everywhere(c):
     assert appeals.city_of({"branch": "Объект (командировка)", "branch_city": None, "site_city": "Атырау"}) == "Атырау"
     for d in c.get("/api/director/ideas").json().get("pending", []):
         assert " — " not in (d.get("branch") or "")
+
+
+# ---------- п. 3: лига ----------
+
+def test_league_city_and_shared_layout(c):
+    login(c, 1)
+    d = c.get("/api/panel/league").json()
+    assert all(u.get("city") for u in d["top"] if u.get("branch") and "Объект" not in u["branch"])
+    ui = (ROOT / "web" / "a" / "ui.js").read_text(encoding="utf-8")
+    for fn in ("function leagueBranches(", "function leagueTop(", "function leagueSplit("):
+        assert fn in ui, fn
+    assert "'Филиалы'], ['top', 'Сотрудники']" in ui and "lg-place" in ui
+    for f in ("panel.js", "app.js"):
+        assert "...leagueSplit(" in (ROOT / "web" / "a" / f).read_text(encoding="utf-8"), f
+    css = (ROOT / "web" / "a" / "style.css").read_text(encoding="utf-8")
+    assert re.search(r"\.lg-place \{[^}]*text-align: right;[^}]*tabular-nums", css)   # «#» по правому краю, моноширинные цифры
+    assert re.search(r"\.lg-emp \{ display: grid; grid-template-columns: 28px ", css)   # место фиксированной ширины

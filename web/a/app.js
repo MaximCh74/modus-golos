@@ -332,15 +332,10 @@ async function rewardsScreen() {
 
 async function leagueScreen() {
   const d = await API.get('/api/panel/league');
-  root.replaceChildren(h('div', { class: 'wrap' }, h('a', { href: '#/', class: 'small ict' }, icon('arrow-left', { size: 14 }), 'Назад'), h('div', { class: 'h1' }, 'Лига филиалов', helpBtn('league')), tabs('#/league'),
+  // этап 9 (пункт 4): список вместо таблицы — на телефоне без горизонтальной прокрутки; нули не показываем; 13.11 (п. 3) — общая вёрстка с панелью
+  root.replaceChildren(h('div', { class: 'wrap wrap-league' }, h('a', { href: '#/', class: 'small ict' }, icon('arrow-left', { size: 14 }), 'Назад'), h('div', { class: 'h1' }, 'Лига филиалов', helpBtn('league')), tabs('#/league'),
     h('div', { class: 'hint' }, 'По качеству работы с обращениями, а не по их числу: реализовано ' + Math.round(d.weights.done * 100) + ' % · рассмотрено ' + Math.round(d.weights.considered * 100) + ' % · скорость первого ответа ' + Math.round(d.weights.speed * 100) + ' %.'),
-    // этап 9 (пункт 4): список вместо таблицы — на телефоне без горизонтальной прокрутки; нули не показываем
-    h('div', { class: 'card list' }, d.items.map(b => h('div', { class: 'item lg-row' },
-      h('div', { class: 'row' }, h('span', { class: 'lg-rank' }, String(b.rank)), h('div', { class: 'spacer' }, h('b', {}, b.city || b.name), h('div', { class: 'small muted' }, b.total ? plural(b.total, 'обращение', 'обращения', 'обращений') + (b.enough ? '' : ' · мало данных') : 'обращений нет')),
-        h('span', { class: 'lg-score', title: 'балл лиги' }, h('b', {}, String(b.score)), helpBtn('league_score'))),
-      h('div', { class: 'small muted lg-bits' }, [b.done_share ? 'реализовано ' + Math.round(b.done_share * 100) + ' %' : null, b.considered_share ? 'рассмотрено ' + Math.round(b.considered_share * 100) + ' %' : null, b.speed ? 'скорость ' + Math.round(b.speed * 100) + ' %' : null, b.open ? 'открыто ' + b.open : null].filter(Boolean).join(' · '))))),
-    d.top.length ? h('div', { class: 'lbl mt16' }, 'Топ сотрудников') : null,
-    d.top.length ? h('div', { class: 'card list' }, d.top.map((u, i) => h('div', { class: 'item', onclick: () => { location.hash = '#/u/' + u.id; } }, h('div', { class: 'row' }, h('b', {}, (i + 1) + '.'), avatarEl(u), h('div', { class: 'spacer' }, h('b', {}, u.name), h('div', { class: 'small muted' }, [u.position, u.branch].filter(Boolean).join(' · '))), h('span', { class: 'small row lg-top' }, iconText('star', String(u.points)), u.implemented ? 'внедрено ' + u.implemented : null, u.thanks ? iconText('heart', String(u.thanks)) : null))))) : null));
+    ...leagueSplit(leagueBranches(d.items), leagueTop(d.top, u => { location.hash = '#/u/' + u.id; }))));
 }
 
 boot();

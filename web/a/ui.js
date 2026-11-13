@@ -420,6 +420,39 @@ function personPicker(opts) {
 
 
 // ---------- словарь терминов (пункт 1 очереди 12.11): подсказки «?» и «Справка» из одного источника — GET /api/public/glossary ----------
+// ---------- лига (замечание владельца 13.11, п. 3): одна вёрстка в панели и приложении ----------
+// «#» — узкая колонка моноширинными цифрами по правому краю, сразу за ней город; топ сотрудников по линейке: место фиксированной ширины
+// («10.» не сдвигает строку), звёзды и «внедрено» одной колонкой справа. Компьютер — «Филиалы» слева, «Сотрудники» справа;
+// телефон — вкладки «Филиалы / Сотрудники».
+function leagueBits(b) {
+  const pct = (label, x) => label + '\u00a0' + Math.round(x * 100) + '\u00a0%';   // «скорость 91 %» не разрывается по строкам
+  return [b.done_share ? pct('реализовано', b.done_share) : null, b.considered_share ? pct('рассмотрено', b.considered_share) : null,
+    b.speed ? pct('скорость', b.speed) : null, b.open ? 'открыто\u00a0' + b.open : null, b.overdue ? 'просрочено\u00a0' + b.overdue : null].filter(Boolean).join(' · ');
+}
+function leagueBranches(items, onOpen, cls) {
+  return h('div', { class: 'card list lg-list' + (cls ? ' ' + cls : '') }, items.map(b => h('div', { class: 'item lg-row' + (onOpen ? '' : ' noclick'), onclick: onOpen ? () => onOpen(b) : null },
+    h('div', { class: 'lg-line' }, h('span', { class: 'lg-place' }, String(b.rank)),
+      h('div', { class: 'lg-who' }, h('b', {}, b.city || brCity(b.name)), h('div', { class: 'small muted' }, b.total ? plural(b.total, 'обращение', 'обращения', 'обращений') + (b.enough ? '' : ' · мало данных') : 'обращений нет')),
+      h('span', { class: 'lg-score', title: 'балл лиги' }, b.overdue ? h('span', { class: 'dot-overdue', title: 'просрочено ' + b.overdue }) : null, h('b', {}, String(b.score)))),
+    h('div', { class: 'small muted lg-bits' }, leagueBits(b)))));
+}
+function leagueTop(top, onOpen) {
+  if (!top.length) return h('div', { class: 'card muted' }, 'Баллов пока ни у кого нет');
+  return h('div', { class: 'card list lg-emps' }, top.map((u, i) => h('div', { class: 'item lg-emp', onclick: () => onOpen(u) },
+    h('span', { class: 'lg-place' }, (i + 1) + '.'), avatarEl(u),
+    h('div', { class: 'lg-who' }, h('b', { class: 'one-line' }, u.name), h('div', { class: 'small muted one-line' }, [u.position, u.city || brCity(u.branch)].filter(Boolean).join(' · '))),
+    h('div', { class: 'lg-stats' }, h('span', { class: 'lg-pts' }, iconText('star', String(u.points))),
+      u.implemented ? h('span', { class: 'small muted' }, 'внедрено ' + u.implemented) : null))));
+}
+function leagueSplit(branchesEl, topEl) {
+  const box = h('div', { class: 'lg-split', 'data-tab': 'branches' });
+  const seg = h('div', { class: 'seg lg-seg', role: 'tablist' }, [['branches', 'Филиалы'], ['top', 'Сотрудники']].map(([k, t]) => h('button', { type: 'button', role: 'tab', class: 'seg-btn' + (k === 'branches' ? ' on' : ''), 'data-tab': k,
+    onclick: () => { box.dataset.tab = k; for (const b of seg.children) b.classList.toggle('on', b.dataset.tab === k); } }, t)));
+  box.append(h('section', { class: 'lg-col lg-col-branches' }, h('div', { class: 'lbl lg-head' }, 'Филиалы'), branchesEl),
+    h('section', { class: 'lg-col lg-col-top' }, h('div', { class: 'lbl lg-head' }, 'Сотрудники', helpBtn('top_employees')), topEl));
+  return [seg, box];
+}
+
 let GLOSSARY = null, _glossaryP = null, _helpOpenedAt = 0;
 function loadGlossary() {
   if (!_glossaryP) _glossaryP = API.get('/api/public/glossary').then(g => { GLOSSARY = g; return g; }).catch(() => { GLOSSARY = { sections: [], terms: {} }; return GLOSSARY; });
