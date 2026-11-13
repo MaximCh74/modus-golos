@@ -42,9 +42,15 @@ def test_labels_navy_links_system_color_errors_dot():
     assert "flex: none" in rules[".tabs > a"] and "mask-image" in rules[".tabs.more-right"]
 
 
-def test_points_is_chip_not_link():
+def test_points_gold_star_without_frame():
+    """Баллы (13.11): залитая золотистая звезда (свой токен) и число — без рамки и подложки; на главной по нажатию — профиль."""
     js = (ROOT / "web" / "a" / "app.js").read_text(encoding="utf-8")
-    assert "class: 'chip chip-points'" in js
+    assert "pointsTag(pts.balance, '#/u/' + ME.id, 'pts-home')" in js and "chip-points" not in js
+    rules = dict(_rules())
+    assert "--gold:" in CSS and "var(--gold)" in rules[".star-gold"]
+    assert "border" not in rules[".pts"] and "background" not in rules[".pts"]
+    bell = rules[".bell .n"]
+    assert "background: var(--red)" in bell and "color: var(--white)" in bell   # счётчик — красный кружок с белой цифрой
 
 
 def test_app_icons_from_logo_mark():

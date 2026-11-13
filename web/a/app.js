@@ -30,7 +30,7 @@ function renderTop() {
   top.replaceChildren(...[   // replaceChildren превращает null в текст «null» — пустые элементы отфильтровываем
     brandLock('#/', 'Модус Голос — на главную приложения', 'brand'),
     h('div', { class: 'spacer' }),
-    showPoints() ? h('span', { class: 'small muted', title: 'Мои баллы' }, iconText('star', String(ME.points || 0))) : null,
+    showPoints() ? pointsTag(ME.points || 0, '#/u/' + ME.id) : null,
     h('a', { href: '#/notifications', class: 'btn btn-sm bell', title: 'Уведомления' }, icon('bell'), ME.unread ? h('span', { class: 'n' }, String(ME.unread)) : null),
     h('a', { href: '/login', class: 'btn btn-sm', title: 'Сменить пользователя' }, ME.name.split(' ')[0])].filter(Boolean));
   renderBottomNav();
@@ -117,7 +117,7 @@ async function home() {
     // одна главная кнопка (замечание владельца 13.11, п. 5): «Проблема / Идея / Спасибо» — переключателем внутри формы, как в QR-форме
     h('a', { href: '#/new', class: 'btn btn-primary btn-big home-cta', id: 'home-cta' }, iconText('message-circle', 'Есть идея или проблема?', { size: 20 })),
     showPoints() ? h('div', { class: 'row mb8' }, h('div', { class: 'spacer' }),
-      h('a', { href: '#/points', class: 'chip chip-points' }, iconText('star', 'Мои баллы: '), h('b', {}, String(pts.balance)))) : null,   // чип, а не ссылка (замечание владельца 12.11)
+      pointsTag(pts.balance, '#/u/' + ME.id, 'pts-home')) : null,   // чип, а не ссылка (замечание владельца 12.11)
     tasksCard,
     meetingCard,
     tabs(null),
