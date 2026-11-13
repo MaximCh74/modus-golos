@@ -265,7 +265,8 @@ def test_director_map_frame_and_objects_like_cities():
     svg = (ROOT / "web" / "a" / "img" / "map-director.svg").read_text(encoding="utf-8")
     assert 'viewBox="0 0 900 643"' in svg
     assert "h('span', { class: 'm-site' }, 'объект'" in js and "icon('map-pin', { size: 30, fill: true, width: 1.5 })" in js
-    assert "const sState = s.overdue ? ' m-late' : ' m-ok';" in js and "объект без открытых обращений" not in js
+    # у директора — то же правило цвета (на главной объект как город, без цвета по просрочкам — test_stage24_home_cards.py)
+    assert "const sState = !staff ? '' : s.overdue ? ' m-late' : ' m-ok';" in js and "объект без открытых обращений" not in js
     css = (ROOT / "web" / "a" / "style.css").read_text(encoding="utf-8")
     assert ".marker.site .mlabel {" not in css and ".marker.site .pin .ic" not in css   # объект оформлен как город
 

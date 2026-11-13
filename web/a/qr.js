@@ -37,6 +37,9 @@
   const to = personPicker({ search: q => API.get('/api/public/staff?q=' + encodeURIComponent(q)) });
   const toField = field('Кому спасибо', to, 'Коллега или отдел — адресат и его руководитель получат уведомление');
   const site = h('input', { type: 'text', name: 'site_city', placeholder: 'Например: Атырау, объект ТЭЦ-2', maxlength: 80 });
+  // город объекта — из ссылки (/q/FIELD?city=Атырау): метка объекта на главной открывает форму с подставленным городом (13.11)
+  if (branch.kind === 'field') site.value = (new URLSearchParams(location.search).get('city') || '').trim().slice(0, 80);
+  const again = location.pathname + location.search;   // «Отправить ещё одно» — с тем же городом объекта
   const submit = h('button', { type: 'submit', class: 'btn btn-primary btn-big' }, 'Отправить');
   // F-08: вошедший сотрудник тоже может отправить анонимно — без связи с ним, только ссылка на статус
   const anon = h('input', { type: 'checkbox' });
@@ -86,7 +89,7 @@
         if (r.items.length) {
           similarShown = true;
           simBox.replaceChildren(similarBlock(r, { canSupport: !!me, onAnyway: () => { anyway = true; simBox.replaceChildren(); form.requestSubmit(); },
-            onSupported: i => { root.replaceChildren(h('div', { class: 'wrap' }, h('div', { class: 'card card-ok' }, h('div', { class: 'h1' }, 'Спасибо — учтено'), h('p', {}, 'Вы поддержали обращение ' + i.number + ': автор получил +2 балла, а ответственный видит, что это не единичный случай.'), h('a', { href: location.pathname, class: 'btn btn-outline' }, 'Отправить своё')))); } }));
+            onSupported: i => { root.replaceChildren(h('div', { class: 'wrap' }, h('div', { class: 'card card-ok' }, h('div', { class: 'h1' }, 'Спасибо — учтено'), h('p', {}, 'Вы поддержали обращение ' + i.number + ': автор получил +2 балла, а ответственный видит, что это не единичный случай.'), h('a', { href: again, class: 'btn btn-outline' }, 'Отправить своё')))); } }));
           submit.disabled = false;
           return;
         }
@@ -111,7 +114,7 @@
           h('div', { class: 'card card-ok' }, h('div', { class: 'h1' }, 'Спасибо передано'),
             h('p', {}, to.value ? 'Адресат и его руководитель получат уведомление, запись появится в профиле.' : 'Ваше спасибо увидят в компании.'),
             r.logged_in ? h('p', { class: 'small' }, h('a', { href: '/app#/appeal/' + r.id }, 'Открыть в приложении')) : null),
-          h('a', { href: location.pathname, class: 'btn btn-outline' }, 'Отправить ещё одно')));
+          h('a', { href: again, class: 'btn btn-outline' }, 'Отправить ещё одно')));
         return;
       }
       root.replaceChildren(h('div', { class: 'wrap' },
@@ -124,7 +127,7 @@
           h('p', { class: 'hint' }, 'Сохраните ссылку: ', h('code', {}, location.origin + r.track_url), r.logged_in ? '' : ' — без входа это единственный способ увидеть ответ.'),
           r.logged_in ? h('p', { class: 'small' }, 'Обращение привязано к вам: ', h('a', { href: '/app#/appeal/' + r.id }, 'открыть в приложении'))
                       : h('p', { class: 'small' }, h('a', { href: '/login?next=' + encodeURIComponent('/app') }, 'Войти, чтобы получать баллы за идеи'), ' · ', h('a', { href: '/rules' }, 'как начисляются баллы'))),
-        h('a', { href: location.pathname, class: 'btn btn-outline' }, 'Отправить ещё одно')));
+        h('a', { href: again, class: 'btn btn-outline' }, 'Отправить ещё одно')));
     } catch (e) { toast(e.message, 'bad'); submit.disabled = false; }
   });
 })();

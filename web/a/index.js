@@ -1,13 +1,13 @@
 'use strict';
 // Стартовая «Модус Голос» (этап 7, шаг 1; правки владельца 12.11): шапка, заголовок с красной чертой, живая карта на реальных контурах (одно смелое место страницы),
-// карточка города рядом с меткой (на телефоне — снизу листом), три тихие карточки-входа. Данные — /api/public/map без входа.
+// карточка города рядом с меткой (на телефоне — снизу листом), под картой — карточки-входы в градиенте главной кнопки. Данные — /api/public/map без входа.
 (async function () {
   const root = document.getElementById('root');
   const hero = h('section', { class: 'hero-text' }, h('span', { class: 'dash' }), h('h1', { class: 'display' }, 'Есть идея или ', h('em', {}, 'проблема?')),
     h('p', { class: 'lead' }, 'Выберите город или отсканируйте QR — без установки и регистрации'));
   const mapSlot = h('div', { class: 'home-map' }, h('div', { class: 'skeleton', style: null }));
   mapSlot.firstChild.style.aspectRatio = '900 / 643';   // та же рамка, что у карты директора
-  const featsSlot = h('div', { class: 'feats' }, [1, 2, 3].map(() => { const k = h('div', { class: 'skeleton' }); k.style.height = '76px'; return k; }));
+  const featsSlot = h('div', { class: 'feats' }, [1, 2].map(() => { const k = h('div', { class: 'skeleton' }); k.style.height = '96px'; return k; }));
   const main = h('main', { class: 'home' }, h('div', { class: 'home-arc', 'aria-hidden': 'true' }, h('i'), h('i')), hero, mapSlot, featsSlot);
   root.replaceChildren(siteHeader(null, {}), main);
 
@@ -16,8 +16,9 @@
   let selected = null;
   const isMobile = () => window.matchMedia('(max-width: 768px)').matches;
   // одна подложка и одна рамка карты везде (замечание владельца 13.11): как у директора — 46…86° в. д., 45…62° с. ш., на всю ширину блока;
-  // на главной — только филиалы (объекты — у директора)
-  const mapEl = mapView(map, { frame: MAP_DIRECTOR, motion: true, onBranch: b => select(b) });
+  // объекты командированных — тем же стилем, что города (метка, город, мелко «объект»); нажатие — форма «Объект» с подставленным городом
+  const siteForm = s => map.field ? map.field.form_url + '?city=' + encodeURIComponent(s.city) : null;
+  const mapEl = mapView(map, { frame: MAP_DIRECTOR, motion: true, onBranch: b => select(b), onSite: s => { const u = siteForm(s); if (u) location.href = u; } });
   const pop = h('div', { class: 'citypop hidden', role: 'dialog' });
   mapEl.map.append(pop);   // окно города — в рамке карты (не в движущейся сцене): так оно не вылезает за края
   const pills = h('div', { class: 'city-pills' });
@@ -74,13 +75,15 @@
   mapEl.map.addEventListener('click', e => { if (e.target === mapEl.map || e.target === mapEl.scene || e.target.classList.contains('map-bg') || e.target.classList.contains('map-layer')) closeAll(); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeAll(); });
 
+  // карточки под картой (замечание владельца 13.11): фирменный градиент главной кнопки, белый текст, одной высоты, без значков;
+  // «Статистика» — ссылкой в подвале
   const submit = h('button', { type: 'button', class: 'feat', onclick: () => { if (selected) location.href = selected.form_url; else { toast('Сначала выберите город на карте или в списке'); pills.firstChild.focus(); pills.scrollIntoView({ behavior: 'smooth', block: 'center' }); } } },
-    h('div', {}, h('b', {}, 'Подать обращение'), h('span', {}, 'Идеи, вопросы, проблемы')));
-  const changes = h('a', { href: '/changes', class: 'feat' }, h('div', {}, h('b', {}, 'Результаты обращений'), h('span', {}, 'Что уже сделано по вашим идеям')));
+    h('b', {}, 'Подать обращение'), h('span', {}, 'Сотрудникам: идеи, вопросы, проблемы'));
+  const changes = h('a', { href: '/changes', class: 'feat' }, h('b', {}, 'Результаты обращений'), h('span', {}, 'Что уже сделано по вашим идеям'));
+  featsSlot.replaceChildren(submit, changes);
   const statsHref = me && me.role !== 'employee' ? '/panel#/summary' : '/login?next=' + encodeURIComponent('/panel#/summary');
-  const stats = h('a', { href: statsHref, class: 'feat' }, h('div', {}, h('b', {}, 'Статистика'), h('span', {}, 'Открытые и решённые')));
-  featsSlot.replaceChildren(submit, changes, stats);
-  main.append(h('div', { class: 'home-foot' }, h('span', {}, h('a', { href: '/rules' }, 'Как начисляются баллы'), ' — прозрачные правила вместо разовых премий'),
+  main.append(h('div', { class: 'home-foot' }, h('span', {}, h('a', { href: '/rules' }, 'Как начисляются баллы'), ' — прозрачные правила вместо разовых премий · ',
+    h('a', { href: statsHref, class: 'foot-stats' }, 'Статистика')),
     h('span', {}, 'разработано ', h('b', {}, 'Cyber QALQAN Systems'), ' · данные демонстрационные · ', versionTag())));
   if (!isMobile() && map.branches.length) select(map.branches[0]);   // на ноутбуке сразу показываем головной офис, как на макете
 })();

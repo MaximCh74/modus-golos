@@ -4,7 +4,8 @@
 // Рамка — та же, что в tools/make_map.py (lon 45…82, lat 46.5…60.5). Маркеры позиционируются в процентах через CSSOM (CSP без
 // inline-стилей). opts: staff — служебные подписи; legend — легенда (по умолчанию нет); countries — подписи стран (по умолчанию есть);
 // crop: {aspect, top} — на стартовой карта показывается более широкой полосой (object-fit: cover, верх обрезки top — доля высоты);
-// motion — живая карта (наезд/отъезд, метки по одной; класс .live, анимации в style.css); слой объектов (data.sites) — только при staff.
+// motion — живая карта (наезд/отъезд, метки по одной; класс .live, анимации в style.css); слой объектов (data.sites) — везде: у директора
+// с цифрами и цветом по просрочкам, на главной — только город и мелко «объект» (замечание владельца 13.11: Атырау вернуть на главную).
 // onBranch(b, el), onSite(s, el). Методы: flash(id), select(id|null), pos(id) → {x, y} в процентах контейнера.
 // Подписи стран не прячутся за обрезкой: прижимаются к краю полосы (clamp), чтобы «Казахстан» был виден и на широкой ленте ноутбука.
 const MAP = { lon0: 45, lon1: 82, lat0: 46.5, lat1: 60.5, aspect: 900 / 579, src: '/a/img/map.svg',
@@ -42,7 +43,7 @@ function mapView(data, opts) {
       // доступная высота — у обёртки (она тянется на высоту колонки), а не у самой карты: так нет качелей «растянул — сжал»
       const W = box.clientWidth, H = wrapEl.clientHeight - (legendEl ? legendEl.offsetHeight + 8 : 0);
       const ba = W / Math.max(1, H);
-      const pts = [...(data.branches || []), ...(staff ? data.sites || [] : [])].filter(p => mapInside(p.lat, p.lng, F)).map(p => mapXY(p.lat, p.lng, F));
+      const pts = [...(data.branches || []), ...(data.sites || [])].filter(p => mapInside(p.lat, p.lng, F)).map(p => mapXY(p.lat, p.lng, F));
       const xs = pts.map(p => p[0] / 100), need = xs.length ? Math.min(1, Math.max(...xs) - Math.min(...xs) + 0.06) : 0;   // поля — по полбулавки
       const tooTall = ba / F.aspect < need - 0.01;   // окно уже разброса меток — карту не тянем, метки дороже ровного края (допуск — округление)
       box.classList.toggle('nofill', tooTall);
@@ -71,18 +72,22 @@ function mapView(data, opts) {
     for (const c of F.countries) { const el = h('span', { class: 'map-country' }, c.name); placed.push([el, c.lat, c.lng, true]); layerCountries.append(el); }
   }
   const outside = [];
-  for (const s of staff ? data.sites || [] : []) {   // объекты командированных — только в панели директора
+  const order = [...(data.branches || []), ...(data.sites || [])].map(p => p.lng).sort((a, b) => a - b);   // порядок появления меток — с запада на восток
+  for (const s of data.sites || []) {   // объекты командированных — у директора и на главной
     if (!mapInside(s.lat, s.lng, F)) { outside.push(s); continue; }
     // объект командированных — точно как город (замечание владельца 13.11): такая же большая метка того же цвета по тому же правилу
-    // (зелёная — просрочек нет, красная — есть) и такая же карточка-подпись; отличие — «объект» мелко серым во второй строке
-    const sState = s.overdue ? ' m-late' : ' m-ok';
+    // (у директора зелёная — просрочек нет, красная — есть; на главной — как города) и такая же карточка-подпись; отличие — «объект»
+    // мелко серым во второй строке; служебные цифры (открытые, просрочки) — только у директора
+    const sState = !staff ? '' : s.overdue ? ' m-late' : ' m-ok';
     const sm = h('button', { type: 'button', class: 'marker site' + sState, title: 'Объект командированных: ' + s.city, onclick: () => { if (opts.onSite) opts.onSite(s, sm); } },
       h('span', { class: 'pin' }, icon('map-pin', { size: 30, fill: true, width: 1.5 })),
-      h('span', { class: 'mlabel' }, h('b', {}, s.city), h('span', { class: 'm-site' }, 'объект', h('span', { class: 'm-rest' }, ' · ' + s.open + ' откр.' + (s.overdue ? ' · просрочено ' + s.overdue : '')))));
+      h('span', { class: 'mlabel' }, h('b', {}, s.city), h('span', { class: 'm-site' }, 'объект',
+        staff ? h('span', { class: 'm-rest' }, ' · ' + s.open + ' откр.' + (s.overdue ? ' · просрочено ' + s.overdue : '')) : null)));
+    sm.dataset.site = s.city;
+    sm.style.setProperty('--i', String(order.indexOf(s.lng)));
     placed.push([sm, s.lat, s.lng]);
     layerSites.append(sm);
   }
-  const order = (data.branches || []).map(b => b.lng).sort((a, b) => a - b);   // порядок появления меток — с запада на восток
   for (const b of data.branches || []) {
     if (!mapInside(b.lat, b.lng, F)) continue;
     const sub = staff ? b.open + ' откр.' + (b.overdue ? ' · просрочено ' + b.overdue : '') : null;   // на главной — только город (замечание 13.11)
@@ -190,7 +195,7 @@ function mapView(data, opts) {
   wrap.relayout = relayout;
   // fill: наибольшая высота блока карты, при которой все метки ещё в окне (для сводки: длиннее — прокрутка внутри сводки)
   wrap.fillLimit = () => {
-    const xs = [...(data.branches || []), ...(staff ? data.sites || [] : [])].filter(p => mapInside(p.lat, p.lng, F)).map(p => mapXY(p.lat, p.lng, F)[0] / 100);
+    const xs = [...(data.branches || []), ...(data.sites || [])].filter(p => mapInside(p.lat, p.lng, F)).map(p => mapXY(p.lat, p.lng, F)[0] / 100);
     const need = xs.length ? Math.min(1, Math.max(...xs) - Math.min(...xs) + 0.06) : 1;
     return box.clientWidth / (F.aspect * need);
   };

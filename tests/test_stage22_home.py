@@ -1,5 +1,5 @@
 """Главная (замечания владельца 13.11): одна подложка и одна рамка карты, как у директора (46…86° в. д., 45…62° с. ш.), на всю ширину
-блока, только филиалы; карта реально движется — и при «уменьшить движение» в системе (мягкий дрейф 30 с, метки без вспышек); окно
+блока (объекты командированных — тоже, см. test_stage24_home_cards.py); карта реально движется — и при «уменьшить движение» в системе (мягкий дрейф 30 с, метки без вспышек); окно
 города по образцу — шапка с меткой и крестиком, плитки «Открытых» и «Решено за месяц», QR, «Главная тема», кнопка «Подать обращение» —
 целиком внутри карты; на телефоне — шторкой снизу."""
 import os
@@ -64,13 +64,14 @@ def _home(browser, base, width, reduced="no-preference"):
     return ctx, page, errors
 
 
-def test_home_map_same_frame_full_width_branches_only(base, browser):
+def test_home_map_same_frame_full_width(base, browser):
     ctx, page, errors = _home(browser, base, 1440)
     try:
         g = page.evaluate("""(() => { const m = document.querySelector('.map').getBoundingClientRect(), slot = document.querySelector('.home-map').getBoundingClientRect();
           return { src: document.querySelector('.map-bg').getAttribute('src'), ratio: m.width / m.height, full: Math.abs(m.width - slot.width) <= 1,
                    sites: document.querySelectorAll('.map .marker.site').length, cropped: document.querySelector('.map').classList.contains('cropped') }; })()""")
-        assert g["src"] == "/a/img/map-director.svg" and abs(g["ratio"] - 900 / 643) < 0.02 and g["full"] and g["sites"] == 0 and not g["cropped"]
+        # объекты командированных снова на главной (замечание владельца 13.11, после этого теста): Атырау из начальных данных
+        assert g["src"] == "/a/img/map-director.svg" and abs(g["ratio"] - 900 / 643) < 0.02 and g["full"] and g["sites"] == 1 and not g["cropped"]
         assert not errors, errors
     finally:
         ctx.close()
