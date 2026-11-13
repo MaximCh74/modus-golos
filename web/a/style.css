@@ -683,7 +683,8 @@ select { appearance: none; -webkit-appearance: none; padding-right: 34px; backgr
 .boss-tile.tile-done .tile-ic { background: var(--tile-done-ic); color: var(--tile-done-fg); }
 .boss-tile.tile-decisions { background: var(--tile-dec-bg); border-color: var(--tile-dec-line); }
 .boss-tile.tile-overdue { background: var(--tile-late-bg); border-color: var(--tile-late-bg); }
-.boss-tile.tile-overdue .tile-ic { background: var(--tile-late-ic); color: var(--red-dark); }
+.boss-tile.tile-overdue .tile-ic { background: var(--tile-late-ic); }
+.boss-tile.tile-overdue .tile-ic .ic { stroke: var(--red-dark); }   /* иконка, не текст: красного текста нет */
 .boss-tile.tile-overdue:not(.zero) .tile-ic::after { content: ''; position: absolute; top: 4px; right: 4px; width: 9px; height: 9px; border-radius: 50%; background: var(--red); box-shadow: 0 0 0 2px var(--white); }
 .boss-tile .tile-label { font-size: 13px; color: var(--muted); line-height: 1.2; }
 .boss-tile.zero b { color: var(--muted-2); }
