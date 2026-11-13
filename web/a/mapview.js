@@ -48,9 +48,11 @@ function mapView(data, opts) {
   const outside = [];
   for (const s of staff ? data.sites || [] : []) {   // объекты командированных — только в панели директора
     if (!mapInside(s.lat, s.lng)) { outside.push(s); continue; }
-    // объект командированных — маленькая контурная метка с подписью «объект · Атырау» (замечание владельца 13.11, вместо серой точки)
-    const sm = h('button', { type: 'button', class: 'marker site', title: 'Объект командированных: ' + s.city + ' · открытых ' + s.open, onclick: () => { if (opts.onSite) opts.onSite(s, sm); } },
-      h('span', { class: 'pin pin-outline' }, icon('map-pin', { size: 20, width: 2 })), h('span', { class: 'mlabel' }, 'объект · ' + s.city));
+    // объект командированных — маленькая метка «объект · Атырау» по той же логике цвета (замечание 13.11): зелёная — просрочек нет,
+    // красная — есть просрочки; открытых обращений нет (данных нет) — серая контурная
+    const sState = s.open ? (s.overdue ? ' m-late' : ' m-ok') : ' m-none';
+    const sm = h('button', { type: 'button', class: 'marker site' + sState, title: 'Объект командированных: ' + s.city + ' · открытых ' + s.open + (s.overdue ? ' · просрочено ' + s.overdue : ''), onclick: () => { if (opts.onSite) opts.onSite(s, sm); } },
+      h('span', { class: 'pin' + (s.open ? '' : ' pin-outline') }, icon('map-pin', { size: 20, fill: !!s.open, width: s.open ? 1.5 : 2 })), h('span', { class: 'mlabel' }, 'объект · ' + s.city));
     placed.push([sm, s.lat, s.lng]);
     layerSites.append(sm);
   }
@@ -58,11 +60,11 @@ function mapView(data, opts) {
   for (const b of data.branches || []) {
     if (!mapInside(b.lat, b.lng)) continue;
     const sub = staff ? b.open + ' откр.' + (b.overdue ? ' · просрочено ' + b.overdue : '') : null;   // на главной — только город (замечание 13.11)
-    // у директора цвет метки — состояние города: зелёная — открытых нет, жёлтая — есть открытые, красная — есть просроченные (13.11)
-    const state = !staff ? '' : b.overdue ? ' m-late' : b.open ? ' m-open' : ' m-ok';
-    const m = h('button', { type: 'button', class: 'marker' + state + (staff && b.overdue ? ' warn' : '') + (b.kind === 'production' ? ' prod' : ''), title: b.name, onclick: () => { if (opts.onBranch) opts.onBranch(b, m); } },
+    // у директора цвет метки — два цвета (замечание 13.11): зелёная — просрочек нет, красная — есть просрочки
+    const state = !staff ? '' : b.overdue ? ' m-late' : ' m-ok';
+    const m = h('button', { type: 'button', class: 'marker' + state + (b.kind === 'production' ? ' prod' : ''), title: b.name, onclick: () => { if (opts.onBranch) opts.onBranch(b, m); } },
       h('span', { class: 'pin' }, icon('map-pin', { size: 30, fill: true, width: 1.5 })),
-      h('span', { class: 'mlabel' }, h('b', {}, b.city), sub ? h('span', {}, sub) : null, staff && b.overdue ? icon('alert', { size: 12, cls: 'warn-ic' }) : null));
+      h('span', { class: 'mlabel' }, h('b', {}, b.city), sub ? h('span', {}, sub) : null));   // без «⚠»: «5 откр. · просрочено 2»
     m.dataset.branch = b.id;
     m.style.setProperty('--i', String(order.indexOf(b.lng)));
     placed.push([m, b.lat, b.lng]);
@@ -74,10 +76,10 @@ function mapView(data, opts) {
   const wrap = h('div', { class: 'mapwrap' }, box);
   if (opts.legend) {
     wrap.append(h('div', { class: 'row small muted mt8 legend' },
-      staff ? h('span', { class: 'ict' }, icon('map-pin', { size: 16, fill: true, cls: 'lg-pin m-ok' }), 'открытых нет') : null,
-      staff ? h('span', { class: 'ict' }, icon('map-pin', { size: 16, fill: true, cls: 'lg-pin m-open' }), 'есть открытые') : null,
-      staff ? h('span', { class: 'ict' }, icon('map-pin', { size: 16, fill: true, cls: 'lg-pin m-late' }), 'есть просроченные') : h('span', { class: 'ict' }, icon('map-pin', { size: 16, fill: true, cls: 'lg-pin' }), 'офис / производство'),
-      h('span', { class: 'ict' }, icon('map-pin', { size: 16, width: 2, cls: 'lg-pin lg-site' }), 'объект командированных (город из QR)'),
+      staff ? h('span', { class: 'ict' }, icon('map-pin', { size: 16, fill: true, cls: 'lg-pin m-ok' }), 'просрочек нет') : null,
+      staff ? h('span', { class: 'ict' }, icon('map-pin', { size: 16, fill: true, cls: 'lg-pin m-late' }), 'есть просрочки') : h('span', { class: 'ict' }, icon('map-pin', { size: 16, fill: true, cls: 'lg-pin' }), 'офис / производство'),
+      h('span', { class: 'ict' }, icon('map-pin', { size: 16, width: 2, cls: 'lg-pin lg-site' }), 'объект без открытых обращений'),
+      staff && (data.unplaced || []).length ? h('span', {}, 'без метки: ' + data.unplaced.map(s => s.city + ' (' + s.total + ')').join(', ') + ' — точку ставит администратор') : null,
       outside.length ? h('span', {}, 'вне рамки: ' + outside.map(s => s.city + ' (' + s.open + ')').join(', ')) : null));
   }
   if (opts.crop) window.addEventListener('resize', relayout);

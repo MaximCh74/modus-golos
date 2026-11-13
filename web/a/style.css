@@ -10,7 +10,7 @@
   --navy: #082742; --ink: #323a47; --muted: #64748d; --muted-2: #8a95a6; --map-label: #7b889c;
   --line: #d1d5dd; --line-soft: #e6e9ef; --bg: #ffffff; --bg-soft: #f5f7fb; --tint: #eff6fd; --tint-line: #cfe0f6; --blue: #2f80ed; --white: #ffffff;
   --map-water: #eaf0f6;
-  --map-ok: #1f9a55; --map-open: #e3a400;   /* метки карты директора: зелёная — открытых нет, жёлтая — есть открытые, красная — просрочки */
+  --map-ok: #1f9a55; --map-none: #8a95a6;   /* метки карты директора: зелёная — просрочек нет, красная — есть просрочки; серая контурная — объект без данных */
   /* приглушённые статусные */
   --ok: #1f7a46; --warn: #9a5b00; --bad: #7a1f1f;
   --ok-bg: #f1faf4; --ok-line: #bfe3cc; --ok-tag-bg: #e3f4ea; --ok-tag-fg: #1f6f3f;
@@ -344,17 +344,22 @@ tr.muted td { opacity: .6; }
 .marker .mlabel .warn-ic { color: var(--warn); vertical-align: -2px; margin-left: 3px; display: inline; }
 .marker.blink .pin { animation: blink .6s 6; }
 .marker.site { transform: translate(-10px, -100%); }   /* остриё контурной метки — в точке объекта */
-.marker .pin-outline { color: var(--navy); filter: none; }
+.marker .pin-outline { color: var(--map-none); filter: none; }
+.marker.site .pin .ic { width: 20px; height: 20px; }   /* объект — маленькая метка и на телефоне */
 .marker .pin-outline .ic { stroke: currentColor; fill: var(--white); }
 .marker.m-ok .pin, .marker.m-ok:hover .pin, .lg-pin.m-ok { color: var(--map-ok); }
-.marker.m-open .pin, .marker.m-open:hover .pin, .lg-pin.m-open { color: var(--map-open); }
 .marker.m-late .pin, .marker.m-late:hover .pin, .lg-pin.m-late { color: var(--red); }
-.lg-pin.lg-site { color: var(--navy); fill: var(--white); stroke: currentColor; }
+.lg-pin.lg-site { color: var(--map-none); fill: var(--white); stroke: currentColor; }
 .sdot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--muted-2); border: 1.5px solid var(--white); box-shadow: 0 0 0 1px var(--muted-2); }
 .sdot.lg { width: 8px; height: 8px; }
 .marker.site .mlabel { display: inline-block; font-size: 10px; margin: 0 0 0 4px; padding: 2px 6px; vertical-align: middle; }
 .lg-pin { color: var(--red); stroke: var(--white); }
 .legend { gap: 14px; }
+/* ручная точка объекта на карте (администрирование) */
+.geo-pick { margin-top: 10px; }
+.geo-wrap { position: relative; cursor: crosshair; border-radius: var(--radius); overflow: hidden; border: 1px solid var(--line-soft); }
+.geo-map { display: block; width: 100%; height: auto; }
+.geo-dot { position: absolute; width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: 50%; background: var(--navy); box-shadow: 0 0 0 3px var(--white); pointer-events: none; }
 
 /* главная (этап 7, шаг 1) */
 .site-head { display: flex; align-items: center; gap: var(--s2); padding: 14px var(--s4); background: var(--white); border-bottom: 1px solid var(--line-soft); }
