@@ -12,7 +12,7 @@ from mf.main import app
 
 @pytest.fixture(scope="module")
 def c():
-    with TestClient(app) as client:
+    with TestClient(app, client=("127.0.0.1", 50000)) as client:   # ручная точка на карте — администрирование с ноутбука (F-03)
         yield client
 
 
@@ -103,3 +103,53 @@ def test_other_commands_not_hijacked(c, text, intent):
     login(c, 1)
     r = c.post("/api/director/command/parse", json={"text": text}).json()
     assert r["command"]["intent"] == intent and r["plan"]["kind"] != "clarify"
+
+
+# ---------- карта директора: справочник городов объектов, «без метки», ручная точка администратора (замечание 13.11) ----------
+
+def _field_appeal(c, city, text):
+    c.cookies.clear()
+    r = c.post("/api/public/appeals", data={"type": "problem", "text": text, "branch_code": "FIELD", "site_city": city})
+    assert r.status_code == 200, r.text
+
+
+def _site(c, city):
+    login(c, 1)
+    m = c.get("/api/panel/map").json()
+    return next((s for s in m["sites"] if s["city"] == city), None), m
+
+
+def test_object_from_new_known_city_appears_on_map(c):
+    _field_appeal(c, "г. Караганда, промплощадка", "На объекте в Караганде нет актуальной схемы щита, рисуем заново")
+    s, m = _site(c, "Караганда")
+    assert s and abs(s["lat"] - 49.80) < 0.1 and abs(s["lng"] - 73.11) < 0.1 and s["open"] >= 1
+    assert all(u["city"] != "Караганда" for u in m["unplaced"])
+    _field_appeal(c, "Өскемен", "Объект в Усть-Каменогорске: не пришла спецификация на кабель")   # казахское название
+    s, _ = _site(c, "Усть-Каменогорск")
+    assert s and abs(s["lat"] - 49.95) < 0.1
+
+
+def test_unknown_city_unplaced_then_admin_point(c):
+    _field_appeal(c, "Новоишимка", "На объекте в Новоишимке нет связи с офисом по заявкам")
+    s, m = _site(c, "Новоишимка")
+    assert s and "lat" not in s and any(u["city"] == "Новоишимка" for u in m["unplaced"])
+    login(c, 15)
+    assert any(u["city"] == "Новоишимка" for u in c.get("/api/admin/geo").json()["unplaced"])
+    with TestClient(app) as outside:   # снаружи (как через туннель) демо-сессии ставить точки не могут
+        assert outside.post("/api/auth/login-as", json={"user_id": 15}).status_code == 200
+        assert outside.post("/api/admin/geo/points", json={"city": "Новоишимка", "lat": 53.2, "lng": 66.8}).status_code == 403
+    assert c.post("/api/admin/geo/points", json={"city": "Новоишимка", "lat": 53.2, "lng": 66.8}).status_code == 200
+    assert c.post("/api/admin/geo/points", json={"city": "Где-то", "lat": 10, "lng": 10}).status_code == 422   # вне KZ и RU
+    s, m = _site(c, "Новоишимка")
+    assert s["lat"] == 53.2 and s["lng"] == 66.8 and all(u["city"] != "Новоишимка" for u in m["unplaced"])
+    login(c, 15)
+    c.post("/api/admin/geo/points/remove", json={"city": "Новоишимка"})
+    s, _ = _site(c, "Новоишимка")
+    assert "lat" not in s
+
+
+def test_director_map_two_colors_data(c):
+    """Данные для двух цветов: у филиалов и объектов есть «просрочено»; зелёная — 0, красная — больше 0."""
+    login(c, 1)
+    m = c.get("/api/panel/map").json()
+    assert all("overdue" in b and "open" in b for b in m["branches"]) and all("overdue" in s for s in m["sites"])

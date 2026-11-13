@@ -1139,6 +1139,44 @@ class SettingsBody(BaseModel):
     settings: dict
 
 
+# ---------- точки объектов на карте (замечание владельца 13.11): справочник городов + ручные точки администратора ----------
+
+class GeoPointBody(BaseModel):
+    city: str
+    lat: float | None = None
+    lng: float | None = None
+
+
+@router.get("/admin/geo")
+async def admin_geo(request: Request):
+    """Объекты «без метки» (город из QR не найден в справочнике) и точки, поставленные вручную."""
+    auth.require(request, "admin", "director")
+    from . import geo
+    md = director.map_data()
+    return {"unplaced": md["unplaced"], "points": [{"key": k, **v} for k, v in geo.manual_points().items()],
+            "frame": {"lon0": 45.0, "lon1": 82.0, "lat0": 46.5, "lat1": 60.5}}
+
+
+@router.post("/admin/geo/points")
+async def admin_geo_point(body: GeoPointBody, request: Request):
+    auth.require_full(request, "admin", "director")
+    from . import geo
+    if body.lat is None or body.lng is None:
+        raise HTTPException(422, "Нужны координаты точки")
+    try:
+        return geo.set_point(body.city, body.lat, body.lng)
+    except ValueError as e:
+        raise HTTPException(422, str(e))
+
+
+@router.post("/admin/geo/points/remove")
+async def admin_geo_point_remove(body: GeoPointBody, request: Request):
+    auth.require_full(request, "admin", "director")
+    from . import geo
+    geo.remove_point(body.city)
+    return {"ok": True}
+
+
 @router.post("/admin/settings")
 async def admin_settings_save(body: SettingsBody, request: Request):
     auth.require(request, "admin", "director")

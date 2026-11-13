@@ -8,22 +8,13 @@ import logging
 import re
 from datetime import timedelta
 
-from . import appeals, db, meetings
+from . import appeals, db, geo, meetings
 from .ai import llm, similar
 
 log = logging.getLogger("mf.director")
 CACHE_TTL = 3600
 # координаты городов объектов для слоя «Объекты» (командированные указывают город текстом, без геолокации)
-CITY_COORDS = {
-    "атырау": (47.1167, 51.8833), "актау": (43.65, 51.2), "актобе": (50.2839, 57.1670), "караганда": (49.8047, 73.1094),
-    "шымкент": (42.3417, 69.5901), "усть-каменогорск": (49.9483, 82.6275), "өскемен": (49.9483, 82.6275), "кокшетау": (53.2833, 69.3833),
-    "костанай": (53.2144, 63.6246), "петропавловск": (54.8667, 69.15), "семей": (50.4111, 80.2275), "тараз": (42.9, 71.3667),
-    "талдыкорган": (45.0167, 78.3667), "туркестан": (43.2975, 68.2517), "уральск": (51.2333, 51.3667), "кызылорда": (44.8488, 65.4823),
-    "экибастуз": (51.7298, 75.3266), "темиртау": (50.0547, 72.9647), "жезказган": (47.7833, 67.7667), "балхаш": (46.8481, 74.9950),
-    "алматы": (43.2380, 76.8829), "астана": (51.1694, 71.4491), "павлодар": (52.2873, 76.9674), "омск": (54.9885, 73.3242),
-    "самара": (53.1959, 50.1002), "тюмень": (57.1530, 65.5343), "новосибирск": (55.0084, 82.9357), "екатеринбург": (56.8389, 60.6057),
-    "челябинск": (55.1644, 61.4368), "курган": (55.4500, 65.3333), "оренбург": (51.7727, 55.0988), "уфа": (54.7388, 55.9721),
-}
+# координаты городов объектов — справочник mf/geo.py (все областные центры KZ и RU, промышленные города, точки администратора)
 
 
 def _city_key(s: str) -> str:
@@ -307,14 +298,17 @@ def map_data() -> dict:
     for r in rows:
         if not r.get("site_city"):
             continue
-        key = _city_key(r["site_city"])
-        s = sites.setdefault(key, {"city": r["site_city"].split(",")[0].strip(), "total": 0, "open": 0, "numbers": []})
+        g = geo.lookup(r["site_city"])
+        key = geo.norm(g["name"] if g else r["site_city"])
+        s = sites.setdefault(key, {"city": g["name"] if g else r["site_city"].split(",")[0].strip(), "total": 0, "open": 0, "overdue": 0, "numbers": []})
         s["total"] += 1
-        s["open"] += 1 if r["status"] in appeals.OPEN else 0
+        is_open = r["status"] in appeals.OPEN
+        s["open"] += 1 if is_open else 0
+        s["overdue"] += 1 if is_open and r["overdue"] else 0
         s["numbers"].append(r["number"])
-        if key in CITY_COORDS:
-            s["lat"], s["lng"] = CITY_COORDS[key]
-    return {"branches": out_b, "sites": list(sites.values())}
+        if g:
+            s["lat"], s["lng"] = g["lat"], g["lng"]
+    return {"branches": out_b, "sites": list(sites.values()), "unplaced": [x for x in sites.values() if "lat" not in x]}   # «без метки» — админ ставит точку
 
 
 def public_map_data(base_url: str) -> dict:

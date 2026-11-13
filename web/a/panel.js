@@ -527,7 +527,50 @@ async function adminScreen() {
             h('div', { class: 'row' }, h('a', { href: b.poster_url, class: 'btn btn-sm', target: '_blank', rel: 'noopener', title: 'Плакат A4 с QR для печати' }, iconText('printer', 'Плакат PDF')),
               h('button', { class: 'btn btn-sm', title: 'Скопировать ссылку на форму', onclick: async () => { try { await navigator.clipboard.writeText(b.form_url); toast('Ссылка скопирована: ' + b.form_url); } catch (e) { toast('Скопируйте вручную: ' + b.form_url); } } }, iconText('link', 'Скопировать ссылку')),
               h('a', { href: '/q/' + b.code, class: 'btn btn-sm btn-ghost', target: '_blank', rel: 'noopener', title: 'Открыть форму обращения' }, iconText('external-link', 'Открыть форму')))))))),
+        geoAdminCard(),
         h('div', { class: 'card' }, h('b', {}, 'Аватарки'), avatars.length ? h('div', { class: 'list mt8' }, avatars.map(u => h('div', { class: 'item' }, h('div', { class: 'row' }, avatarEl({ name: u.name, avatar: '/api/avatars/' + u.avatar }), h('span', {}, u.name), h('div', { class: 'spacer' }), h('button', { class: 'btn btn-sm', onclick: async () => { await API.post('/api/admin/users/' + u.id + '/avatar/remove'); toast('Убрана'); adminScreen(); } }, 'Убрать'))))) : h('div', { class: 'muted small mt8' }, 'Пользовательских аватарок нет'))))));
+}
+
+// ---------- объекты на карте (замечание владельца 13.11): город из QR «Объект» встаёт на карту сам по справочнику (mf/geo.py: областные
+// центры KZ и RU, промышленные города); незнакомый — здесь, администратор ставит точку нажатием на карту ----------
+function geoAdminCard() {
+  const box = h('div', { class: 'card' }, h('b', {}, 'Объекты на карте'), h('div', { class: 'small muted mt8' }, 'Загружаем…'));
+  const load = async () => {
+    let d;
+    try { d = await API.get('/api/admin/geo'); } catch (e) { box.replaceChildren(h('b', {}, 'Объекты на карте'), h('div', { class: 'small muted mt8' }, e.message)); return; }
+    const picker = h('div', { class: 'geo-pick hidden' });
+    const pick = city => {
+      const img = h('img', { src: '/a/img/map.svg', alt: 'Карта: нажмите, где находится ' + city, class: 'geo-map' });
+      const dot = h('span', { class: 'geo-dot hidden' });
+      const wrap = h('div', { class: 'geo-wrap' }, img, dot);
+      const f = d.frame;
+      const status = h('div', { class: 'small mt8' }, 'Нажмите на карте, где находится «' + city + '».');
+      let pt = null;
+      const save = h('button', { class: 'btn btn-sm btn-primary', disabled: true, onclick: async () => {
+        try { await API.post('/api/admin/geo/points', { city, lat: pt.lat, lng: pt.lng }); toast('Точка поставлена: ' + city); load(); } catch (e) { toast(e.message, 'bad'); }
+      } }, 'Сохранить точку');
+      wrap.addEventListener('click', ev => {
+        const r = img.getBoundingClientRect();
+        const x = (ev.clientX - r.left) / r.width, y = (ev.clientY - r.top) / r.height;
+        pt = { lng: Math.round((f.lon0 + x * (f.lon1 - f.lon0)) * 1e4) / 1e4, lat: Math.round((f.lat1 - y * (f.lat1 - f.lat0)) * 1e4) / 1e4 };
+        dot.style.left = (x * 100) + '%'; dot.style.top = (y * 100) + '%'; dot.classList.remove('hidden');
+        status.textContent = '«' + city + '»: ' + pt.lat.toFixed(2) + ' с. ш., ' + pt.lng.toFixed(2) + ' в. д.'; save.disabled = false;
+      });
+      picker.replaceChildren(wrap, status, h('div', { class: 'row mt8' }, save, h('button', { class: 'btn btn-sm', onclick: () => picker.classList.add('hidden') }, 'Отмена')));
+      picker.classList.remove('hidden');
+    };
+    box.replaceChildren(...[h('b', {}, 'Объекты на карте'),   // replaceChildren пишет null текстом — пустое отфильтровано
+      h('div', { class: 'hint' }, 'Город объекта из QR-формы встаёт на карту сам — по справочнику областных центров и промышленных городов Казахстана и России. Незнакомый город — ниже: поставьте точку нажатием на карту. Новый филиал — с координатами, как раньше.'),
+      d.unplaced.length ? h('div', { class: 'list mt8' }, d.unplaced.map(s => h('div', { class: 'item noclick' }, h('div', { class: 'row' },
+        h('span', {}, h('b', {}, s.city), h('span', { class: 'small muted' }, ' · обращений: ' + s.total)), h('div', { class: 'spacer' }),
+        h('button', { class: 'btn btn-sm', onclick: () => pick(s.city) }, iconText('map-pin', 'Поставить точку')))))) : h('div', { class: 'small muted mt8' }, 'Все объекты на карте — без метки нет.'),
+      picker,
+      d.points.length ? h('div', { class: 'mt8' }, h('div', { class: 'small muted' }, 'Точки, поставленные вручную:'), h('div', { class: 'list' }, d.points.map(p => h('div', { class: 'item noclick' }, h('div', { class: 'row' },
+        h('span', {}, p.name, h('span', { class: 'small muted' }, ' · ' + p.lat.toFixed(2) + ', ' + p.lng.toFixed(2))), h('div', { class: 'spacer' }),
+        h('button', { class: 'btn btn-sm btn-ghost', onclick: async () => { try { await API.post('/api/admin/geo/points/remove', { city: p.name }); toast('Точка убрана'); load(); } catch (e) { toast(e.message, 'bad'); } } }, 'Убрать')))))) : null].filter(Boolean));
+  };
+  load();
+  return box;
 }
 
 // ---------- «Справка» (пункт 1 очереди 12.11): термины по разделам из единого словаря, поиск, переход по ссылке из подсказки «?» ----------
