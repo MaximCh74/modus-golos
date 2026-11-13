@@ -32,7 +32,7 @@
   async function loginAs(u) {
     try {
       const me = await API.post('/api/auth/login-as', { user_id: u.id });
-      location.href = next || (me.role === 'employee' ? '/app' : '/panel');
+      location.href = next || (me.role === 'employee' ? '/app' : me.role === 'admin' ? '/panel#/admin' : '/panel');   // администратор — сразу «Администрирование»
     } catch (e) { toast(e.message, 'bad'); }
   }
 })();

@@ -148,6 +148,18 @@ function publicConfig() { return _cfgP || (_cfgP = API.get('/api/public/config')
 function versionTag() { const s = h('span', { class: 'ver' }); publicConfig().then(c => { if (c && c.version) s.textContent = 'версия ' + c.version; }); return s; }
 // Филиал на экране — только город (замечания владельца 13.11): «Омск — головной офис» → «Омск»; где сервер дал город — берём его.
 function brCity(name) { return name ? String(name).split(' — ')[0] : name; }
+// Нумерация строк в таблицах и списках администрирования (замечание владельца 13.11): «1.», «2.» узкой колонкой слева, моноширинные цифры
+function rowNum(i) { return h('td', { class: 'rownum', 'data-label': '' }, (i + 1) + '.'); }
+function rowNumTh() { return h('th', { class: 'rownum', 'aria-label': 'Номер строки' }); }
+function rowNumSpan(i) { return h('span', { class: 'rownum' }, (i + 1) + '.'); }
+function colgroup(widths) { return h('colgroup', {}, widths.map(w => { const c = document.createElement('col'); if (w) c.style.width = typeof w === 'number' ? w + 'px' : w; return c; })); }
+// заголовок колонки с подсказкой «?» (у каждой колонки администрирования, 13.11); пустой заголовок — без подсказки
+function thHelp(label, key) { return h('th', {}, label, label && key ? helpBtn(key) : null); }
+// Баллы (13.11): залитая золотистая звезда без рамки и подложки — просто «★ 180»; со ссылкой — в профиль
+function pointsTag(n, href, cls) {
+  return h(href ? 'a' : 'span', { class: 'pts' + (cls ? ' ' + cls : ''), href: href || null, title: 'Мои баллы', 'aria-label': 'Баллы: ' + n },
+    icon('star', { size: 16, fill: true, cls: 'star-gold' }), h('b', {}, String(n)));
+}
 function qs(name) { return new URLSearchParams(location.search).get(name); }
 // подпись + поле; для стилизованных компонентов (pick, personPicker, filePicker) — div, а не label: иначе клик по пункту списка
 // срабатывал бы ещё раз как клик по кнопке списка
@@ -435,7 +447,7 @@ function leagueTop(top, onOpen) {
   return h('div', { class: 'card list lg-emps' }, top.map((u, i) => h('div', { class: 'item lg-emp', onclick: () => onOpen(u) },
     h('span', { class: 'lg-place' }, (i + 1) + '.'), avatarEl(u),
     h('div', { class: 'lg-who' }, h('b', { class: 'one-line' }, u.name), h('div', { class: 'small muted one-line' }, [u.position, u.city || brCity(u.branch)].filter(Boolean).join(' · '))),
-    h('div', { class: 'lg-stats' }, h('span', { class: 'lg-pts' }, iconText('star', String(u.points))),
+    h('div', { class: 'lg-stats' }, pointsTag(u.points, null, 'lg-pts'),
       u.implemented ? h('span', { class: 'small muted' }, 'внедрено ' + u.implemented) : null))));
 }
 function leagueSplit(branchesEl, topEl) {

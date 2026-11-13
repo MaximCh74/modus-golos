@@ -179,3 +179,32 @@ def test_no_old_statuses_on_screen():
         assert old not in tracker, old
     labels = re.search(r"const STATUS = \{(.*?)\};", ui, re.S).group(1)
     assert set(re.findall(r"\['([^']+)', 'st-", labels)) == {"Новое", "В работе", "Уточнение", "Решено", "Отклонено"}
+
+
+# ---------- седьмой список 13.11: администрирование, колокольчик, баллы ----------
+
+def test_admin_lands_in_administration():
+    from mf.main import _home_for
+    assert _home_for({"role": "admin"}) == "/panel#/admin" and _home_for({"role": "employee"}) == "/app" and _home_for({"role": "director"}) == "/panel"
+    assert "me.role === 'admin' ? '/panel#/admin'" in (ROOT / "web" / "a" / "login.js").read_text(encoding="utf-8")
+    assert "if (ME.role === 'admin' && ['', '#', '#/'].includes(location.hash)) { location.replace('#/admin'); return; }" in (ROOT / "web" / "a" / "panel.js").read_text(encoding="utf-8")
+
+
+def test_admin_tables_numbered_and_help_everywhere():
+    from mf import glossary
+    assert not glossary.validate()
+    panel = (ROOT / "web" / "a" / "panel.js").read_text(encoding="utf-8")
+    staff = (ROOT / "web" / "a" / "staff.js").read_text(encoding="utf-8")
+    admin = panel.split("async function adminScreen()")[1].split("// ---------- «Справка»")[0] + staff
+    keys = set(re.findall(r"helpBtn\('([a-z_]+)'", admin)) | set(re.findall(r"thHelp\('[^']*', '([a-z_]+)'\)", admin))
+    assert keys and all(k in glossary.TERMS for k in keys), sorted(k for k in keys if k not in glossary.TERMS)
+    assert "h('th', {}, t)" not in admin and ".map(t => h('th'" not in admin   # каждый заголовок колонки — через thHelp (с «?»)
+    assert admin.count("rowNumTh()") >= 4 and admin.count("rowNumSpan(") >= 4   # сотрудники, категории, награды, заявки; филиалы, объекты, аватарки
+    assert "colgroup([40, null, '28%', '15%', '21%', 56])" in staff   # имя уже, остальные шире, без пустой середины
+    css = (ROOT / "web" / "a" / "style.css").read_text(encoding="utf-8")
+    assert re.search(r"\.rownum \{[^}]*tabular-nums", css)
+
+
+def test_boss_has_bell_with_counter():
+    js = (ROOT / "web" / "a" / "boss.js").read_text(encoding="utf-8")
+    assert "class: 'btn btn-sm btn-ghost bell'" in js and "ME.unread ? h('span', { class: 'n' }" in js

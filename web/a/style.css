@@ -7,6 +7,7 @@
 :root {
   /* бренд */
   --red: #e40000; --red-dark: #bc262c; --red-soft: #fff5f5; --red-tint: #fff1f1;
+  --gold: #f2b100;   /* звезда баллов — залитая золотистая (13.11), только для звезды */
   --navy: #082742; --ink: #323a47; --muted: #64748d; --muted-2: #8a95a6; --map-label: #7b889c;
   --line: #d1d5dd; --line-soft: #e6e9ef; --bg: #ffffff; --bg-soft: #f5f7fb; --tint: #eff6fd; --tint-line: #cfe0f6; --blue: #2f80ed; --white: #ffffff;
   --map-water: #eaf0f6;
@@ -243,7 +244,9 @@ input[type=file] { font: inherit; font-size: 14px; }
 .nav a { padding: 6px 12px; border-radius: var(--radius-sm); text-decoration: none; color: var(--ink); font-size: 14px; font-weight: var(--w-bold); }
 .nav a.active { background: var(--tint); color: var(--navy); }
 .bell { position: relative; }
-.bell .n { position: absolute; top: -6px; right: -6px; background: var(--navy); color: var(--white); font-size: 11px; border-radius: var(--radius-pill); padding: 0 5px; line-height: 16px; }
+/* счётчик на колокольчике — красный кружок с белой цифрой везде: панель, приложение, /boss (13.11) */
+.bell { position: relative; }
+.bell .n { position: absolute; top: -6px; right: -6px; min-width: 18px; height: 18px; box-sizing: border-box; background: var(--red); color: var(--white); font-size: 11px; font-weight: var(--w-bold); border-radius: var(--radius-pill); padding: 0 5px; line-height: 18px; text-align: center; box-shadow: 0 0 0 2px var(--white); }
 .bell .ic { vertical-align: -4px; }
 
 .user-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
@@ -299,8 +302,12 @@ details.card > summary { cursor: pointer; font-weight: var(--w-bold); color: var
 .chip { border: 1px solid var(--line); background: var(--white); border-radius: var(--radius-pill); padding: 8px 14px; font: inherit; font-size: 13px; font-weight: var(--w-body); color: var(--ink); cursor: pointer; min-height: 40px; transition: background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease); }
 .chip:hover { background: var(--bg-soft); }
 .chip.on { background: var(--navy); color: var(--white); border-color: var(--navy); }
-.chip-points { display: inline-flex; align-items: center; gap: 4px; padding: 6px 12px; color: var(--navy); }
-.chip-points .ic { color: var(--muted); }
+/* баллы (13.11): залитая золотистая звезда и число — без рамки и подложки; по нажатию — профиль */
+.pts { display: inline-flex; align-items: center; gap: 5px; color: var(--navy); text-decoration: none; font-variant-numeric: tabular-nums; }
+a.pts:hover { text-decoration: none; }
+.pts b { font-weight: var(--w-bold); }
+.star-gold { color: var(--gold); flex: none; }
+.pts-home { font-size: 17px; padding: 4px 2px; }
 .chip b, .badge b { font-weight: var(--w-body); }
 .avatar { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 50%; background: var(--navy); color: var(--white); font-weight: var(--w-bold); font-size: 12px; flex: none; object-fit: cover; letter-spacing: .02em; }
 .avatar-sm { width: 24px; height: 24px; font-size: 10px; }
@@ -473,13 +480,20 @@ tr.muted td { opacity: .6; }
 .staff-tools .btn { white-space: nowrap; }
 .staff-search { flex: 1; min-width: 200px; max-width: 360px; }
 .tbl tr.noclick { cursor: default; }
+/* нумерация строк администрирования (13.11): «1.», «2.» узкой колонкой слева, моноширинные цифры по правому краю */
+.rownum { font-variant-numeric: tabular-nums; font-feature-settings: 'tnum' 1; color: var(--muted); text-align: right; white-space: nowrap; }
+.tbl th.rownum, .tbl td.rownum { min-width: 0; width: 40px; padding-right: 8px; padding-left: 0; text-align: right; }
+.list .rownum { display: inline-block; min-width: 26px; flex: none; }
+.rewards-tbl td { vertical-align: middle; }
+.tbl.staff-tbl td:nth-child(3), .tbl.staff-tbl td:nth-child(4) { white-space: normal; }
 .tbl tr.noclick:hover { background: transparent; }
 .w120 { width: 120px !important; min-width: 120px !important; }
 .staff-tbl td { vertical-align: middle; }
-.staff-tbl td:first-child { min-width: 170px; }
+.staff-tbl td:nth-child(2) { min-width: 0; overflow: hidden; }
+.staff-tbl td:nth-child(2) > * { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .staff-tbl td input, .staff-tbl td select { min-width: 78px; }
 .staff-tbl td select { width: 104px; }
-.staff-tbl td:first-child input { width: 160px; min-width: 160px; }
+.staff-tbl td:nth-child(2) input { width: 160px; min-width: 160px; }
 .staff-tbl th:last-child, .staff-tbl td:last-child { width: 1%; white-space: nowrap; }
 .inv-cell { gap: 6px; flex-wrap: nowrap; }
 .inv-body { display: flex; gap: var(--s2); align-items: flex-start; }
@@ -590,7 +604,7 @@ select { appearance: none; -webkit-appearance: none; padding-right: 34px; backgr
 .tbl.cats { table-layout: fixed; }
 .tbl.cats td { overflow: hidden; }
 .tbl.cats select { width: 100%; min-width: 0; }
-.tbl.cats td:first-child { min-width: 0; overflow-wrap: anywhere; }
+.tbl.cats td:nth-child(2) { min-width: 0; overflow-wrap: anywhere; }
 .qr-thumb { width: 56px; height: 56px; border: 1px solid var(--line-soft); border-radius: var(--radius-sm); background: var(--white); flex: none; }
 .branch-item { cursor: default; }
 .list .item.noclick:hover { background: transparent; }
@@ -866,6 +880,8 @@ select { appearance: none; -webkit-appearance: none; padding-right: 34px; backgr
   .tbl td:first-child { font-weight: var(--w-bold); color: var(--navy); }
   .tbl td[data-label]:not([data-label=""])::before { content: attr(data-label) ': '; color: var(--muted); font-size: 12px; font-weight: var(--w-regular, 400); }
   .tbl td:empty { display: none; }
+  .tbl td.rownum { display: inline-block; width: auto !important; margin-right: 6px; font-weight: var(--w-body); color: var(--muted); padding: 2px 0; vertical-align: top; }
+  .tbl td.rownum + td { display: inline-block; font-weight: var(--w-body); vertical-align: top; }
   .tracker .step { font-size: 10px; padding: 22px 1px 0; }
   .grid2 .btn-big { padding: 14px 10px; font-size: 16px; }
   .stats { grid-template-columns: repeat(2, 1fr); }

@@ -112,7 +112,7 @@ function staffSection(d, reload) {
         STAFF_UI.openId = r.id; STAFF_UI.showAdd = false; reload();
       } catch (e) { toast(e.message, 'bad'); btn.disabled = false; }
     } }, iconText('plus', 'Добавить'));
-    addCard = h('div', { class: 'card card-info' }, h('b', {}, 'Новый сотрудник'),
+    addCard = h('div', { class: 'card card-info' }, h('b', {}, 'Новый сотрудник', helpBtn('adm_add')),
       h('div', { class: 'hint' }, 'Для тех, кого нет в Битрикс24: рабочие, производство, командированные. Телефон нужен, чтобы отправить приглашение в WhatsApp и склеить профиль с порталом, если человек появится и там.'),
       h('div', { class: 'grid3 mt8' }, field('Имя и фамилия', name), field('Город / филиал', br), field('Отдел', dep), field('Роль', role), field('Должность', pos), field('Телефон (WhatsApp)', phone), field('Почта', email)),
       h('div', { class: 'row mt8' }, btn, h('label', { class: 'check small' }, inv, 'сразу выдать личное приглашение — ссылку и QR'), h('div', { class: 'spacer' }), h('button', { class: 'btn btn-sm btn-ghost', onclick: () => { STAFF_UI.showAdd = false; reload(); } }, 'Отмена')));
@@ -134,10 +134,10 @@ function staffSection(d, reload) {
       h('div', { class: 'row' }, r.created ? tag('st-done', 'добавлено ' + r.created) : null, r.updated ? tag('tag-type', 'обновлено ' + r.updated) : null, r.errors.length ? tag('tag-overdue', 'не загружено ' + r.errors.length) : null,
         r.cards_url ? h('a', { href: r.cards_url, class: 'btn btn-sm btn-primary', target: '_blank', rel: 'noopener' }, iconText('printer', 'Карточки для добавленных (' + r.invites.length + ')')) : null,
         h('div', { class: 'spacer' }), h('button', { class: 'btn btn-sm btn-ghost', onclick: () => { STAFF_UI.importResult = null; STAFF_UI.showImport = false; reload(); } }, 'Закрыть')),
-      r.errors.length ? h('table', { class: 'tbl mt8' }, h('thead', {}, h('tr', {}, ['Строка', 'Что в файле', 'Почему не загружена'].map(t => h('th', {}, t)))),
+      r.errors.length ? h('table', { class: 'tbl mt8' }, h('thead', {}, h('tr', {}, thHelp('Строка', 'import_row'), thHelp('Что в файле', 'import_text'), thHelp('Почему не загружена', 'import_error'))),
         h('tbody', {}, r.errors.map(e => h('tr', { class: 'noclick' }, h('td', { class: 'small' }, String(e.row)), h('td', { class: 'small' }, e.text), h('td', { class: 'small' }, e.error))))) : null,
       r.users.length ? h('div', { class: 'small muted mt8' }, 'Загружены: ' + r.users.map(u => u.name + (u.action === 'updated' ? ' (уже был — дополнен)' : '')).join(', ')) : null) : null;
-    importCard = h('div', { class: 'card card-info' }, h('b', {}, 'Импорт списком'),
+    importCard = h('div', { class: 'card card-info' }, h('b', {}, 'Импорт списком', helpBtn('adm_import')),
       h('div', { class: 'hint' }, 'Файл по шаблону: Имя; Город; Отдел; Роль; Телефон; Должность; Почта. Ошибочная строка попадает в отчёт, остальные заводятся; повторы по телефону или почте не плодят дублей.'),
       h('div', { class: 'row mt8' }, file, h('label', { class: 'check small' }, inv, 'новым — сразу приглашения'), btn), result);
   }
@@ -149,7 +149,7 @@ function staffSection(d, reload) {
   const showInactive = h('input', { type: 'checkbox', checked: STAFF_UI.showInactive });
   showInactive.addEventListener('change', () => { STAFF_UI.showInactive = showInactive.checked; renderRows(); });
   const tbody = h('tbody', {});
-  function row(u) {
+  function row(u, i) {
     const st = inviteState(u);
     const invCell = st.code === 'none' ? h('button', { class: 'btn btn-sm', onclick: ev => { ev.stopPropagation(); issue(u); } }, iconText('qr', 'Пригласить')) : tag(st.cls, st.label);
     const items = [['Открыть', () => openStaff(u)]];
@@ -161,7 +161,7 @@ function staffSection(d, reload) {
     const menu = menuButton(items);
     menu.addEventListener('click', ev => ev.stopPropagation());
     return h('tr', { class: (u.active ? '' : 'muted') + (STAFF_UI.openId === u.id ? ' sel' : ''), onclick: () => openStaff(u) },
-      h('td', {}, h('b', { class: 'num' }, u.name), h('div', { class: 'small muted' }, u.position || '—')),
+      rowNum(i), h('td', {}, h('b', { class: 'num' }, u.name), h('div', { class: 'small muted' }, u.position || '—')),
       h('td', {}, [bOf(u.branch_id).city || bOf(u.branch_id).name, dOf(u.department_id)].filter(Boolean).join(' · ') || '—'),
       h('td', {}, ROLE_LBL[u.role] || u.role),
       h('td', {}, invCell),
@@ -170,17 +170,17 @@ function staffSection(d, reload) {
   function renderRows() {
     const needle = STAFF_UI.q.trim().toLowerCase();
     const rows = users.filter(u => (STAFF_UI.showInactive || u.active) && (!needle || [u.name, u.position, bOf(u.branch_id).city, bOf(u.branch_id).name, dOf(u.department_id), u.phone, u.email].filter(Boolean).join(' ').toLowerCase().includes(needle)));
-    tbody.replaceChildren(...rows.map(row));
+    tbody.replaceChildren(...rows.map((u, i) => row(u, i)));
     const act = users.filter(u => invites[u.id] && invites[u.id].status === 'active').length;
     counter.textContent = rows.length + ' из ' + users.length + (act ? ' · действующих приглашений ' + act : '');
   }
   renderRows();
-  const table = h('table', { class: 'tbl queue staff-tbl' },
-    h('colgroup', {}, [null, 220, 150, 190, 56].map(w => { const c = document.createElement('col'); if (w) c.style.width = w + 'px'; return c; })),
-    h('thead', {}, h('tr', {}, ['Сотрудник', 'Город · отдел', 'Роль', 'Приглашение', ''].map(t => h('th', {}, t, t === 'Приглашение' ? helpBtn('invite') : null)))), tbody);
+  // 13.11: без пустой середины — имя уже, остальные колонки шире, всё на всю ширину; «1.», «2.» — узкой колонкой слева
+  const table = h('table', { class: 'tbl queue staff-tbl adm-tbl' }, colgroup([40, null, '28%', '15%', '21%', 56]),
+    h('thead', {}, h('tr', {}, rowNumTh(), thHelp('Сотрудник', 'adm_staff_name'), thHelp('Город · отдел', 'adm_staff_place'), thHelp('Роль', 'adm_staff_role'), thHelp('Приглашение', 'invite'), thHelp('', null))), tbody);
   if (STAFF_UI.openId) { const u = users.find(x => x.id === STAFF_UI.openId); if (u) setTimeout(() => openStaff(u), 0); }
   return h('div', { class: 'card staff' },
-    h('div', { class: 'row' }, h('b', {}, 'Сотрудники'), counter, h('div', { class: 'spacer' }), tools),
+    h('div', { class: 'row' }, h('b', {}, 'Сотрудники', helpBtn('adm_staff')), counter, h('div', { class: 'spacer' }), tools),
     h('div', { class: 'hint' }, 'Из Битрикс24 сотрудники приходят синхронизацией; рабочих, производство и командированных добавьте здесь и выдайте личное приглашение — ссылку, QR или карточку. Клик по строке — карточка сотрудника.'),
     addCard, importCard,
     h('div', { class: 'row mt8' }, h('div', { class: 'staff-search' }, q), h('label', { class: 'check small' }, showInactive, 'показывать отключённых')),

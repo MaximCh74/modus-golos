@@ -181,3 +181,45 @@ def test_app_bottom_nav_on_phone_tabs_on_desktop(base, browser):
         assert _fits(page) and not errors, errors
     finally:
         ctx.close()
+
+
+# ---------- седьмой список 13.11 ----------
+
+def test_admin_lands_in_administration_numbered_with_help(base, browser):
+    ctx, page, errors = _open(browser, base, 15, 1440, "/panel")
+    try:
+        page.wait_for_selector(".staff-tbl tbody tr")
+        assert page.evaluate("location.hash") == "#/admin"
+        first = page.locator("#root .card").first
+        assert first.locator("b").first.inner_text().startswith("Сотрудники")
+        assert [t.strip() for t in first.locator(".staff-tools > button").all_inner_texts()] == ["Добавить", "Импорт CSV или Excel"]
+        assert page.locator(".staff-tbl tbody tr").nth(1).locator("td.rownum").inner_text() == "2."
+        num = page.locator(".staff-tbl thead th").first.bounding_box()
+        assert num["width"] <= 44   # узкая колонка номера
+        widths = page.evaluate("[...document.querySelectorAll('.staff-tbl thead th')].map(th => th.getBoundingClientRect().width)")
+        assert widths[1] < widths[2] + widths[3] + widths[4]   # имя уже, остальные шире — без пустой середины
+        missing = page.evaluate("[...document.querySelectorAll('#root th')].filter(th => th.textContent.trim() && !th.querySelector('.help-btn')).map(th => th.textContent.trim())")
+        assert not missing, missing
+        for sel in ("table.cats", ".rewards-tbl"):
+            assert page.locator(sel + " tbody tr").first.locator("td.rownum").inner_text() == "1."
+        assert _fits(page) and not errors, errors
+    finally:
+        ctx.close()
+
+
+def test_bell_counter_red_and_points_gold_star(base, browser):
+    ctx, page, errors = _open(browser, base, 17, 375, "/app#/")
+    try:
+        page.request.post(f"{base}/api/auth/login-as", data={"user_id": 3})   # Ерлан благодарит Ольгу — у неё непрочитанное
+        page.request.post(f"{base}/api/appeals", multipart={"type": "praise", "text": "Спасибо за быструю помощь со сверкой", "praise_to_user_id": "17"})
+        page.request.post(f"{base}/api/auth/login-as", data={"user_id": 17})
+        page.reload(); page.wait_for_selector(".topbar .bell .n")
+        n = page.evaluate("(() => { const s = getComputedStyle(document.querySelector('.topbar .bell .n')); return [s.backgroundColor, s.color]; })()")
+        assert n == ["rgb(228, 0, 0)", "rgb(255, 255, 255)"], n
+        star = page.evaluate("(() => { const s = getComputedStyle(document.querySelector('.topbar .pts .star-gold')); const p = getComputedStyle(document.querySelector('.topbar .pts')); return [s.color, s.fill, p.borderTopWidth, p.backgroundColor]; })()")
+        assert star[0] == star[1] and star[0] not in ("rgb(8, 39, 66)",) and star[2] == "0px" and star[3] in ("rgba(0, 0, 0, 0)", "transparent"), star
+        home = page.locator(".pts-home")
+        assert home.get_attribute("href") == "#/u/17" and "Мои баллы" not in home.inner_text()
+        assert _fits(page) and not errors, errors
+    finally:
+        ctx.close()

@@ -286,7 +286,8 @@ def _bitrix_required() -> None:
 
 
 def _home_for(user: dict) -> str:
-    return "/app" if user["role"] == "employee" else "/panel"
+    """Куда после входа: сотрудник — приложение, администратор — сразу «Администрирование» (замечание владельца 13.11), остальные — панель."""
+    return {"employee": "/app", "admin": "/panel#/admin"}.get(user["role"], "/panel")
 
 
 async def _form(request: Request) -> dict:
