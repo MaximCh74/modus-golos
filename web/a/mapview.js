@@ -77,37 +77,68 @@ function mapView(data, opts) {
     placed.push([m, b.lat, b.lng]);
     layerBranches.append(m);
   }
-  // подписи меток не обрезаются краем (замечание владельца 13.11): не влезает справа — ставим слева от метки, у верхнего края — ниже,
-  // у нижнего — выше; на телефоне (подпись под булавкой) — к краю или над булавкой. Из вариантов берём первый, где подпись целиком
-  // на карте и не закрывает чужие булавки и уже поставленные подписи.
-  const FLIPS = ['flip-x', 'flip-r', 'flip-down', 'flip-up'];
+  // подписи меток не обрезаются краем и не наезжают друг на друга (замечания владельца 13.11): у каждой подписи — варианты места (справа,
+  // слева, ниже, выше; на телефоне подпись под булавкой — по центру, к краю или над булавкой). Сначала жадно по очереди, потом проходы
+  // улучшения: каждая подпись пересматривается при уже стоящих остальных, пока есть пересечения (так «Караганда» уступает место
+  // «Усть-Каменогорску»). Где тесно и так (Караганда в 190 км от Астаны — на телефоне это ~25 px), подпись отводится дальше с тонкой
+  // линией к булавке (flip-far) — только если без отвода не разойтись; на живой карте стартовой отвода нет.
+  const FLIPS = ['flip-x', 'flip-r', 'flip-down', 'flip-up', 'flip-far', 'flip-far2', 'lift-s', 'lift-l', 'flip-side', 'flip-compact'];
   const fitLabels = () => {
     const br = box.getBoundingClientRect();
     if (!br.width || !br.height) return;
     const pad = 4;
     const markers = [...layerBranches.children, ...layerSites.children].filter(m => !m.classList.contains('off') && m.querySelector('.mlabel'));
-    const pins = markers.map(m => [m, m.querySelector('.pin').getBoundingClientRect()]);
-    const labels = [];
+    if (!markers.length) return;
+    for (const m of markers) m.classList.remove(...FLIPS);
+    const column = getComputedStyle(markers[0]).flexDirection.startsWith('column');
+    // компьютер: сбоку от булавки, выше или ниже на трёх высотах (lift-s / обычная / lift-l); телефон: под булавкой, над ней или сбоку
+    const lifts = ['lift-s', '', 'lift-l'];
+    const near = column ? ['', 'flip-x', 'flip-r', 'flip-up', 'flip-up flip-x', 'flip-up flip-r', 'flip-side', 'flip-side flip-x']
+      : ['', 'flip-x', ...['flip-down', 'flip-up'].flatMap(d => ['', 'flip-x'].flatMap(x => lifts.map(l => [x, d, l].filter(Boolean).join(' '))))];
+    const along = column ? near.filter(v => !v.includes('flip-side')) : ['', 'flip-x'];   // отвод — вдоль линии от булавки к подписи
+    const far = opts.motion ? [] : [...along.map(v => (v + ' flip-far').trim()), ...along.map(v => (v + ' flip-far flip-far2').trim())];
+    const variants = [...near, ...far];
+    // самый узкий телефон (360): у объекта, если иначе не разойтись, — только город, без строки «объект» (крайний вариант, штраф 3)
+    const variantsFor = i => column && markers[i].querySelector('.m-site') ? [...variants, ...variants.map(v => (v + ' flip-compact').trim())] : variants;
+    const pins = markers.map(m => m.querySelector('.pin').getBoundingClientRect());
+    const labs = markers.map(m => m.querySelector('.mlabel'));
     const inside = r => r.left >= br.left + pad && r.right <= br.right - pad && r.top >= br.top + pad && r.bottom <= br.bottom - pad;
     const cross = (a, b) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
-    for (const m of markers) {
-      const lab = m.querySelector('.mlabel');
-      m.classList.remove(...FLIPS);
-      const column = getComputedStyle(m).flexDirection.startsWith('column');
-      const variants = column ? ['', 'flip-x', 'flip-r', 'flip-up', 'flip-up flip-x', 'flip-up flip-r'] : ['', 'flip-x', 'flip-down', 'flip-up', 'flip-x flip-down', 'flip-x flip-up'];
-      let best = null;
-      for (const v of variants) {
-        m.classList.remove(...FLIPS);
-        if (v) m.classList.add(...v.split(' '));
-        const r = lab.getBoundingClientRect();
-        const score = (inside(r) ? 0 : 4) + pins.filter(([o, pr]) => o !== m && cross(r, pr)).length + labels.filter(l => cross(r, l)).length;
-        if (!best || score < best.score) best = { v, score, r };
-        if (!score) break;
+    const put = (i, v) => { markers[i].classList.remove(...FLIPS); if (v) markers[i].classList.add(...v.split(' ')); };
+    const rectOf = {};   // подпись i в варианте v — размер подписи от варианта не зависит, булавки на месте: меряем один раз
+    const measure = (i, v) => { const k = i + '|' + v; if (!rectOf[k]) { put(i, v); rectOf[k] = labs[i].getBoundingClientRect(); } return rectOf[k]; };
+    // штраф: за краем — 40, за каждую чужую булавку или подпись под подписью — 10, отвод с линией — 1, дальний — 1,5: любой расклад без
+    // пересечений лучше любого с пересечением, а отводов — как можно меньше
+    const score = (i, v, cur) => {
+      const r = measure(i, v);
+      return (inside(r) ? 0 : 40) + 10 * pins.filter((p, j) => j !== i && cross(r, p)).length
+        + 10 * cur.filter((o, j) => j !== i && o !== null && cross(r, measure(j, o))).length + (v.includes('flip-far2') ? 1.5 : v.includes('flip-far') ? 1 : 0)
+        + (v.includes('flip-compact') ? 3 : 0);
+    };
+    const run = order => {
+      const cur = markers.map(() => null);
+      const pick = i => { let top = null; for (const v of variantsFor(i)) { const sc = score(i, v, cur); if (!top || sc < top.sc) top = { v, sc }; if (!sc) break; } return top; };
+      for (const i of order) cur[i] = pick(i).v;
+      for (let pass = 0; pass < 6; pass++) {
+        let changed = false;
+        for (const i of order) { const now = score(i, cur[i], cur); if (now < 1) continue; const b = pick(i); if (b.sc < now) { cur[i] = b.v; changed = true; } }
+        if (!changed) break;
       }
-      m.classList.remove(...FLIPS);
-      if (best.v) m.classList.add(...best.v.split(' '));
-      labels.push(best.r);
+      return { cur, total: order.reduce((n, i) => n + score(i, cur[i], cur), 0) };
+    };
+    // самые стеснённые (больше всего булавок рядом) — первыми; не разошлись — ещё несколько проходов в другом порядке
+    const near2 = i => pins.filter((p, j) => j !== i && Math.abs(p.left - pins[i].left) < 160 && Math.abs(p.top - pins[i].top) < 90).length;
+    const base = markers.map((m, i) => i).sort((a, b) => near2(b) - near2(a));
+    let best = run(base);
+    let seed = 7;
+    const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+    for (let k = 0; k < 80 && best.total >= 10; k++) {   // замеры закэшированы — перезапуски почти бесплатны
+      const order = base.slice();
+      for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }
+      const r = run(order);
+      if (r.total < best.total) best = r;
     }
+    best.cur.forEach((v, i) => put(i, v));
   };
   const relayout = () => { layout(); for (const [el, lat, lng, clamp] of placed) place(el, lat, lng, clamp); fitLabels(); };
   relayout();

@@ -399,8 +399,16 @@ tr.muted td { opacity: .6; }
 .marker.blink .pin { animation: blink .6s 6; }
 /* подписи не обрезаются краем карты (13.11): не влезает справа — слева от метки; у верхнего/нижнего края — ниже/выше (mapview.js fitLabels) */
 .marker.flip-x { flex-direction: row-reverse; --mx: calc(-100% + 15px); }
-.marker.flip-down .mlabel { transform: translateY(calc(50% + 18px)); }
-.marker.flip-up .mlabel { transform: translateY(calc(-50% - 18px)); }
+.marker.flip-down .mlabel { transform: translateY(calc(50% + var(--lift, 18px))); }
+.marker.flip-up .mlabel { transform: translateY(calc(-50% - var(--lift, 18px))); }
+.marker.lift-s { --lift: 12px; }
+.marker.lift-l { --lift: 26px; }
+/* отвод подписи, когда рядом тесно (13.11): подпись дальше от булавки, к ней — тонкая линия (mapview.js, fitLabels) */
+.marker.flip-far { gap: 30px; }
+.marker.flip-far .pin::after { content: ''; position: absolute; top: 40%; left: 100%; width: 28px; height: 0; border-top: 1px solid var(--map-label); }
+.marker.flip-far.flip-x .pin::after { left: auto; right: 100%; }
+.marker.flip-far2 { gap: 56px; }
+.marker.flip-far2 .pin::after { width: 54px; }
 .marker.m-ok .pin, .marker.m-ok:hover .pin, .lg-pin.m-ok { color: var(--map-ok); }
 .marker.m-late .pin, .marker.m-late:hover .pin, .lg-pin.m-late { color: var(--red); }
 .sdot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--muted-2); border: 1.5px solid var(--white); box-shadow: 0 0 0 1px var(--muted-2); }
@@ -840,6 +848,15 @@ select { appearance: none; -webkit-appearance: none; padding-right: 34px; backgr
   .marker.flip-r { align-items: flex-start; --mx: -13px; }
   .marker.flip-up { flex-direction: column-reverse; --my: -100%; }
   .marker.flip-up .mlabel, .marker.flip-down .mlabel { transform: none; }
+  .marker.flip-far { gap: 16px; }
+  .marker.flip-far .pin::after { top: 100%; bottom: auto; left: 50%; right: auto; width: 0; height: 15px; border-top: 0; border-left: 1px solid var(--map-label); }
+  .marker.flip-far.flip-x .pin::after { left: 50%; right: auto; }   /* на телефоне линия — от середины булавки вниз или вверх */
+  .marker.flip-far.flip-up .pin::after { top: auto; bottom: 100%; }
+  .marker.flip-compact .mlabel .m-site { display: none; }
+  .marker.flip-side { flex-direction: row; align-items: center; gap: 2px; --mx: -13px; --my: -100%; }
+  .marker.flip-side.flip-x { flex-direction: row-reverse; --mx: calc(-100% + 13px); }
+  .marker.flip-far2 { gap: 34px; }
+  .marker.flip-far2 .pin::after { width: 0; height: 33px; }
   .marker .mlabel { display: block; margin: 0; padding: 1px 6px; border-radius: 6px; }
   .marker .mlabel b { font-size: 11px; }
   .home { padding: var(--s3) var(--s2) var(--s5); }
