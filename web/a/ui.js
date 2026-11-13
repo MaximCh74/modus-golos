@@ -281,7 +281,7 @@ function summaryBody(d, fixHref) {
   if (!d.items) return h('div', { class: 'sum-body' }, d.sentences.map(s => h('p', {}, s.href ? h('a', { href: go(s.href) }, s.text) : s.text)));
   return h('div', { class: 'sum-body' }, h('p', { class: 'sum-greet' }, d.greeting), h('div', { class: 'sum-period' }, d.period),
     h('ul', { class: 'sum-list' }, d.items.map(it => {
-      const kids = it.parts.map(([t, b]) => b ? h('b', {}, t) : t);
+      const kids = it.parts.map(([t, b, mark]) => mark === 'dot' ? h('b', { class: 'num-dot' }, h('span', { class: 'dot-overdue' }), t) : b ? h('b', {}, t) : t);   // «мешают работать» — красная точка + тёмная цифра
       return h('li', {}, it.href ? h('a', { href: go(it.href) }, kids) : h('span', {}, kids));
     })));
 }

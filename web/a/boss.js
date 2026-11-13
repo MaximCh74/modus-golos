@@ -6,7 +6,7 @@
 (async function () {
   const root = document.getElementById('root');
   const S = { period: 'week', home: null, sheet: null };
-  try { S.period = localStorage.getItem('mf.boss.period') || 'week'; } catch (e) { /* без хранилища */ }
+  try { const saved = localStorage.getItem('mf.boss.period'); S.period = ['week', 'month'].includes(saved) ? saved : 'week'; } catch (e) { /* без хранилища */ }   // «Неделя / Месяц» (13.11)
   const ME = await API.me();
   if (!ME) { location.href = '/login?next=' + encodeURIComponent('/boss'); return; }
   if (ME.role !== 'director') {
@@ -27,10 +27,11 @@
   const greetMark = h('span', { class: 'boss-greet-mark' });
   const speakGreet = h('button', { type: 'button', class: 'btn btn-sm btn-ghost boss-speak', title: 'Озвучить приветствие', 'aria-label': 'Озвучить' }, icon('volume', { size: 18 }));
   const seg = h('div', { class: 'seg', role: 'tablist' },
-    ['today', 'week'].map(p => h('button', { type: 'button', role: 'tab', class: 'seg-btn' + (S.period === p ? ' on' : ''), 'data-period': p, onclick: () => setPeriod(p) }, p === 'today' ? 'Сегодня' : 'Неделя')));
-  const TILES = [['new', 'пришло'], ['done', 'решено'], ['decisions', 'ждут вашего решения'], ['overdue', 'просрочено']];
+    ['week', 'month'].map(p => h('button', { type: 'button', role: 'tab', class: 'seg-btn' + (S.period === p ? ' on' : ''), 'data-period': p, onclick: () => setPeriod(p) }, iconText('calendar', p === 'week' ? 'Неделя' : 'Месяц', { size: 18 }))));
+  // плитки по образцу владельца (13.11): иконка в круге на мягком фоне; «ждут решения» и «просрочено» — текущее состояние («сейчас»)
+  const TILES = [['new', 'поступило', 'inbox'], ['done', 'решено', 'check-circle'], ['decisions', 'ждут вашего решения', 'send'], ['overdue', 'просрочено', 'clock']];
   const tiles = {};
-  const tilesEl = h('div', { class: 'boss-tiles' }, TILES.map(([k, label]) => { const b = h('b', {}, '…'); tiles[k] = b; return h('button', { type: 'button', class: 'boss-tile tile-' + k, 'data-tile': k, onclick: () => openList(k) }, b, h('span', {}, label)); }));
+  const tilesEl = h('div', { class: 'boss-tiles' }, TILES.map(([k, label, ic]) => { const b = h('b', {}, '…'); tiles[k] = b; return h('button', { type: 'button', class: 'boss-tile tile-' + k, 'data-tile': k, onclick: () => openList(k) }, h('span', { class: 'tile-ic' }, icon(ic, { size: 24 })), h('span', { class: 'tile-body' }, b, h('span', { class: 'tile-label' }, label), k === 'decisions' || k === 'overdue' ? h('small', { class: 'tile-now' }, 'сейчас') : null)); }));
   const ta = h('textarea', { class: 'boss-ask-text', rows: 1, placeholder: 'Спросите, например: что по Омску?', 'aria-label': 'Вопрос' });
   const mic = h('button', { type: 'button', class: 'btn mic boss-mic', title: 'Спросить голосом', 'aria-label': 'Спросить голосом' });
   const send = h('button', { type: 'button', class: 'btn btn-primary boss-send', title: 'Спросить', 'aria-label': 'Спросить' }, icon('send', { size: 20 }));
@@ -57,14 +58,14 @@
     } catch (e) { toast(e.message, 'bad'); return; }
     if (seq !== loadSeq) return;
     S.home = home;
-    for (const [k] of TILES) { tiles[k].textContent = String(S.home.tiles[k]); tiles[k].parentElement.classList.toggle('zero', !S.home.tiles[k]); }
+    for (const [k] of TILES) { tiles[k].textContent = String(S.home.tiles[k]); tiles[k].closest('.boss-tile').classList.toggle('zero', !S.home.tiles[k]); }
     // приветствие списком из чисел сервера, как сводка в панели (замечание 13.11); строка «Поступило / Решено / Ждут решения» — список внутри /boss
     const g = S.home.greeting;
     if (g.items) {
       const LIST = { new: 'new', done: 'done', decisions: 'decisions' };
       greetText.replaceChildren(h('p', { class: 'boss-greet-hi' }, g.greeting), h('div', { class: 'boss-greet-period' }, g.period),
         h('ul', { class: 'boss-greet-list' }, g.items.map(it => {
-          const kids = it.parts.map(([t, b]) => b ? h('b', {}, t) : t);
+          const kids = it.parts.map(([t, b, mark]) => mark === 'dot' ? h('b', { class: 'num-dot' }, h('span', { class: 'dot-overdue' }), t) : b ? h('b', {}, t) : t);
           if (!LIST[it.key]) return h('li', {}, h('span', {}, kids));
           const go = ev => { ev.stopPropagation(); openList(LIST[it.key]); };   // строчный элемент, а не кнопка: маркер списка — у первой строки
           return h('li', {}, h('span', { class: 'linkish', role: 'button', tabindex: '0', onclick: go, onkeydown: ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); go(ev); } } }, kids));

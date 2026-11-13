@@ -29,7 +29,8 @@ QUESTIONS = {
     "department": "как дела у отдела",
 }
 EXAMPLES = ["Что нового за неделю?", "Что ждёт моего решения?", "Кто просрочил?", "Какие главные темы?", "Что по Омску?", "Что по обращению A-027?", "Как дела у продаж?"]
-PERIODS = {"today": "сегодня", "week": "за неделю"}
+PERIODS = {"week": "за неделю", "month": "за месяц", "today": "сегодня"}   # «сегодня» — только если директор сам назвал в вопросе
+HOME_PERIODS = ("week", "month")   # переключатель экрана «Неделя / Месяц», по умолчанию неделя (замечание владельца 13.11)
 ANSWER_TTL = 1800
 _ANSWERS: dict[str, dict] = {}
 
@@ -41,16 +42,16 @@ def _offset() -> timedelta:
 
 
 def period_since(period: str) -> str:
-    """«Сегодня» — с местной полуночи (tz_offset_hours), «неделя» — последние 7 суток. ISO в UTC для сравнения с колонками базы."""
+    """«Сегодня» — с местной полуночи (tz_offset_hours), «неделя» — последние 7 суток, «месяц» — последние 30 суток. ISO в UTC для сравнения с колонками базы."""
     now = db.now()
     if period == "today":
         local_midnight = (now + _offset()).replace(hour=0, minute=0, second=0, microsecond=0)
         return db.iso(local_midnight - _offset())
-    return db.iso(now - timedelta(days=7))
+    return db.iso(now - timedelta(days=30 if period == "month" else 7))
 
 
 def _period(period: str | None) -> str:
-    return period if period in PERIODS else "week"
+    return period if period in HOME_PERIODS else "week"
 
 
 # ---------- факты (считает сервер) ----------
@@ -121,15 +122,15 @@ def greeting(user: dict, h: dict) -> dict:
     key = f"boss_greeting:{user['id']}:{h['period']}"
     v = director.version() + ":" + (db.now() + _offset()).strftime("%Y-%m-%d-%H")[:13]   # меняется с событиями и раз в час (время суток в приветствии)
     cached = db.setting(key)
-    if cached and cached.get("version") == v and "items" in cached:
+    if cached and cached.get("version") == v and cached.get("fmt") == director.SUMMARY_FMT:
         return cached
     f = _greeting_facts(h)
     its = director.items(f)
     phrase = director.ai_phrase(f)
     greet = director.greeting(user) + (" " + phrase if phrase else "")
-    period = h["period_label"][0].upper() + h["period_label"][1:] + ":"   # «За неделю:» / «Сегодня:»
+    period = h["period_label"][0].upper() + h["period_label"][1:] + ":"   # «За неделю:» / «За месяц:»
     out = {"greeting": greet, "period": period, "items": its, "text": " ".join([greet, period] + [it["text"] + "." for it in its]),
-           "engine": "openai" if phrase else "template", "version": v}
+           "engine": "openai" if phrase else "template", "version": v, "fmt": director.SUMMARY_FMT}
     db.set_setting(key, out)
     return out
 

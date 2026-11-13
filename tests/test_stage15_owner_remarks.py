@@ -34,7 +34,7 @@ def test_summary_is_a_list_of_server_numbers(c):
     theme = next(t for t in texts if t.startswith("Главная тема: "))
     assert f" — {f['cluster']['size']} " in theme and f" из {len(f['cluster']['cities'])} " in theme
     for it in d["items"]:   # каждое число — жирным отдельным сегментом и только из фактов
-        bold = [t for t, b in it["parts"] if b]
+        bold = [p[0] for p in it["parts"] if p[1]]
         assert bold and all(t.isdigit() for t in bold)
         assert {int(x) for x in re.findall(r"\d+", it["text"])} <= director._allowed_numbers(f)
     spoken = " ".join(s["text"] for s in d["sentences"])   # озвучка — тот же текст

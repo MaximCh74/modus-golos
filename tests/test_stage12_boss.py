@@ -49,8 +49,14 @@ def test_home_tiles_lists_and_greeting(c):
     items = {it["key"]: it["text"] for it in g["items"]}
     assert items["new"] == f"Поступило: {t['new']}" and items["done"] == f"Решено: {t['done']}" and items["decisions"].startswith("Ждут вашего решения: 2")
     assert g["text"] == " ".join([g["greeting"], g["period"]] + [it["text"] + "." for it in g["items"]])   # озвучка — тот же текст
-    today = c.get("/api/boss/home?period=today").json()
-    assert today["tiles"]["new"] <= t["new"] and today["tiles"]["decisions"] == 2 and today["greeting"]["period"] == "Сегодня:"
+    # «Неделя / Месяц» (замечание 13.11): «поступило / решено» — за период, «ждут решения» и «просрочено» — сейчас, от периода не зависят
+    month = c.get("/api/boss/home?period=month").json()
+    assert month["period"] == "month" and month["greeting"]["period"] == "За месяц:"
+    assert month["tiles"]["new"] >= t["new"] and month["tiles"]["done"] >= t["done"]
+    assert month["tiles"]["decisions"] == t["decisions"] == 2 and month["tiles"]["overdue"] == t["overdue"]
+    mi = {it["key"]: it["text"] for it in month["greeting"]["items"]}
+    assert mi["new"] == f"Поступило: {month['tiles']['new']}" and mi["done"] == f"Решено: {month['tiles']['done']}"
+    assert c.get("/api/boss/home?period=today").json()["period"] == "week"   # на экране «сегодня» больше нет — неделя по умолчанию
     assert c.get("/api/boss/home?period=nonsense").json()["period"] == "week"
 
 
@@ -139,3 +145,16 @@ def test_audio_without_key_and_answer_ownership(c):
     assert r["audio"] is False
     assert c.get(f"/api/boss/answer/{r['id']}/audio").status_code == 503
     assert boss.period_since("today") > boss.period_since("week")
+
+
+
+def test_month_period_for_questions(c):
+    """Вопрос без периода — за выбранный на экране период; «за месяц» в самом вопросе — месяц (замечание 13.11)."""
+    login(c, 1)
+    w = c.post("/api/boss/ask", json={"text": "Что нового?", "period": "week"}).json()
+    m = c.post("/api/boss/ask", json={"text": "Что нового?", "period": "month"}).json()
+    assert w["kind"] == m["kind"] == "question"
+    assert "за неделю" in w["answer"].lower() and "за месяц" in m["answer"].lower()
+    m2 = c.post("/api/boss/ask", json={"text": "Что нового за месяц?", "period": "week"}).json()
+    assert "за месяц" in m2["answer"].lower()
+    assert boss.period_since("month") < boss.period_since("week") < boss.period_since("today")

@@ -260,7 +260,7 @@ def parse_boss(text: str, ctx: dict) -> dict:
     department = next((d["name"] for d in ctx.get("departments", []) if _find_name(d["name"], t) >= 0), None)
     m = re.search(r"(?<![а-яa-z])[aа]-?\s?(\d{1,4})\b", t)   # «A-027», «а 27» — латиница и кириллица, как пишет STT
     number = f"A-{int(m.group(1)):03d}" if m else None
-    period = "today" if re.search(r"сегодня|за день|с утра", t) else "week" if re.search(r"недел", t) else None
+    period = "today" if re.search(r"сегодня|за день|с утра", t) else "month" if re.search(r"месяц|30 дн|тридцать дн", t) else "week" if re.search(r"недел", t) else None
     # команда — только явный глагол действия (is_action); иначе это вопрос, даже если в нём есть «просрочил» или «напоминание»
     if is_action(text):
         return {"kind": "command", "question": None, "city": city, "department": department, "number": number, "period": period, "parts": []}

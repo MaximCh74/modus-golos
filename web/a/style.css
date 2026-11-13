@@ -10,6 +10,8 @@
   --navy: #082742; --ink: #323a47; --muted: #64748d; --muted-2: #8a95a6; --map-label: #7b889c;
   --line: #d1d5dd; --line-soft: #e6e9ef; --bg: #ffffff; --bg-soft: #f5f7fb; --tint: #eff6fd; --tint-line: #cfe0f6; --blue: #2f80ed; --white: #ffffff;
   --map-water: #eaf0f6;
+  --tile-new-bg: #eaf2fc; --tile-new-ic: #d6e6f8; --tile-done-bg: #e9f6ee; --tile-done-ic: #d2eedc; --tile-done-fg: #1f7a46;
+  --tile-dec-bg: #eaf2fc; --tile-dec-line: #8fb2e0; --tile-late-bg: #fdeeee; --tile-late-ic: #f8d9d9;   /* плитки /boss по образцу владельца 13.11 */
   --map-ok: #1f9a55; --map-none: #8a95a6;   /* метки карты директора: зелёная — просрочек нет, красная — есть просрочки; серая контурная — объект без данных */
   /* приглушённые статусные */
   --ok: #1f7a46; --warn: #9a5b00; --bad: #7a1f1f;
@@ -652,37 +654,50 @@ select { appearance: none; -webkit-appearance: none; padding-right: 34px; backgr
 }
 .boss-greet-text:has(.boss-greet-list):not(.open)::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 1.6em; background: linear-gradient(transparent, var(--white)); pointer-events: none; }
 .boss-greet-hi { margin: 0 0 2px; }
-.boss-greet-period { font-weight: var(--w-bold); color: var(--navy); }
+.boss-greet-period { font-weight: var(--w-bold); color: var(--navy); padding-bottom: 4px; margin-bottom: 4px; border-bottom: 1px solid var(--line-soft); }
 .boss-greet-list { margin: 2px 0 0; padding-left: 18px; font-size: 14px; line-height: 1.4; }
 .boss-greet-list b { color: var(--navy); }
+.num-dot { white-space: nowrap; }
+.num-dot .dot-overdue { margin-right: 4px; vertical-align: 1px; }
 .boss-greet-list .linkish { cursor: pointer; border-bottom: 1px dashed var(--line); }
 .boss-greet-list .linkish:focus-visible { box-shadow: var(--focus); border-radius: 4px; }
 .boss-speak { min-height: 32px; padding: 4px 8px; }
 .seg { display: grid; grid-template-columns: 1fr 1fr; background: var(--line-soft); border-radius: var(--radius-pill); padding: 3px; }
 .seg-btn { border: 0; background: transparent; font: inherit; font-weight: var(--w-bold); font-size: 14px; color: var(--muted); padding: 8px; border-radius: var(--radius-pill); cursor: pointer; min-height: 40px; transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease); }
-.seg-btn.on { background: var(--white); color: var(--navy); box-shadow: var(--shadow-1); }
+.seg-btn.on { background: var(--navy); color: var(--white); box-shadow: var(--shadow-1); }   /* активная половина — сплошная тёмно-синяя (13.11) */
+.seg-btn .ict { justify-content: center; gap: 8px; }
+.seg { background: var(--white); border: 1px solid var(--line-soft); }
 .seg-btn:focus-visible { outline: none; box-shadow: var(--focus); }
 .boss-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; flex: 1; align-content: stretch; }
 .boss-tile { display: flex; flex-direction: column; justify-content: center; align-items: flex-start; gap: 2px; background: var(--white); border: 1px solid var(--line-soft); border-radius: var(--radius); padding: 14px 16px; font: inherit; color: var(--ink); cursor: pointer; text-align: left; min-height: 96px; transition: border-color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease), transform var(--t-fast) var(--ease); }
 .boss-tile:hover { border-color: var(--line); box-shadow: var(--shadow-1); }
 .boss-tile:active { transform: translateY(1px); }
 .boss-tile:focus-visible { outline: none; box-shadow: var(--focus); }
-.boss-tile b { font-size: 44px; line-height: 1; color: var(--navy); font-weight: var(--w-bold); letter-spacing: -.02em; }
-.boss-tile span { font-size: 13px; color: var(--muted); line-height: 1.2; }
+.boss-tile { flex-direction: row !important; align-items: center !important; justify-content: flex-start !important; gap: 10px !important; padding: 12px !important; }
+.boss-tile .tile-ic { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 50%; color: var(--navy); background: var(--tile-new-ic); position: relative; }
+.boss-tile .tile-body { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; text-align: left; }
+.boss-tile b { font-size: 36px; line-height: 1; color: var(--navy); font-weight: var(--w-bold); letter-spacing: -.02em; }
+.boss-tile .tile-now { font-size: 11px; color: var(--muted-2); line-height: 1; }
+.boss-tile.tile-new { background: var(--tile-new-bg); border-color: var(--tile-new-bg); }
+.boss-tile.tile-done { background: var(--tile-done-bg); border-color: var(--tile-done-bg); }
+.boss-tile.tile-done .tile-ic { background: var(--tile-done-ic); color: var(--tile-done-fg); }
+.boss-tile.tile-decisions { background: var(--tile-dec-bg); border-color: var(--tile-dec-line); }
+.boss-tile.tile-overdue { background: var(--tile-late-bg); border-color: var(--tile-late-bg); }
+.boss-tile.tile-overdue .tile-ic { background: var(--tile-late-ic); color: var(--red-dark); }
+.boss-tile.tile-overdue:not(.zero) .tile-ic::after { content: ''; position: absolute; top: 4px; right: 4px; width: 9px; height: 9px; border-radius: 50%; background: var(--red); box-shadow: 0 0 0 2px var(--white); }
+.boss-tile .tile-label { font-size: 13px; color: var(--muted); line-height: 1.2; }
 .boss-tile.zero b { color: var(--muted-2); }
-.boss-tile.tile-overdue:not(.zero) b::after { content: ''; display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--red); margin-left: 8px; vertical-align: 18px; }
-.boss-tile.tile-decisions:not(.zero) { border-color: var(--tint-line); background: var(--tint); }
 .boss-ask { display: flex; flex-direction: column; gap: 8px; }
 .boss-ask-row { display: flex; gap: 8px; align-items: stretch; }
 .boss-ask-text { flex: 1; min-height: 46px; resize: none; padding: 11px 12px; font-size: 15px; line-height: 1.3; }
-.boss-send { width: 52px; min-height: 46px; padding: 0; flex: none; }   /* главная кнопка нового стиля (градиент с красным углом) */
+.boss-send, .boss-send:hover, .boss-send:active { width: 52px; min-height: 46px; padding: 0; flex: none; background: var(--navy); border-color: var(--navy); box-shadow: none; }   /* сплошная — на экране один градиент (13.11) */
 .boss-ask-text::placeholder { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 14px; }
 @media (max-width: 400px) { .boss-ask-text { padding-left: 10px; padding-right: 8px; } .boss-ask-text::placeholder { font-size: 13px; } }
 .boss-mic-row { display: flex; flex-direction: column; align-items: center; gap: 4px; }
-.boss-mic { width: 76px; height: 76px; min-height: 76px; border-radius: 50%; background: var(--navy); color: var(--white); border-color: var(--navy); box-shadow: var(--shadow-2); }
-.boss-mic:hover { background: var(--navy); }
+.boss-mic { width: 84px; height: 84px; min-height: 84px; border-radius: 50%; background: var(--btn-main); color: var(--white); border: 0; box-shadow: var(--btn-main-shadow); }   /* главная кнопка: градиент с красным углом (13.11) */
+.boss-mic:hover { background: var(--btn-main-hover); }
 .boss-mic .ic { width: 32px; height: 32px; }
-.boss-mic.recording { background: var(--navy); border-color: var(--navy); }
+.boss-mic.recording { background: var(--btn-main-active); }
 .boss-mic-label { font-size: 12px; color: var(--muted); font-weight: var(--w-bold); letter-spacing: .04em; text-transform: uppercase; }
 .boss-foot { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 12px; flex-wrap: wrap; }
 .boss-foot a { color: var(--navy); font-weight: var(--w-bold); text-decoration: none; }
@@ -712,7 +727,7 @@ select { appearance: none; -webkit-appearance: none; padding-right: 34px; backgr
 .boss-links { display: flex; flex-wrap: wrap; gap: 8px; }
 .boss-gate { max-width: 460px; margin: 10vh auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
 .boss-logo { height: 36px; width: auto; align-self: flex-start; }
-@media (max-height: 700px) { .boss-tile b { font-size: 36px; } .boss-tile { min-height: 80px; padding: 10px 14px; } .boss-mic { width: 60px; height: 60px; min-height: 60px; } .boss-mic .ic { width: 26px; height: 26px; } .boss-greet-text { font-size: 14px; } .boss { gap: 8px; } }
+@media (max-height: 700px) { .boss-tile b { font-size: 30px; } .boss-tile .tile-ic { width: 40px; height: 40px; } .boss-tile { min-height: 80px; padding: 10px 14px; } .boss-mic { width: 60px; height: 60px; min-height: 60px; } .boss-mic .ic { width: 26px; height: 26px; } .boss-greet-text { font-size: 14px; } .boss { gap: 8px; } }
 @media (max-width: 380px) { .boss-head { gap: 6px; } .boss-head img { height: 22px; } .boss-title { font-size: 14px; } }
 @media (min-width: 700px) { .boss { min-height: 0; margin-top: 24px; } .boss-tiles { flex: none; } .boss-tile { min-height: 120px; } }
 

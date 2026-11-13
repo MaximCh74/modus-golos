@@ -39,7 +39,7 @@ def main() -> None:
         page.goto(f"{base}/boss"); page.wait_for_selector(".boss-tile b:not(:has-text('…'))"); page.wait_for_timeout(1200)
         page.click(".seg-btn[data-period=week]"); page.wait_for_timeout(1000)
         shot(page, "директор_в_кармане_неделя_390")
-        page.click(".seg-btn[data-period=today]"); wait_text(page, "Сегодня"); page.wait_for_timeout(400)
+        page.click(".seg-btn[data-period=month]"); wait_text(page, "За месяц"); page.wait_for_timeout(400)
         shot(page, "директор_в_кармане_сегодня_390")
         page.click(".seg-btn[data-period=week]"); wait_text(page, "недел"); page.wait_for_timeout(400)
         for text, name in (("Кто просрочил?", "вопрос_кто_просрочил"), ("Что по Омску?", "вопрос_что_по_Омску"), ("Что по обращению A-027?", "вопрос_обращение_A-027")):

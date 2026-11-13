@@ -95,7 +95,7 @@ def items(f: dict) -> list[dict]:
            {"key": "done", "parts": [["Решено: ", False], [str(f["done"]), True]], "href": "/changes"}]
     op = [["Открыто: ", False], [str(f["open"]), True]]
     if f["urgent_open"]:
-        op += [[", из них мешают работать: ", False], [str(f["urgent_open"]), True]]
+        op += [[", из них мешают работать: ", False], [str(f["urgent_open"]), True, "dot"]]   # красная точка + тёмная цифра (красного текста нет)
     out.append({"key": "open", "parts": op, "href": "/panel#/queue?open=1" + ("&urgency=now" if f["urgent_open"] else "")})
     if f["decisions_pending"]:
         dp = [["Ждут вашего решения: ", False], [str(f["decisions_pending"]), True]]
@@ -108,7 +108,7 @@ def items(f: dict) -> list[dict]:
                               [" " + _word(c["size"], ("обращение", "обращения", "обращений")) + " из ", False], [str(n), True],
                               [" " + _word(n, ("города", "городов", "городов")), False]], "href": f"/panel#/queue?cluster_id={c['id']}"})
     for it in out:
-        it["text"] = "".join(t for t, _ in it["parts"])
+        it["text"] = "".join(p[0] for p in it["parts"])
     return out
 
 
@@ -130,11 +130,14 @@ def ai_phrase(f: dict) -> str | None:
     return None if llm.has_forbidden(phrase) else phrase
 
 
+SUMMARY_FMT = 2   # формат списка сводки: при изменении (13.11 — красная точка у «мешают работать») старый кэш пересчитывается
+
+
 def build(f: dict, user: dict, phrase: str | None, v: str) -> dict:
     greet = greeting(user) + (" " + phrase if phrase else "")
     its = items(f)
     return {"greeting": greet, "period": f"За {_plural(f['period_days'], ('день', 'дня', 'дней'))}:", "items": its,
-            "sentences": _sentences(greet, f, its), "engine": "openai" if phrase else "template", "facts": f, "at": db.now_iso(), "version": v,
+            "sentences": _sentences(greet, f, its), "engine": "openai" if phrase else "template", "facts": f, "at": db.now_iso(), "version": v, "fmt": SUMMARY_FMT,
             "lines": _lines(f)}
 
 
@@ -207,9 +210,9 @@ def summary(user: dict, refresh: bool = False, force_template: bool = False) -> 
     if force_template:
         return build(facts(), user, None, v)
     age = (db.now() - db.parse(cached["at"])).total_seconds() if cached and cached.get("at") else None
-    if cached and not refresh and cached.get("version") == v and age < CACHE_TTL and "items" in cached:   # старый кэш абзацем — пересчитать
+    if cached and not refresh and cached.get("version") == v and age < CACHE_TTL and cached.get("fmt") == SUMMARY_FMT:   # старый формат кэша — пересчитать
         return cached
-    if cached and refresh and age is not None and age < 60 and "items" in cached:   # F-07: «обновить» не чаще раза в минуту — каждое обновление это вызов ИИ
+    if cached and refresh and age is not None and age < 60 and cached.get("fmt") == SUMMARY_FMT:   # F-07: «обновить» не чаще раза в минуту — каждое обновление это вызов ИИ
         return cached
     f = facts()
     out = build(f, user, ai_phrase(f), v)
