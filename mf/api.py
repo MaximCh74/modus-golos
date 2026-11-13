@@ -473,6 +473,8 @@ async def avatar_file(name: str):
     if "/" in name or ".." in name or not name.endswith(".jpg"):
         raise HTTPException(404)
     path = config.AVATAR_DIR / name
+    if not path.is_file():   # демо-портреты (синтетические, tools/make_avatars.py) лежат в репозитории — в снапшоте только имя файла
+        path = config.ROOT / "demo" / "avatars" / name
     if not path.is_file():
         raise HTTPException(404)
     return FileResponse(path, media_type="image/jpeg", headers={"Cache-Control": "public, max-age=86400"})

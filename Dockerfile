@@ -9,5 +9,6 @@ COPY web ./web
 COPY tools ./tools
 # демо-снапшот: при первом старте пустая база заполняется им сама (даты сдвигаются на «сегодня»)
 COPY demo/fixtures/mf-demo.db ./demo/fixtures/mf-demo.db
+COPY demo/avatars ./demo/avatars
 EXPOSE 8080
 CMD ["python3", "-m", "uvicorn", "mf.main:app", "--host", "0.0.0.0", "--port", "8080"]

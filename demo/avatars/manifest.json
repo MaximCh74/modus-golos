@@ -1,0 +1,627 @@
+{
+ "note": "Синтетические портреты вымышленных людей, сгенерированы ИИ (OpenAI Images) для демо «Модус Голос». Директору портрет не делался: «Сергей Михайлович» — имя реального человека заказчика.",
+ "items": {
+  "2": {
+   "user_id": 2,
+   "file": "u2-38cd3a12cb.jpg",
+   "model": "gpt-image-1.5",
+   "size": "1024x1024 → 512",
+   "quality": "medium",
+   "prompt": "Photorealistic corporate headshot of a fictional Russian (Eastern European) man, about 44 years old, short brown hair, light stubble, wearing a charcoal suit with a light blue shirt, no tie. Waist-up portrait, centered, facing the camera with a calm friendly expression. Neutral light grey studio background, soft diffused light, natural skin texture, 85mm lens look. Consistent professional company-portrait style. A fictional person, not resembling any real or famous person. No text, no logos, no watermark.",
+   "usage": {
+    "input_tokens": 115,
+    "input_tokens_details": {
+     "image_tokens": 0,
+     "text_tokens": 115
+    },
+    "output_tokens": 1417,
+    "total_tokens": 1532,
+    "output_tokens_details": {
+     "image_tokens": 1056,
+     "text_tokens": 361
+    }
+   },
+   "cost_usd": 0.038,
+   "seconds": 11.9
+  },
+  "3": {
+   "user_id": 3,
+   "file": "u3-51c17d9849.jpg",
+   "model": "gpt-image-1.5",
+   "size": "1024x1024 → 512",
+   "quality": "medium",
+   "prompt": "Photorealistic corporate headshot of a fictional Kazakh (Central Asian) man, about 31 years old, short black hair, thin rectangular glasses, wearing a navy blazer over a white shirt, no tie. Waist-up portrait, centered, facing the camera with a calm friendly expression. Neutral light grey studio background, soft diffused light, natural skin texture, 85mm lens look. Consistent professional company-portrait style. A fictional person, not resembling any real or famous person. No text, no logos, no watermark.",
+   "usage": {
+    "input_tokens": 115,
+    "input_tokens_details": {
+     "image_tokens": 0,
+     "text_tokens": 115
+    },
+    "output_tokens": 1382,
+    "total_tokens": 1497,
+    "output_tokens_details": {
+     "image_tokens": 1056,
+     "text_tokens": 326
+    }
+   },
+   "cost_usd": 0.0376,
+   "seconds": 12.1
+  },
+  "4": {
+   "user_id": 4,
+   "file": "u4-fc394e08c9.jpg",
+   "model": "gpt-image-1.5",
+   "size": "1024x1024 → 512",
+   "quality": "medium",
+   "prompt": "Photorealistic corporate headshot of a fictional Kazakh (Central Asian) woman, about 36 years old, long straight black hair, wearing a dark blue blazer over a white blouse. Waist-up portrait, centered, facing the camera with a calm friendly expression. Neutral light grey studio background, soft diffused light, natural skin texture, 85mm lens look. Consistent professional company-portrait style. A fictional person, not resembling any real or famous person. No text, no logos, no watermark.",
+   "usage": {
+    "input_tokens": 110,
+    "input_tokens_details": {
+     "image_tokens": 0,
+     "text_tokens": 110
+    },
+    "output_tokens": 1398,
+    "total_tokens": 1508,
+    "output_tokens_details": {
+     "image_tokens": 1056,
+     "text_tokens": 342
+    }
+   },
+   "cost_usd": 0.0378,
+   "seconds": 12.7
+  },
+  "5": {
+   "user_id": 5,
+   "file": "u5-d80ce27364.jpg",
+   "model": "gpt-image-1.5",
+   "size": "1024x1024 → 512",
+   "quality": "medium",
+   "prompt": "Photorealistic corporate headshot of a fictional Russian (Eastern European) man, about 41 years old, short dark blond hair, wearing a grey suit, white shirt and burgundy tie. Waist-up portrait, centered, facing the camera with a calm friendly expression. Neutral light grey studio background, soft diffused light, natural skin texture, 85mm lens look. Consistent professional company-portrait style. A fictional person, not resembling any real or famous person. No text, no logos, no watermark.",
+   "usage": {
+    "input_tokens": 111,
+    "input_tokens_details": {
+     "image_tokens": 0,
+     "text_tokens": 111
+    },
+    "output_tokens": 1388,
+    "total_tokens": 1499,
+    "output_tokens_details": {
+     "image_tokens": 1056,
+     "text_tokens": 332
+    }
+   },
+   "cost_usd": 0.0377,
+   "seconds": 13.2
+  },
+  "6": {
+   "user_id": 6,
+   "file": "u6-14041f4757.jpg",
+   "model": "gpt-image-1.5",
+   "size": "1024x1024 → 512",
+   "quality": "medium",
+   "prompt": "Photorealistic corporate headshot of a fictional Kazakh (Central Asian) woman, about 38 years old, shoulder-length dark hair, small stud earrings, wearing a beige blazer over a cream blouse. Waist-up portrait, centered, facing the camera with a calm friendly expression. Neutral light grey studio background, soft diffused light, natural skin texture, 85mm lens look. Consistent professional company-portrait style. A fictional person, not resembling any real or famous person. No text, no logos, no watermark.",
+   "usage": {
+    "input_tokens": 113,
+    "input_tokens_details": {
+     "image_tokens": 0,
+     "text_tokens": 113
+    },
+    "output_tokens": 1399,
+    "total_tokens": 1512,
+    "output_tokens_details": {
+     "image_tokens": 1056,
+     "text_tokens": 343
+    }
+   },
+   "cost_usd": 0.0378,
+   "seconds": 10.3
+  },
+  "7": {
+   "user_id": 7,
+   "file": "u7-71b0ec2587.jpg",
+   "model": "gpt-image-1.5",
+   "size": "1024x1024 → 512",
+   "quality": "medium",
+   "prompt": "Photorealistic corporate headshot of a fictional Russian (Eastern European) woman, about 49 years old, short auburn bob haircut, wearing a dark grey jacket over a light blouse. Waist-up portrait, centered, facing the camera with a calm friendly expression. Neutral light grey studio background, soft diffused light, natural skin texture, 85mm lens look. Consistent professional company-portrait style. A fictional person, not resembling any real or famous person. No text, no logos, no watermark.",
+   "usage": {
+    "input_tokens": 110,
+    "input_tokens_details": {
+     "image_tokens": 0,
+     "text_tokens": 110
+    },
+    "output_tokens": 1391,
+    "total_tokens": 1501,
+    "output_tokens_details": {
+     "image_tokens": 1056,
+     "text_tokens": 335
+    }
+   },
+   "cost_usd": 0.0377,
+   "seconds": 11.2
+  },
+  "8": {
+   "user_id": 8,
+   "file": "u8-60997d41e4.jpg",
+   "model": "gpt-image-1.5",
+   "size": "1024x1024 → 512",
+   "quality": "medium",
+   "prompt": "Photorealistic corporate headshot of a fictional Kazakh (Central Asian) man, about 45 years old, short black hair with a little grey, neat short beard, wearing a dark suit with a light shirt, no tie. Waist-up portrait, centered, facing the camera with a calm friendly expression. Neutral light grey studio background, soft diffused light, natural skin texture, 85mm lens look. Consistent professional company-portrait style. A fictional person, not resembling any real or famous person. No text, no logos, no watermark.",
+   "usage": {
+    "input_tokens": 119,
+    "input_tokens_details": {
+     "image_tokens": 0,
+     "text_tokens": 119
+    },
+    "output_tokens": 1387,
+    "total_tokens": 1506,
+    "output_tokens_details": {
+     "image_tokens": 1056,
+     "text_tokens": 331
+    }
+   },
+   "cost_usd": 0.0377,
+   "seconds": 10.6
+  },
+  "9": {
+   "user_id": 9,
+   "file": "u9-b6c0c3aae4.jpg",
+   "model": "gpt-image-1.5",
+   "size": "1024x1024 → 512",
+   "quality": "medium",
+   "prompt": "Photorealistic corporate headshot of a fictional Russian (Eastern European) man, about 39 years old, short dark hair, glasses, wearing a navy suit and white shirt. Waist-up portrait, centered, facing the camera with a calm friendly expression. Neutral light grey studio background, soft diffused light, natural skin texture, 85mm lens look. Consistent professional company-portrait style. A fictional person, not resembling any real or famous person. No text, no logos, no watermark.",
+   "usage": {
+    "input_tokens": 108,
+    "input_tokens_details": {
+     "image_tokens": 0,
+     "text_tokens": 108
+    },
+    "output_tokens": 1415,
+    "total_tokens": 1523,
+    "output_tokens_details": {
+     "image_tokens": 1056,
+     "text_tokens": 359
+    }
+   },
+   "cost_usd": 0.0379,
+   "seconds": 12.0
+  },
+  "10": {
+   "user_id": 10,
+   "file": "u10-7b86b324b0.jpg",
+   "model": "gpt-image-1.5",
+   "size": "1024x1024 → 512",
+   "quality": "medium",
+   "prompt": "Photorealistic corporate headshot of a fictional Russian (Eastern European) woman, about 42 years old, blonde hair in a low ponytail, wearing a teal blazer over a white top. Waist-up portrait, centered, facing the camera with a calm friendly expression. Neutral light grey studio background, soft diffused light, natural skin texture, 85mm lens look. Consistent professional company-portrait style. A fictional person, not resembling any real or famous person. No text, no logos, no watermark.",
+   "usage": {
+    "input_tokens": 111,
+    "input_tokens_details": {
+     "image_tokens": 0,
+     "text_tokens": 111
+    },
+    "output_tokens": 1380,
+    "total_tokens": 1491,
+    "output_tokens_details": {
+     "image_tokens": 1056,
+     "text_tokens": 324
+    }
+   },
+   "cost_usd": 0.0376,
+   "seconds": 10.6
+  },
+  "11": {
+   "user_id": 11,
+   "file": "u11-59da8351a6.jpg",
+   "model": "gpt-image-1.5",
+   "size": "1024x1024 → 512",
+   "quality": "medium",
+   "prompt": "Photorealistic corporate headshot of a fictional Russian (Eastern European) man, about 51 years old, receding grey hair, wearing a dark grey suit, white shirt and navy tie. Waist-up portrait, centered, facing the camera with a calm friendly expression. Neutral light grey studio background, soft diffused light, natural skin texture, 85mm lens look. Consistent professional company-portrait style. A fictional person, not resembling any real or famous person. No text, no logos, no watermark.",
+   "usage": {
+    "input_tokens": 111,
+    "input_tokens_details": {
+     "image_tokens": 0,
+     "text_tokens": 111
+    },
+    "output_tokens": 1424,
+    "total_tokens": 1535,
+    "output_tokens_details": {
+     "image_tokens": 1056,
+     "text_tokens": 368
+    }
+   },
+   "cost_usd": 0.038,
+   "seconds": 10.2
+  },
+  "12": {
+   "user_id": 12,
+   "file": "u12-2726226aeb.jpg",
+   "model": "gpt-image-1.5",
+   "size": "1024x1024 → 512",
+   "quality": "medium",
+   "prompt": "Photorealistic corporate headshot of a fictional Russian (Eastern European) woman, about 33 years old, light brown shoulder-length hair, wearing a black blazer over a light grey top. Waist-up portrait, centered, facing the camera with a calm friendly expression. Neutral light grey studio background, soft diffused light, natural skin texture, 85mm lens look. Consistent professional company-portrait style. A fictional person, not resembling any real or famous person. No text, no logos, no watermark.",
+   "usage": {
+    "input_tokens": 110,
+    "input_tokens_details": {
+     "image_tokens": 0,
+     "text_tokens": 110
+    },
+    "output_tokens": 1355,
+    "total_tokens": 1465,
+    "output_tokens_details": {
+     "image_tokens": 1056,
+     "text_tokens": 299
+    }
+   },
+   "cost_usd": 0.0373,
+   "seconds": 10.7
+  },
+  "13": {
+   "user_id": 13,
+   "file": "u13-567dbc6aa1.jpg",
+   "model": "gpt-image-1.5",
+   "size": "1024x1024 → 512",
+   "quality": "medium",
+   "prompt": "Photorealistic corporate headshot of a fictional Kazakh (Central Asian) man, about 35 years old, short black hair, clean-shaven, wearing a navy suit and white shirt, no tie. Waist-up portrait, centered, facing the camera with a calm friendly expression. Neutral light grey studio background, soft diffused light, natural skin texture, 85mm lens look. Consistent professional company-portrait style. A fictional person, not resembling any real or famous person. No text, no logos, no watermark.",
+   "usage": {
+    "input_tokens": 114,
+    "input_tokens_details": {
+     "image_tokens": 0,
+     "text_tokens": 114
+    },
+    "output_tokens": 1363,
+    "total_tokens": 1477,
+    "output_tokens_details": {
+     "image_tokens": 1056,
+     "text_tokens": 307
+    }
+   },
+   "cost_usd": 0.0374,
+   "seconds": 10.6
+  },
+  "14": {
+   "user_id": 14,
+   "file": "u14-0306dda547.jpg",
+   "model": "gpt-image-1.5",
+   "size": "1024x1024 → 512",
+   "quality": "medium",
+   "prompt": "Photorealistic corporate headshot of a fictional Russian (Eastern European) woman, about 40 years old, dark brown hair pinned up, glasses, wearing a navy blazer over a white blouse. Waist-up portrait, centered, facing the camera with a calm friendly expression. Neutral light grey studio background, soft diffused light, natural skin texture, 85mm lens look. Consistent professional company-portrait style. A fictional person, not resembling any real or famous person. No text, no logos, no watermark.",
+   "usage": {
+    "input_tokens": 111,
+    "input_tokens_details": {
+     "image_tokens": 0,
+     "text_tokens": 111
+    },
+    "output_tokens": 1395,
+    "total_tokens": 1506,
+    "output_tokens_details": {
+     "image_tokens": 1056,
+     "text_tokens": 339
+    }
+   },
+   "cost_usd": 0.0377,
+   "seconds": 10.8
+  },
+  "15": {
+   "user_id": 15,
+   "file": "u15-0e576d2908.jpg",
+   "model": "gpt-image-1.5",
+   "size": "1024x1024 → 512",
+   "quality": "medium",
+   "prompt": "Photorealistic corporate headshot of a fictional Russian (Eastern European) man, about 34 years old, short brown hair, short beard, wearing a dark blue sweater over a collared shirt. Waist-up portrait, centered, facing the camera with a calm friendly expression. Neutral light grey studio background, soft diffused light, natural skin texture, 85mm lens look. Consistent professional company-portrait style. A fictional person, not resembling any real or famous person. No text, no logos, no watermark.",
+   "usage": {
+    "input_tokens": 112,
+    "input_tokens_details": {
+     "image_tokens": 0,
+     "text_tokens": 112
+    },
+    "output_tokens": 1405,
+    "total_tokens": 1517,
+    "output_tokens_details": {
+     "image_tokens": 1056,
+     "text_tokens": 349
+    }
+   },
+   "cost_usd": 0.0378,
+   "seconds": 11.7
+  },
+  "16": {
+   "user_id": 16,
+   "file": "u16-170ad82a97.jpg",
+   "model": "gpt-image-1.5",
+   "size": "1024x1024 → 512",
+   "quality": "medium",
+   "prompt": "Photorealistic corporate headshot of a fictional Kazakh (Central Asian) man, about 28 years old, short black hair, wearing a light grey blazer over a white shirt. Waist-up portrait, centered, facing the camera with a calm friendly expression. Neutral light grey studio background, soft diffused light, natural skin texture, 85mm lens look. Consistent professional company-portrait style. A fictional person, not resembling any real or famous person. No text, no logos, no watermark.",
+   "usage": {
+    "input_tokens": 109,
+    "input_tokens_details": {
+     "image_tokens": 0,
+     "text_tokens": 109
+    },
+    "output_tokens": 1394,
+    "total_tokens": 1503,
+    "output_tokens_details": {
+     "image_tokens": 1056,
+     "text_tokens": 338
+    }
+   },
+   "cost_usd": 0.0377,
+   "seconds": 10.7
+  },
+  "17": {
+   "user_id": 17,
+   "file": "u17-b1fea46f34.jpg",
+   "model": "gpt-image-1.5",
+   "size": "1024x1024 → 512",
+   "quality": "medium",
+   "prompt": "Photorealistic corporate headshot of a fictional Russian (Eastern European) woman, about 31 years old, chestnut wavy shoulder-length hair, wearing a dark navy blazer over a white blouse. Waist-up portrait, centered, facing the camera with a calm friendly expression. Neutral light grey studio background, soft diffused light, natural skin texture, 85mm lens look. Consistent professional company-portrait style. A fictional person, not resembling any real or famous person. No text, no logos, no watermark.",
+   "usage": {
+    "input_tokens": 112,
+    "input_tokens_details": {
+     "image_tokens": 0,
+     "text_tokens": 112
+    },
+    "output_tokens": 1388,
+    "total_tokens": 1500,
+    "output_tokens_details": {
+     "image_tokens": 1056,
+     "text_tokens": 332
+    }
+   },
+   "cost_usd": 0.0377,
+   "seconds": 10.6
+  },
+  "18": {
+   "user_id": 18,
+   "file": "u18-c9321f0120.jpg",
+   "model": "gpt-image-1.5",
+   "size": "1024x1024 → 512",
+   "quality": "medium",
+   "prompt": "Photorealistic corporate headshot of a fictional Kazakh (Central Asian) woman, about 29 years old, long black hair with bangs, wearing a light grey blazer over a white top. Waist-up portrait, centered, facing the camera with a calm friendly expression. Neutral light grey studio background, soft diffused light, natural skin texture, 85mm lens look. Consistent professional company-portrait style. A fictional person, not resembling any real or famous person. No text, no logos, no watermark.",
+   "usage": {
+    "input_tokens": 111,
+    "input_tokens_details": {
+     "image_tokens": 0,
+     "text_tokens": 111
+    },
+    "output_tokens": 1380,
+    "total_tokens": 1491,
+    "output_tokens_details": {
+     "image_tokens": 1056,
+     "text_tokens": 324
+    }
+   },
+   "cost_usd": 0.0376,
+   "seconds": 10.6
+  },
+  "19": {
+   "user_id": 19,
+   "file": "u19-39fa3dff6a.jpg",
+   "model": "gpt-image-1.5",
+   "size": "1024x1024 → 512",
+   "quality": "medium",
+   "prompt": "Photorealistic corporate headshot of a fictional Russian (Eastern European) man, about 37 years old, short light brown hair, glasses, wearing a grey jacket over a white shirt. Waist-up portrait, centered, facing the camera with a calm friendly expression. Neutral light grey studio background, soft diffused light, natural skin texture, 85mm lens look. Consistent professional company-portrait style. A fictional person, not resembling any real or famous person. No text, no logos, no watermark.",
+   "usage": {
+    "input_tokens": 110,
+    "input_tokens_details": {
+     "image_tokens": 0,
+     "text_tokens": 110
+    },
+    "output_tokens": 1396,
+    "total_tokens": 1506,
+    "output_tokens_details": {
+     "image_tokens": 1056,
+     "text_tokens": 340
+    }
+   },
+   "cost_usd": 0.0377,
+   "seconds": 10.7
+  },
+  "20": {
+   "user_id": 20,
+   "file": "u20-c49a5a5387.jpg",
+   "model": "gpt-image-1.5",
+   "size": "1024x1024 → 512",
+   "quality": "medium",
+   "prompt": "Photorealistic corporate headshot of a fictional Kazakh (Central Asian) woman, about 32 years old, black hair in a neat bun, wearing a burgundy blazer over a black top. Waist-up portrait, centered, facing the camera with a calm friendly expression. Neutral light grey studio background, soft diffused light, natural skin texture, 85mm lens look. Consistent professional company-portrait style. A fictional person, not resembling any real or famous person. No text, no logos, no watermark.",
+   "usage": {
+    "input_tokens": 112,
+    "input_tokens_details": {
+     "image_tokens": 0,
+     "text_tokens": 112
+    },
+    "output_tokens": 1388,
+    "total_tokens": 1500,
+    "output_tokens_details": {
+     "image_tokens": 1056,
+     "text_tokens": 332
+    }
+   },
+   "cost_usd": 0.0377,
+   "seconds": 11.0
+  },
+  "21": {
+   "user_id": 21,
+   "file": "u21-7cf0a75923.jpg",
+   "model": "gpt-image-1.5",
+   "size": "1024x1024 → 512",
+   "quality": "medium",
+   "prompt": "Photorealistic corporate headshot of a fictional Russian (Eastern European) man, about 30 years old, short brown hair, clean-shaven, wearing a navy suit, white shirt and dark tie. Waist-up portrait, centered, facing the camera with a calm friendly expression. Neutral light grey studio background, soft diffused light, natural skin texture, 85mm lens look. Consistent professional company-portrait style. A fictional person, not resembling any real or famous person. No text, no logos, no watermark.",
+   "usage": {
+    "input_tokens": 113,
+    "input_tokens_details": {
+     "image_tokens": 0,
+     "text_tokens": 113
+    },
+    "output_tokens": 1413,
+    "total_tokens": 1526,
+    "output_tokens_details": {
+     "image_tokens": 1056,
+     "text_tokens": 357
+    }
+   },
+   "cost_usd": 0.0379,
+   "seconds": 10.7
+  },
+  "22": {
+   "user_id": 22,
+   "file": "u22-8fccd01363.jpg",
+   "model": "gpt-image-1.5",
+   "size": "1024x1024 → 512",
+   "quality": "medium",
+   "prompt": "Photorealistic corporate headshot of a fictional Kazakh (Central Asian) woman, about 27 years old, long dark hair, wearing a navy cardigan over a white blouse. Waist-up portrait, centered, facing the camera with a calm friendly expression. Neutral light grey studio background, soft diffused light, natural skin texture, 85mm lens look. Consistent professional company-portrait style. A fictional person, not resembling any real or famous person. No text, no logos, no watermark.",
+   "usage": {
+    "input_tokens": 108,
+    "input_tokens_details": {
+     "image_tokens": 0,
+     "text_tokens": 108
+    },
+    "output_tokens": 1388,
+    "total_tokens": 1496,
+    "output_tokens_details": {
+     "image_tokens": 1056,
+     "text_tokens": 332
+    }
+   },
+   "cost_usd": 0.0377,
+   "seconds": 10.7
+  },
+  "23": {
+   "user_id": 23,
+   "file": "u23-b767aef7a0.jpg",
+   "model": "gpt-image-1.5",
+   "size": "1024x1024 → 512",
+   "quality": "medium",
+   "prompt": "Photorealistic corporate headshot of a fictional Russian (Eastern European) man, about 35 years old, short brown hair, neat full beard, wearing a navy suit and white shirt, no tie. Waist-up portrait, centered, facing the camera with a calm friendly expression. Neutral light grey studio background, soft diffused light, natural skin texture, 85mm lens look. Consistent professional company-portrait style. A fictional person, not resembling any real or famous person. No text, no logos, no watermark.",
+   "usage": {
+    "input_tokens": 113,
+    "input_tokens_details": {
+     "image_tokens": 0,
+     "text_tokens": 113
+    },
+    "output_tokens": 1382,
+    "total_tokens": 1495,
+    "output_tokens_details": {
+     "image_tokens": 1056,
+     "text_tokens": 326
+    }
+   },
+   "cost_usd": 0.0376,
+   "seconds": 10.8
+  },
+  "24": {
+   "user_id": 24,
+   "file": "u24-bf6edb7dd8.jpg",
+   "model": "gpt-image-1.5",
+   "size": "1024x1024 → 512",
+   "quality": "medium",
+   "prompt": "Photorealistic corporate headshot of a fictional Kazakh (Central Asian) woman, about 34 years old, shoulder-length dark hair, wearing a soft green blazer over a white top. Waist-up portrait, centered, facing the camera with a calm friendly expression. Neutral light grey studio background, soft diffused light, natural skin texture, 85mm lens look. Consistent professional company-portrait style. A fictional person, not resembling any real or famous person. No text, no logos, no watermark.",
+   "usage": {
+    "input_tokens": 110,
+    "input_tokens_details": {
+     "image_tokens": 0,
+     "text_tokens": 110
+    },
+    "output_tokens": 1391,
+    "total_tokens": 1501,
+    "output_tokens_details": {
+     "image_tokens": 1056,
+     "text_tokens": 335
+    }
+   },
+   "cost_usd": 0.0377,
+   "seconds": 10.7
+  },
+  "25": {
+   "user_id": 25,
+   "file": "u25-facce944ca.jpg",
+   "model": "gpt-image-1.5",
+   "size": "1024x1024 → 512",
+   "quality": "medium",
+   "prompt": "Photorealistic corporate headshot of a fictional Kazakh (Central Asian) woman, about 46 years old, black hair in a neat low bun, wearing a dark navy jacket over a light blouse, small pendant. Waist-up portrait, centered, facing the camera with a calm friendly expression. Neutral light grey studio background, soft diffused light, natural skin texture, 85mm lens look. Consistent professional company-portrait style. A fictional person, not resembling any real or famous person. No text, no logos, no watermark.",
+   "usage": {
+    "input_tokens": 116,
+    "input_tokens_details": {
+     "image_tokens": 0,
+     "text_tokens": 116
+    },
+    "output_tokens": 1382,
+    "total_tokens": 1498,
+    "output_tokens_details": {
+     "image_tokens": 1056,
+     "text_tokens": 326
+    }
+   },
+   "cost_usd": 0.0376,
+   "seconds": 12.6
+  },
+  "26": {
+   "user_id": 26,
+   "file": "u26-f02dba66bd.jpg",
+   "model": "gpt-image-1.5",
+   "size": "1024x1024 → 512",
+   "quality": "medium",
+   "prompt": "Photorealistic corporate headshot of a fictional Kazakh (Central Asian) man, about 38 years old, short black hair, short trimmed beard, wearing a dark grey blazer over a light blue shirt. Waist-up portrait, centered, facing the camera with a calm friendly expression. Neutral light grey studio background, soft diffused light, natural skin texture, 85mm lens look. Consistent professional company-portrait style. A fictional person, not resembling any real or famous person. No text, no logos, no watermark.",
+   "usage": {
+    "input_tokens": 114,
+    "input_tokens_details": {
+     "image_tokens": 0,
+     "text_tokens": 114
+    },
+    "output_tokens": 1382,
+    "total_tokens": 1496,
+    "output_tokens_details": {
+     "image_tokens": 1056,
+     "text_tokens": 326
+    }
+   },
+   "cost_usd": 0.0376,
+   "seconds": 11.2
+  },
+  "27": {
+   "user_id": 27,
+   "file": "u27-e8f5c47f7c.jpg",
+   "model": "gpt-image-1.5",
+   "size": "1024x1024 → 512",
+   "quality": "medium",
+   "prompt": "Photorealistic corporate headshot of a fictional Kazakh (Central Asian) man, about 47 years old, short greying black hair, moustache, wearing a neat dark work jacket over a collared shirt. Waist-up portrait, centered, facing the camera with a calm friendly expression. Neutral light grey studio background, soft diffused light, natural skin texture, 85mm lens look. Consistent professional company-portrait style. A fictional person, not resembling any real or famous person. No text, no logos, no watermark.",
+   "usage": {
+    "input_tokens": 116,
+    "input_tokens_details": {
+     "image_tokens": 0,
+     "text_tokens": 116
+    },
+    "output_tokens": 1382,
+    "total_tokens": 1498,
+    "output_tokens_details": {
+     "image_tokens": 1056,
+     "text_tokens": 326
+    }
+   },
+   "cost_usd": 0.0376,
+   "seconds": 9.3
+  },
+  "28": {
+   "user_id": 28,
+   "file": "u28-a69a424308.jpg",
+   "model": "gpt-image-1.5",
+   "size": "1024x1024 → 512",
+   "quality": "medium",
+   "prompt": "Photorealistic corporate headshot of a fictional Kazakh (Central Asian) man, about 25 years old, short black hair, clean-shaven, wearing a navy work jacket over a light shirt. Waist-up portrait, centered, facing the camera with a calm friendly expression. Neutral light grey studio background, soft diffused light, natural skin texture, 85mm lens look. Consistent professional company-portrait style. A fictional person, not resembling any real or famous person. No text, no logos, no watermark.",
+   "usage": {
+    "input_tokens": 113,
+    "input_tokens_details": {
+     "image_tokens": 0,
+     "text_tokens": 113
+    },
+    "output_tokens": 1372,
+    "total_tokens": 1485,
+    "output_tokens_details": {
+     "image_tokens": 1056,
+     "text_tokens": 316
+    }
+   },
+   "cost_usd": 0.0375,
+   "seconds": 10.2
+  }
+ },
+ "total_cost_usd": 1.0176
+}
