@@ -266,3 +266,18 @@ def test_director_map_frame_and_objects_like_cities():
     assert "const sState = s.overdue ? ' m-late' : ' m-ok';" in js and "объект без открытых обращений" not in js
     css = (ROOT / "web" / "a" / "style.css").read_text(encoding="utf-8")
     assert ".marker.site .mlabel {" not in css and ".marker.site .pin .ic" not in css   # объект оформлен как город
+
+
+# ---------- объект на карте и в таблице «Филиалы» (13.11): очередь по городу объекта ----------
+
+def test_queue_filter_by_site_and_rows_per_object(c):
+    login(c, 1)
+    rows = c.get("/api/panel/appeals?open=1&site=Атырау").json()
+    assert rows and all(r["site_city"] == "Атырау" for r in rows) and "A-025" in [r["number"] for r in rows]
+    by = c.get("/api/panel/summary?days=30").json()["by_branch"]
+    sites = [b for b in by if b["kind"] == "field"]
+    assert sites and all(b.get("site") for b in sites) and any(b["site"] == "Атырау" and b["total"] >= 1 for b in sites)   # строкой на каждый объект
+    js = (ROOT / "web" / "a" / "panel.js").read_text(encoding="utf-8")
+    assert "onSite: s => { S.filters = { site: s.city };" in js and "b.site + ' · объект'" in js and "if (k === 'site') return 'Объект: ' + v;" in js
+    css = (ROOT / "web" / "a" / "style.css").read_text(encoding="utf-8")
+    assert ".map-layer { position: absolute; inset: 0; pointer-events: none; }" in css and ".map-layer .marker { pointer-events: auto; }" in css

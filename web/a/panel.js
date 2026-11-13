@@ -112,7 +112,7 @@ const QUEUE_TABS = [['attention', 'Требуют внимания'], ['open', '
 const EXTRA_COLS = [['type', 'Тип', 110], ['category', 'Категория', 170], ['branch', 'Филиал', 130], ['department', 'Подразделение', 140], ['news', 'Новость автору', 120], ['flags', 'Метки', 150], ['supports', 'Поддержка', 90]];
 const CLOSED_STATUSES = ['done', 'closed', 'rejected'];
 const OPEN_STATUSES = ['new', 'review', 'clarify', 'in_progress'];
-const FILTER_LABELS = { branch_id: 'Филиал', department_id: 'Подразделение', category_id: 'Категория', status: 'Статус', responsible_id: 'Ответственный', days: 'Срок', sort: 'Сортировка', urgency: 'Мешают сейчас', cluster_id: 'Тема', overdue: 'Просроченные', unassigned: 'Без ответственного' };
+const FILTER_LABELS = { branch_id: 'Филиал', site: 'Объект', department_id: 'Подразделение', category_id: 'Категория', status: 'Статус', responsible_id: 'Ответственный', days: 'Срок', sort: 'Сортировка', urgency: 'Мешают сейчас', cluster_id: 'Тема', overdue: 'Просроченные', unassigned: 'Без ответственного' };
 S.tab = S.tab || 'attention';
 let OVERLAY = null;   // выезжающая панель поверх таблицы: карточка (когда ширины не хватает) или фильтры
 
@@ -184,7 +184,7 @@ async function queue() {
   if (S.selected) await loadCard(S.selected);
   else if (!side) closeOverlay();
 }
-const FILTER_KEYS = ['branch_id', 'department_id', 'category_id', 'status', 'responsible_id', 'days', 'sort', 'urgency', 'cluster_id', 'overdue', 'unassigned'];
+const FILTER_KEYS = ['branch_id', 'site', 'department_id', 'category_id', 'status', 'responsible_id', 'days', 'sort', 'urgency', 'cluster_id', 'overdue', 'unassigned'];
 function filterLabel(k) {
   const v = S.filters[k];
   const name = (list, id) => (list.find(x => String(x.id) === String(id)) || {}).name;
@@ -196,6 +196,7 @@ function filterLabel(k) {
   if (k === 'days') return v + ' дн';
   if (k === 'sort') return v === 'new' ? 'Сначала новые' : 'По приоритету';
   if (k === 'cluster_id') return 'Тема';
+  if (k === 'site') return 'Объект: ' + v;   // объект командированных — чипом с крестиком (13.11)
   return FILTER_LABELS[k] || k;
 }
 
@@ -424,7 +425,7 @@ async function summary() {
   const [d, ds, md] = await Promise.all([API.get('/api/panel/summary?days=30'), API.get('/api/panel/director-summary').catch(() => null), API.get('/api/panel/map').catch(() => null)]);
   const l = (ds && ds.lines) || {};
   const sumBlock = ds ? summaryBlockPanel(ds) : null;
-  MAPVIEW = md ? mapView(md, { staff: true, legend: true, frame: MAP_DIRECTOR, onBranch: b => { S.filters = { branch_id: b.id }; S.tab = 'open'; location.hash = '#/queue'; }, onSite: s => { S.filters = { q: s.city }; S.tab = 'open'; location.hash = '#/queue'; } }) : null;
+  MAPVIEW = md ? mapView(md, { staff: true, legend: true, frame: MAP_DIRECTOR, onBranch: b => { S.filters = { branch_id: b.id }; S.tab = 'open'; location.hash = '#/queue'; }, onSite: s => { S.filters = { site: s.city }; S.tab = 'open'; location.hash = '#/queue'; } }) : null;
   const mapCard = h('div', { class: 'card map-card' }, h('div', { class: 'row' }, h('b', {}, 'Карта'), h('span', { class: 'hint' }, 'клик по городу — очередь филиала')), MAPVIEW || h('div', { class: 'muted small' }, 'карта недоступна'));
   const pct = x => x === null || x === undefined ? '—' : Math.round(x * 100) + ' %';
   const attention = h('div', { class: 'card attention' }, attentionLine([[d.overdue, '#/queue?overdue=1', 'просрочено'], [d.unassigned, '#/queue?unassigned=1', 'без ответственного'], [l.decisions_over_threshold, '#/decisions', 'ждут решения'],
@@ -439,8 +440,8 @@ async function summary() {
       .map(([g, n]) => h('span', { class: 'badge ' + g.cls }, g.label + ': ' + n))));
   const branches = h('div', { class: 'card' }, h('b', {}, 'Филиалы', helpBtn('by_branch')), h('div', { class: 'hint' }, 'Количество обращений филиал не ранжирует — лига по качеству во вкладке «Лига».'),
     h('table', { class: 'tbl mt8 by-branch' }, h('thead', {}, h('tr', {}, ['Филиал', 'Всего', 'Открыто', 'Просрочено', 'Рассмотрено', 'Первый ответ', 'Реализовано', 'Главная тема'].map(t => h('th', {}, t)))),
-      h('tbody', {}, d.by_branch.map(b => h('tr', { onclick: () => { S.filters = { branch_id: b.id }; S.tab = 'open'; location.hash = '#/queue'; } },
-        h('td', {}, b.kind === 'field' ? 'Объекты' : b.city || brCity(b.name)), h('td', {}, b.total), h('td', {}, b.open), h('td', {}, b.overdue ? h('span', {}, h('span', { class: 'dot-overdue' }), String(b.overdue)) : ''),
+      h('tbody', {}, d.by_branch.map(b => h('tr', { onclick: () => { S.filters = b.site ? { site: b.site } : { branch_id: b.id }; S.tab = 'open'; location.hash = '#/queue'; } },
+        h('td', {}, b.kind === 'field' ? (b.site ? b.site + ' · объект' : 'объект без города') : b.city || brCity(b.name)), h('td', {}, b.total), h('td', {}, b.open), h('td', {}, b.overdue ? h('span', {}, h('span', { class: 'dot-overdue' }), String(b.overdue)) : ''),
         h('td', {}, pct(b.considered_share)), h('td', {}, fmtHours(b.avg_first_response_hours)), h('td', {}, b.done_total), h('td', { class: 'small' }, b.top_category || '—'))))));
   const clustersBox = h('div', { class: 'card' }, h('b', {}, 'Повторяющиеся темы'), h('div', { class: 'hint' }, 'Считаем…'));
   API.get('/api/panel/clusters').then(c => {

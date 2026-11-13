@@ -817,6 +817,8 @@ def list_for(user: dict, f: dict) -> list[dict]:
         where.append("(a.number LIKE ? OR a.text LIKE ? OR a.brief LIKE ?)"); params += [f"%{f['q']}%", f"%{f['q']}%", f"%{f['q']}%"]
     if f.get("urgency"):
         where.append("a.author_urgency=?"); params.append(f["urgency"])
+    if f.get("site"):   # объект командированных — по городу объекта (13.11)
+        where.append("a.site_city=?"); params.append(f["site"])
     if f.get("cluster_id"):
         where.append("a.cluster_id=?"); params.append(int(f["cluster_id"]))
     order = "a.created_at DESC"
@@ -915,14 +917,22 @@ def summary(user: dict, days: int = 30, branch_id: int | None = None) -> dict:
     by_status = {s: sum(1 for r in rows if r["status"] == s) for s in STATUSES}
     branches = db.q("SELECT * FROM branches ORDER BY is_hq DESC, name")
     by_branch = []
-    for b in branches:
-        items = [r for r in rows if r["branch_id"] == b["id"]]
+    def top_cat(items: list[dict]) -> str | None:
         cats: dict[str, int] = {}
         for r in items:
             if r["status"] in OPEN and r["category"]:
                 cats[r["category"]] = cats.get(r["category"], 0) + 1
-        top = max(cats.items(), key=lambda kv: kv[1])[0] if cats else None
-        by_branch.append({"id": b["id"], "code": b["code"], "name": b["name"], "city": b["city"], "kind": b["kind"], "lat": b["lat"], "lng": b["lng"], **block(items), "top_category": top})
+        return max(cats.items(), key=lambda kv: kv[1])[0] if cats else None
+
+    for b in branches:
+        items = [r for r in rows if r["branch_id"] == b["id"]]
+        base = {"id": b["id"], "code": b["code"], "name": b["name"], "city": b["city"], "kind": b["kind"], "lat": b["lat"], "lng": b["lng"]}
+        if b["kind"] == "field":   # объекты командированных — строкой на каждый объект («Атырау · объект»), а не общей «Объекты» (13.11)
+            for site in sorted({r.get("site_city") or "" for r in items}):
+                part = [r for r in items if (r.get("site_city") or "") == site]
+                by_branch.append({**base, "site": site or None, **block(part), "top_category": top_cat(part)})
+            continue
+        by_branch.append({**base, **block(items), "top_category": top_cat(items)})
     cat_counts: dict[str, int] = {}
     for r in rows:
         if r["status"] in OPEN and r["category"]:

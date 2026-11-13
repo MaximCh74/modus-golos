@@ -364,7 +364,8 @@ tr.muted td { opacity: .6; }
 .map.cropped { aspect-ratio: var(--map-aspect, 2.05); }
 .map-scene { position: absolute; inset: 0; transform-origin: 50% 50%; }
 .map-bg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; object-fit: cover; object-position: 50% var(--map-pos-y, 50%); }
-.map-layer { position: absolute; inset: 0; }
+.map-layer { position: absolute; inset: 0; pointer-events: none; }   /* слои не перехватывают клики: метка объекта под слоем городов кликалась впустую (13.11) */
+.map-layer .marker { pointer-events: auto; }
 /* живая карта на главной (замечание владельца 12.11): очень медленный лёгкий наезд/отъезд всей сцены (метки и карточка едут вместе с
    картой, цикл 28 с) и метки появляются по одной с запада на восток с мягким пульсом; --i — порядок метки (CSSOM в mapview.js).
    При prefers-reduced-motion общее правило выше гасит анимации — метки сразу на месте (fill-mode backwards, базовое состояние видимое). */

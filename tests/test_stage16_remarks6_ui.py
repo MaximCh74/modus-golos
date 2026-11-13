@@ -298,3 +298,24 @@ def test_director_map_labels_never_clipped(base, browser, width):
         assert _fits(page) and not errors, errors
     finally:
         ctx.close()
+
+
+def test_click_object_marker_and_row_open_queue_with_site(base, browser):
+    """Клик по метке объекта (Атырау) и по строке «Атырау · объект» — очередь по объекту, чип «Объект: Атырау» с крестиком."""
+    ctx, page, errors = _open(browser, base, 1, 1440, "/panel#/summary")
+    try:
+        page.wait_for_selector(".map .marker.site"); page.wait_for_timeout(800)
+        page.locator(".map .marker.site").click(timeout=5000)   # раньше клик перехватывал слой городов
+        page.wait_for_selector("table.queue tbody tr")
+        nums = page.evaluate("[...document.querySelectorAll('table.queue tbody tr .num')].map(n => n.textContent)")
+        assert "A-025" in nums and page.locator(".chips-active .chip", has_text="Объект: Атырау").count() == 1
+        page.goto(base + "/panel#/summary"); page.wait_for_selector(".by-branch")
+        row = page.locator(".by-branch tbody tr", has_text="Атырау · объект")
+        assert row.count() == 1
+        row.click(); page.wait_for_selector("table.queue tbody tr")
+        assert "A-025" in page.evaluate("[...document.querySelectorAll('table.queue tbody tr .num')].map(n => n.textContent)")
+        page.locator(".chips-active .chip", has_text="Объект: Атырау").click(); page.wait_for_timeout(600)   # крестик снимает фильтр
+        assert page.locator(".chips-active .chip", has_text="Объект").count() == 0
+        assert not errors, errors
+    finally:
+        ctx.close()
