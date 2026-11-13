@@ -272,13 +272,35 @@ def top_employees(limit: int = 10) -> list[dict]:
     return rows
 
 
-def my_place(user_id: int) -> dict:
-    """Место пользователя среди сотрудников по баллам (как в топе: больше баллов — выше; равные делят место) — для строки «Вы — N место»
-    в лиге, когда пользователь не в топ-10 (образец владельца 13.11)."""
+def everyone() -> list[dict]:
+    """Все сотрудники для «Показать всех» в лиге (ТЗ владельца 13.11): баллы по убыванию, при равенстве — по имени, с нулём баллов тоже;
+    директор и администратор — только если у них есть баллы. Первые строки совпадают с топом (та же сортировка)."""
+    rows = db.q("""SELECT u.id, u.name, u.position, u.avatar, u.role, """ + appeals.BRANCH_LABEL + """ AS branch, b.city AS city, COALESCE(SUM(l.amount), 0) AS points
+                   FROM users u LEFT JOIN branches b ON b.id=u.branch_id LEFT JOIN points_ledger l ON l.user_id=u.id
+                   WHERE u.active=1 GROUP BY u.id HAVING points > 0 OR u.role IN ('employee', 'responsible') ORDER BY points DESC, u.name""")
+    for r in rows:
+        r["avatar"] = appeals.avatar_url(r["id"], r["avatar"])
+    return rows
+
+
+def my_place(user_id: int, rows: list[dict] | None = None) -> dict:
+    """Место пользователя — его строка в списке «все сотрудники» (баллы по убыванию, при равенстве — по имени): «Вы — N место» в лиге,
+    когда пользователь не в топ-10, совпадает с номером строки в «Показать всех»."""
+    rows = everyone() if rows is None else rows
     pts = int(db.one("SELECT COALESCE(SUM(amount), 0) AS s FROM points_ledger WHERE user_id=?", (user_id,))["s"])
-    above = db.one("""SELECT COUNT(*) AS n FROM (SELECT u.id, COALESCE(SUM(l.amount), 0) AS p FROM users u LEFT JOIN points_ledger l ON l.user_id=u.id
-                      WHERE u.active=1 GROUP BY u.id HAVING p > ?)""", (pts,))["n"]
-    return {"id": user_id, "rank": above + 1, "points": pts}
+    ids = [r["id"] for r in rows]
+    return {"id": user_id, "rank": ids.index(user_id) + 1 if user_id in ids else len(ids) + 1, "points": pts}
+
+
+def points_parts(user_id: int) -> dict:
+    """«Из чего баллы» (поповер на ★ в лиге): журнал баллов по видам — сколько раз и сколько всего; списания за награды — минусом."""
+    rows = db.q("""SELECT CASE WHEN reason LIKE 'reward:%' THEN 'reward' ELSE reason END AS reason, COUNT(*) AS n, COALESCE(SUM(amount), 0) AS total
+                   FROM points_ledger WHERE user_id=? GROUP BY 1""", (user_id,))
+    order = {"accepted": 0, "done": 1, "support": 2, "reward": 3}
+    labels = {**appeals.POINT_REASONS, "support": "поддержали коллеги", "reward": "потрачено на награды"}
+    parts = [{"reason": r["reason"], "label": labels.get(r["reason"], r["reason"]), "count": r["n"], "total": r["total"]}
+             for r in sorted(rows, key=lambda r: order.get(r["reason"], 9))]
+    return {"balance": sum(p["total"] for p in parts), "parts": parts}
 
 
 # ---------- карта ----------

@@ -201,7 +201,7 @@ def test_admin_tables_numbered_and_help_everywhere():
     keys = set(re.findall(r"helpBtn\('([a-z_]+)'", admin)) | set(re.findall(r"thHelp\('[^']*', '([a-z_]+)'\)", admin))
     assert keys and all(k in glossary.TERMS for k in keys), sorted(k for k in keys if k not in glossary.TERMS)
     assert "h('th', {}, t)" not in admin and ".map(t => h('th'" not in admin   # каждый заголовок колонки — через thHelp (с «?»)
-    assert admin.count("rowNumTh()") >= 4 and admin.count("rowNumSpan(") >= 4   # сотрудники, категории, награды, заявки; филиалы, объекты, аватарки
+    assert admin.count("rowNumTh()") >= 4 and admin.count("rowNumSpan(") >= 3   # сотрудники, категории, награды, заявки; филиалы, объекты (аватарки — сетка фото без номеров, 13.11)
     assert "colgroup([40, null, '28%', '15%', '21%', 56])" in staff   # имя уже, остальные шире, без пустой середины
     css = (ROOT / "web" / "a" / "style.css").read_text(encoding="utf-8")
     assert re.search(r"\.rownum \{[^}]*tabular-nums", css)

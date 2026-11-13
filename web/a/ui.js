@@ -462,18 +462,19 @@ function clickable(attrs, onOpen) {
   if (!onOpen) return attrs;
   return { ...attrs, role: 'link', tabindex: '0', onclick: onOpen, onkeydown: ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); onOpen(); } } };
 }
-// метрики лиги таблицей — под «Подробнее»; на телефоне строки карточками с подписями (data-label)
-function leagueTable(items, onOpen) {
-  const cols = [['#', 36], ['Филиал', null], ['Балл', 76, 'league_score'], ['Реализовано', 112], ['Рассмотрено', 116], ['Скорость', 108, 'league_speed'], ['Открыто', 86], ['Просрочено', 104]];
-  const pct = x => Math.round(x * 100) + ' %';
-  const cell = (i, v, cls) => h('td', { class: cls || null, 'data-label': i > 1 ? cols[i][0] : '' }, v);
-  return h('table', { class: 'tbl league' },
-    h('colgroup', {}, cols.map(([, w]) => { const c = document.createElement('col'); if (w) c.style.width = w + 'px'; return c; })),
-    h('thead', {}, h('tr', {}, cols.map(([t, , help]) => h('th', { class: t === '#' ? 'lg-place' : '' }, t, help ? helpBtn(help) : null)))),
-    h('tbody', {}, items.map(b => h('tr', { class: onOpen ? '' : 'noclick', onclick: onOpen ? () => onOpen(b) : null }, cell(0, String(b.rank), 'lg-place'),
-      cell(1, h('span', {}, h('b', {}, b.city || brCity(b.name)), h('div', { class: 'small muted' }, plural(b.total, 'обращение', 'обращения', 'обращений') + (b.enough ? '' : ' · мало данных')))),
-      cell(2, h('b', {}, String(b.score)), 'score'), cell(3, pct(b.done_share)), cell(4, pct(b.considered_share)), cell(5, pct(b.speed)),
-      cell(6, b.open ? String(b.open) : ''), cell(7, b.overdue ? h('span', {}, h('span', { class: 'dot-overdue' }), String(b.overdue)) : '')))));
+// «Подробнее» у лиги филиалов (13.11): не таблица (в левую колонку она не влезала), а строки — место · город · балл, под ними серой
+// строкой метрики; просрочено — с красной точкой; без горизонтальной прокрутки
+function leagueBitsEl(b) {
+  const pct = (label, x) => label + '\u00a0' + Math.round((x || 0) * 100) + '\u00a0%';
+  const parts = [pct('реализовано', b.done_share), pct('рассмотрено', b.considered_share), pct('скорость', b.speed), b.open ? 'открыто\u00a0' + b.open : null].filter(Boolean);
+  return h('div', { class: 'lg-bits' }, parts.join(' · '), b.overdue ? h('span', { class: 'lg-od' }, ' · просрочено\u00a0', h('span', { class: 'dot-overdue' }), String(b.overdue)) : null);
+}
+function leagueDetails(items, onOpen) {
+  return h('div', { class: 'lg-detail' }, items.map(b => h('div', clickable({ class: 'lg-detail-row' }, onOpen ? () => onOpen(b) : null),
+    h('div', { class: 'lg-detail-line' }, h('span', { class: 'lg-place' }, String(b.rank)),
+      h('span', { class: 'lg-detail-city' }, b.city || brCity(b.name), b.enough ? null : h('span', { class: 'small muted' }, ' · мало данных')),
+      h('b', { class: 'lg-detail-score' }, String(b.score))),
+    leagueBitsEl(b))));
 }
 function leagueBranches(items, onOpen) {
   const top = items.filter(b => b.enough).slice(0, 3);   // на пьедестал — только филиалы с данными; меньше трёх — сколько есть
@@ -490,23 +491,75 @@ function leagueBranches(items, onOpen) {
   const more = h('button', { type: 'button', class: 'btn btn-sm lg-more', 'aria-expanded': 'false' }, 'Подробнее');
   more.addEventListener('click', () => {
     const show = !box.firstChild;
-    box.replaceChildren(...(show ? [leagueTable(items, onOpen)] : []));
+    box.replaceChildren(...(show ? [leagueDetails(items, onOpen)] : []));
     more.textContent = show ? 'Свернуть' : 'Подробнее'; more.setAttribute('aria-expanded', show ? 'true' : 'false');
   });
   return h('div', { class: 'lg-branches' }, podium, restEl, h('div', { class: 'lg-more-row' }, more), box);
 }
-function leagueTop(top, onOpen, me) {
+// «Из чего баллы» (13.11): нажатие на ★ у сотрудника в лиге — начисления по видам (сколько раз и сколько всего); как подсказки «?»
+function pointsPop(u, cls) {
+  const wrap = h('span', { class: 'help-wrap pts-pop' });
+  const btn = h('button', { type: 'button', class: 'pts-btn', title: 'Из чего баллы', 'aria-label': 'Из чего баллы: ' + u.points }, pointsTag(u.points, null, cls));
+  const pop = h('div', { class: 'help-pop', role: 'tooltip' });
+  wrap.append(btn, pop);
+  const place = () => {
+    const r = btn.getBoundingClientRect(), w = Math.min(300, window.innerWidth - 16);
+    pop.style.width = w + 'px';
+    pop.style.left = Math.max(8, Math.min(r.right - w, window.innerWidth - w - 8)) + 'px';
+    pop.style.top = (r.bottom + 6) + 'px';
+    const pr = pop.getBoundingClientRect();
+    if (pr.bottom > window.innerHeight - 8) pop.style.top = Math.max(8, r.top - pr.height - 6) + 'px';
+  };
+  btn.addEventListener('click', async ev => {
+    ev.preventDefault(); ev.stopPropagation();
+    const open = wrap.classList.contains('open');
+    closeHelp();
+    if (open) return;
+    pop.replaceChildren(h('b', {}, 'Из чего баллы'), h('div', { class: 'muted' }, 'Считаем…'));
+    wrap.classList.add('open'); _helpOpenedAt = Date.now(); place();
+    try {
+      const d = await API.get('/api/users/' + u.id + '/points');
+      pop.replaceChildren(h('b', {}, 'Из чего баллы — ' + String(u.name || '').split(' ')[0]),
+        d.parts.length ? h('div', { class: 'pts-parts' }, d.parts.map(x => h('div', { class: 'pts-part' }, h('span', {}, x.label + (x.reason === 'reward' ? '' : ' · ' + plural(x.count, 'раз', 'раза', 'раз'))),
+          h('b', {}, (x.total > 0 ? '+' : '') + x.total)))) : h('div', { class: 'muted' }, 'Баллов пока нет'),
+        h('div', { class: 'pts-part pts-sum' }, h('span', {}, 'итого'), h('b', {}, String(d.balance))),
+        h('a', { href: '/rules', class: 'small' }, 'Как начисляются баллы'));
+      place();
+    } catch (e) { pop.replaceChildren(h('b', {}, 'Из чего баллы'), h('div', { class: 'muted' }, e.message)); }
+  });
+  return wrap;
+}
+function leagueTop(top, onOpen, me, all) {
   if (!top.length) return h('div', { class: 'muted' }, 'Баллов пока ни у кого нет');
   const mine = u => !!me && u.id === me.id;
   const city = u => u.city || brCity(u.branch);
   const cards = top.slice(0, 3).map((u, i) => h('div', clickable({ class: 'emp-card' + (mine(u) ? ' me' : ''), 'data-place': i + 1 }, () => onOpen(u)),
     avatarEl(u, 'card'), h('div', { class: 'lg-who' }, h('b', { class: 'one-line' }, u.name), h('div', { class: 'muted one-line' }, city(u))),
-    h('div', { class: 'lg-stats big' }, pointsTag(u.points, null, 'lg-pts'), u.implemented ? h('span', { class: 'muted' }, 'внедрено ' + u.implemented) : null)));
-  const rows = top.slice(3).map((u, i) => h('div', clickable({ class: 'item lg-emp' + (mine(u) ? ' me' : '') }, () => onOpen(u)),
-    h('span', { class: 'lg-place' }, String(i + 4)), avatarEl(u, 'sm'), h('b', { class: 'lg-who one-line' }, u.name), h('span', { class: 'lg-city one-line' }, city(u)),
-    h('div', { class: 'lg-stats' }, pointsTag(u.points, null, 'lg-pts'))));
+    h('div', { class: 'lg-stats big' }, pointsPop(u, 'lg-pts'), u.implemented ? h('span', { class: 'muted' }, 'внедрено ' + u.implemented) : null)));
+  const row = (u, place) => h('div', clickable({ class: 'item lg-emp' + (mine(u) ? ' me' : ''), 'data-user': u.id }, () => onOpen(u)),
+    h('span', { class: 'lg-place' }, String(place)), avatarEl(u, 'sm'), h('b', { class: 'lg-who one-line' }, u.name), h('span', { class: 'lg-city one-line' }, city(u)),
+    h('div', { class: 'lg-stats' }, pointsPop(u, 'lg-pts')));
+  const rows = top.slice(3).map((u, i) => row(u, i + 4));
+  const list = h('div', { class: 'list lg-emps' }, rows);
   const me10 = me && me.show && !top.some(mine) ? h('div', { class: 'lg-me me' }, h('b', {}, 'Вы — ' + me.rank + ' место'), pointsTag(me.points, null, 'lg-pts')) : null;
-  return h('div', { class: 'lg-top' }, h('div', { class: 'emp-cards' }, cards), rows.length ? h('div', { class: 'list lg-emps' }, rows) : null, me10);
+  // «Показать всех (N)» (13.11): три карточки на месте, с 4-го места — все сотрудники до последнего (и с нулём баллов) в области с
+  // прокруткой; своя строка подсвечена, список прокручивается к ней; «Свернуть» — ровно прежний вид
+  let more = null;
+  if (all && all.length > top.length) {
+    const label = 'Показать всех (' + all.length + ')';
+    more = h('button', { type: 'button', class: 'btn btn-sm btn-outline lg-all', 'aria-expanded': 'false' }, label);
+    more.addEventListener('click', () => {
+      const open = !list.classList.contains('all');
+      list.classList.toggle('all', open);
+      list.replaceChildren(...(open ? all.slice(3).map((u, i) => row(u, i + 4)) : rows));
+      if (me10) me10.style.display = open ? 'none' : '';
+      more.textContent = open ? 'Свернуть' : label; more.setAttribute('aria-expanded', open ? 'true' : 'false');
+      const r = open && list.querySelector('.me');
+      if (r) list.scrollTop = Math.max(0, r.offsetTop - list.offsetTop - (list.clientHeight - r.offsetHeight) / 2);
+      else list.scrollTop = 0;
+    });
+  }
+  return h('div', { class: 'lg-top' }, h('div', { class: 'emp-cards' }, cards), rows.length || more ? list : null, more ? h('div', { class: 'lg-all-row' }, more) : null, me10);
 }
 // компьютер: филиалы слева, сотрудники справа; телефон — вкладки «Филиалы / Сотрудники»
 function leagueSplit(branchesEl, topEl) {
@@ -517,12 +570,21 @@ function leagueSplit(branchesEl, topEl) {
     h('section', { class: 'lg-col lg-col-top' }, h('div', { class: 'lg-head' }, 'Топ сотрудников', helpBtn('top_employees')), topEl));
   return [seg, box];
 }
-// витрина наград: баллы за внедрённые идеи — премия, выходной, обучение (стрелка — значок, не символ); нажатие — «Награды»
-function awardCard(href) {
-  return h('a', { href, class: 'card award-card', 'aria-label': 'Витрина наград — открыть награды' },
-    h('span', { class: 'award-ic' }, icon('trophy', { size: 30 })), h('b', { class: 'award-title' }, 'Витрина наград'),
-    h('span', { class: 'award-text' }, h('span', { class: 'award-line' }, 'Баллы за внедрённые идеи', icon('arrow-right', { size: 18, cls: 'award-arrow' }), 'премия, выходной, обучение'),
-      h('span', { class: 'award-note' }, 'состав наград утверждает компания')));
+// низ лиги (13.11): две карточки рядом (на телефоне одна под другой) — «Как начисляются баллы» (значения из настроек администратора)
+// и «Витрина наград» (активные награды с ценой; у сотрудника сверху «У вас ★ N»; нажатие — «Награды»)
+function leagueInfo(d, rewardsHref) {
+  const p = d.rules || { accepted: 10, done: 50, support: 2, support_cap: 20 };
+  const rule = (label, value) => h('div', { class: 'lg-rule' }, h('span', {}, label), h('b', {}, value));
+  const rules = h('div', { class: 'card lg-info lg-rules-card' }, h('div', { class: 'lbl' }, 'Как начисляются баллы'),
+    h('div', { class: 'lg-rules' }, rule('принято к рассмотрению', '+' + p.accepted), rule('реализовано', '+' + p.done),
+      rule('поддержали коллеги', '+' + p.support + ' (до +' + p.support_cap + ' на обращение)'), rule('за отправку и «спасибо»', '0, анонимные — без баллов')),
+    h('a', { href: '/rules', class: 'small lg-rules-more' }, 'Подробнее'));
+  const me = d.me && d.me.show ? d.me : null;
+  const award = h('a', { href: rewardsHref, class: 'card lg-info award-card', 'aria-label': 'Витрина наград — открыть награды' },
+    h('div', { class: 'row award-head' }, h('div', { class: 'lbl' }, 'Витрина наград'), h('div', { class: 'spacer' }), me ? h('span', { class: 'award-me' }, 'У вас ', pointsTag(me.points, null, 'lg-pts')) : null),
+    (d.rewards || []).length ? h('div', { class: 'award-list' }, d.rewards.map(r => h('div', { class: 'award-row' }, h('span', { class: 'award-title' }, r.title), pointsTag(r.cost_points, null, 'lg-pts')))) : h('div', { class: 'muted small' }, 'Награды пока не заведены'),
+    h('div', { class: 'award-note' }, 'состав и цены утверждает компания'));
+  return h('div', { class: 'lg-info-row' }, rules, award);
 }
 
 let GLOSSARY = null, _glossaryP = null, _helpOpenedAt = 0;

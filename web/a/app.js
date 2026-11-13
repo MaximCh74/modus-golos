@@ -354,7 +354,7 @@ async function leagueScreen() {
   const d = await API.get('/api/panel/league');
   // лига по образцу владельца 13.11 — общая вёрстка с панелью (ui.js): пьедестал, топ сотрудников со своей строкой, витрина наград
   root.replaceChildren(h('div', { class: 'wrap wrap-league' }, h('a', { href: '#/', class: 'small ict' }, icon('arrow-left', { size: 14 }), 'Назад'), h('div', { class: 'h1' }, 'Лига', helpBtn('league')), tabs('#/league'),
-    ...leagueSplit(leagueBranches(d.items), leagueTop(d.top, u => { location.hash = '#/u/' + u.id; }, d.me)), awardCard('#/rewards')));
+    ...leagueSplit(leagueBranches(d.items), leagueTop(d.top, u => { location.hash = '#/u/' + u.id; }, d.me, d.everyone)), leagueInfo(d, '#/rewards')));
 }
 
 boot();

@@ -29,6 +29,7 @@
   --pod-bronze-bg: linear-gradient(180deg, #f6e0d0 0%, #fcf2eb 100%); --pod-bronze-ink: #b5693c;
   --pod-base-bg: linear-gradient(180deg, #ffffff 0%, #edf1f6 100%); --pod-base-shadow: 0 10px 22px -10px rgba(8, 39, 66, .28);
   --pod-step-shadow: 0 -4px 22px -12px rgba(199, 154, 18, .45); --pod-pill-shadow: 0 6px 14px -6px rgba(8, 39, 66, .22);
+  --ava-shade: rgba(8, 39, 66, .62);   /* затемнение фото под «Убрать» в администрировании */
   --map-ok: #1f9a55; --map-none: #8a95a6;   /* метки карты директора: зелёная — просрочек нет, красная — есть просрочки; серая контурная — объект без данных */
   /* приглушённые статусные */
   --ok: #1f7a46; --warn: #9a5b00; --bad: #7a1f1f;
@@ -747,15 +748,46 @@ select { appearance: none; -webkit-appearance: none; padding-right: 34px; backgr
 .lg-top .me { background: var(--tint); box-shadow: inset 3px 0 0 var(--navy); }
 .emp-card.me { border-color: var(--tint-line); box-shadow: inset 3px 0 0 var(--navy), var(--shadow-card); }
 .lg-me { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 10px; padding: 10px 12px 10px 15px; border-radius: 10px; color: var(--navy); }
-/* витрина наград: значок кубка, «Витрина наград», текст; разделители — тонкие линии */
-.award-card { display: grid; grid-template-columns: auto auto minmax(0, 1fr); align-items: center; padding: 14px 20px 14px 14px; margin-top: var(--s2); text-decoration: none; color: var(--ink); transition: border-color var(--t-fast) var(--ease); }
+/* «Подробнее» у лиги филиалов (13.11): строки место · город · балл, под ними серой строкой метрики — без таблицы и прокрутки */
+.lg-detail { display: flex; flex-direction: column; }
+.lg-detail-row { padding: 9px 6px; border-bottom: 1px solid var(--line-soft); border-radius: 8px; }
+.lg-detail-row:last-child { border-bottom: 0; }
+.lg-detail-row[role=link] { cursor: pointer; }
+.lg-detail-row[role=link]:hover { background: var(--bg-soft); }
+.lg-detail-line { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 12px; align-items: center; }
+.lg-detail-city { font-weight: var(--w-bold); color: var(--navy); min-width: 0; overflow-wrap: anywhere; }
+.lg-detail-score { font-size: 18px; font-weight: var(--w-semi); color: var(--navy); font-variant-numeric: tabular-nums; }
+.lg-bits { margin-top: 3px; padding-left: 40px; font-size: 13px; color: var(--muted); line-height: 1.45; }
+.lg-od { white-space: nowrap; }
+.lg-od .dot-overdue { margin: 0 3px 0 0; }
+/* «Показать всех (N)»: с 4-го места — область с прокруткой высотой примерно в 7 строк */
+.lg-emps.all { max-height: 372px; overflow: auto; overscroll-behavior: contain; padding-right: 2px; }
+.lg-all-row { margin-top: 10px; }
+/* звезда с баллами у сотрудника — кнопка: «Из чего баллы» в поповере, как подсказки «?» */
+.pts-btn { border: 0; background: none; padding: 2px 4px; margin: -2px -4px; font: inherit; color: inherit; cursor: pointer; border-radius: var(--radius-sm); }
+.pts-btn:hover { background: var(--bg-soft); }
+.pts-btn:focus-visible { outline: none; box-shadow: var(--focus); }
+.pts-pop .help-pop b { color: var(--navy); }
+.pts-parts { margin-top: 6px; }
+.pts-part { display: flex; justify-content: space-between; gap: 12px; padding: 3px 0; }
+.pts-part b { font-variant-numeric: tabular-nums; font-weight: var(--w-semi); }
+.pts-sum { border-top: 1px solid var(--line-soft); margin: 6px 0 6px; padding-top: 6px; }
+/* низ лиги: «Как начисляются баллы» и «Витрина наград» — две карточки рядом, на телефоне одна под другой */
+.lg-info-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s2); margin-top: var(--s2); align-items: stretch; }
+.lg-info-row > .card { margin: 0; }
+.lg-rules { margin-top: 10px; }
+.lg-rule { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--line-soft); }
+.lg-rule:last-child { border-bottom: 0; }
+.lg-rule b { color: var(--navy); font-weight: var(--w-semi); text-align: right; }
+.lg-rules-more { display: inline-block; margin-top: 8px; }
+.award-card { display: block; text-decoration: none; color: var(--ink); transition: border-color var(--t-fast) var(--ease); }
 a.award-card:hover { text-decoration: none; border-color: var(--tint-line); }
-.award-ic { width: 60px; height: 60px; border-radius: 14px; background: var(--tint); color: var(--navy); display: inline-flex; align-items: center; justify-content: center; }
-.award-title { font-size: 20px; color: var(--navy); padding: 6px 22px; margin-left: 18px; border-left: 1px solid var(--line-soft); border-right: 1px solid var(--line-soft); white-space: nowrap; }
-.award-text { display: flex; flex-direction: column; gap: 2px; padding-left: 22px; min-width: 0; }
-.award-line { font-size: 17px; color: var(--ink); }
-.award-arrow { vertical-align: -3px; margin: 0 6px; color: var(--muted); }
-.award-note { font-size: 13px; color: var(--muted); }
+.award-me { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; color: var(--muted); }
+.award-list { margin-top: 10px; }
+.award-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--line-soft); }
+.award-row:last-child { border-bottom: 0; }
+.award-title { min-width: 0; }
+.award-note { margin-top: 8px; font-size: 12px; color: var(--muted); }
 @media (max-width: 1279px) {
   .lg-split { grid-template-columns: minmax(0, 1fr); }
   .lg-col-top { border-left: 0; border-top: 1px solid var(--line-soft); margin-top: var(--s3); padding-top: var(--s3); }
@@ -785,11 +817,9 @@ a.award-card:hover { text-decoration: none; border-color: var(--tint-line); }
   .lg-emp .lg-city { display: none; }   /* узко: город — только у топ-3; у строк 4–10 — имя и баллы */
   .emp-card .lg-who b, .lg-emp .lg-who { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; line-height: 1.25; }   /* имя целиком, в две строки */
   .lg-stats.big .muted { font-size: 13px; }
-  .award-card { grid-template-columns: auto minmax(0, 1fr); row-gap: 12px; padding: 12px 14px; }
-  .award-ic { width: 48px; height: 48px; border-radius: 12px; }
-  .award-title { border: 0; padding: 0; margin-left: 14px; font-size: 18px; }
-  .award-text { grid-column: 1 / -1; padding-left: 0; }
-  .award-line { font-size: 15px; }
+  .lg-info-row { grid-template-columns: minmax(0, 1fr); }
+  .lg-bits { padding-left: 34px; }
+  .lg-detail-line { grid-template-columns: 22px minmax(0, 1fr) auto; gap: 10px; }
 }
 .stats.n1 { grid-template-columns: 1fr; } .stats.n2 { grid-template-columns: repeat(2, 1fr); } .stats.n3 { grid-template-columns: repeat(3, 1fr); }
 @media (max-width: 480px) { .mi-fields { grid-template-columns: 1fr; } .stats.n3 { grid-template-columns: repeat(3, 1fr); } }
@@ -1076,3 +1106,20 @@ html.panel-page, html.panel-page body { background: var(--bg-page); }
 html.panel-page .card:not(.card-elevated), html.panel-page .kpi { border-top-color: var(--white); box-shadow: var(--card-hi), var(--shadow-card); }
 html.panel-page .card .card, html.panel-page .drawer .card { box-shadow: var(--card-hi); }
 html.panel-page .map::after { content: ''; position: absolute; inset: 0; border-radius: inherit; box-shadow: var(--map-inset); pointer-events: none; }
+
+/* «Аватарки» в администрировании (замечание владельца 13.11): сетка круглых фото ~64 px, имя под фото (до двух строк); 5 в ряд на
+   компьютере, 3 на телефоне; «Убрать» — поверх фото при наведении (на телефоне — по нажатию), подтверждение «Да / Нет» на плитке */
+.ava-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 16px 12px; }
+.ava-tile { position: relative; display: flex; flex-direction: column; align-items: center; text-align: center; min-width: 0; }
+.ava-photo { position: relative; border: 0; background: none; padding: 0; cursor: pointer; border-radius: 50%; line-height: 0; }
+.ava-photo:focus-visible { outline: none; box-shadow: var(--focus); }
+.ava-photo .avatar-card { width: 64px; height: 64px; font-size: 22px; }
+.ava-remove { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: var(--ava-shade); color: var(--white); font-size: 12px; line-height: 1; font-weight: var(--w-bold); opacity: 0; transition: opacity var(--t-fast) var(--ease); }
+.ava-remove { pointer-events: none; }   /* невидимая надпись не перехватывает нажатие: на телефоне первое — показать «Убрать» */
+.ava-tile.show .ava-remove { opacity: 1; pointer-events: auto; }
+@media (hover: hover) { .ava-photo:hover .ava-remove, .ava-photo:focus-visible .ava-remove { opacity: 1; pointer-events: auto; } }
+.ava-name { margin-top: 6px; max-width: 100%; font-size: 13px; line-height: 1.25; color: var(--ink); overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.ava-ask { display: none; position: absolute; top: -6px; left: 50%; transform: translateX(-50%); z-index: 3; width: max-content; max-width: 180px; padding: 8px 10px; border-radius: var(--radius-btn); background: var(--white); border: 1px solid var(--line-soft); box-shadow: var(--shadow-2); font-size: 13px; color: var(--ink); }
+.ava-tile.ask .ava-ask { display: block; }
+.ava-ask-btns { display: flex; gap: 6px; justify-content: center; margin-top: 6px; }
+@media (max-width: 900px) { .ava-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } .ava-name { font-size: 12px; } }

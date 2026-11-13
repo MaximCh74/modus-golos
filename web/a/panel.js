@@ -504,7 +504,7 @@ function summaryBlockPanel(d) {
 async function leaguePanel() {
   const d = await API.get('/api/panel/league');
   root.replaceChildren(h('div', { class: 'wrap wrap-league' }, h('div', { class: 'h1' }, 'Лига', helpBtn('league')),
-    ...leagueSplit(leagueBranches(d.items, openBranch), leagueTop(d.top, u => { location.href = '/app#/u/' + u.id; }, d.me)), awardCard('/app#/rewards')));
+    ...leagueSplit(leagueBranches(d.items, openBranch), leagueTop(d.top, u => { location.href = '/app#/u/' + u.id; }, d.me, d.everyone)), leagueInfo(d, '/app#/rewards')));
 }
 function openBranch(b) { S.filters = { branch_id: b.id }; location.hash = '#/queue'; }
 
@@ -545,6 +545,21 @@ async function adminScreen() {
     const rej = h('button', { class: 'btn btn-sm', onclick: () => dec('rejected') }, 'Отклонить');
     return h('tr', { class: 'noclick' }, rowNum(ci), h('td', {}, c.user_name), h('td', {}, c.title + ' · ' + c.cost_points), h('td', {}, tag(c.status === 'approved' ? 'st-done' : c.status === 'rejected' ? 'st-rejected' : 'st-review', c.status === 'approved' ? 'одобрено' : c.status === 'rejected' ? 'отклонено' : 'ждёт')), h('td', { class: 'small' }, fmtDate(c.created_at)), h('td', {}, c.status === 'requested' ? h('div', {}, h('div', { class: 'row' }, h('button', { class: 'btn btn-sm btn-primary', onclick: () => dec('approved') }, 'Одобрить'), rej), reason) : (c.comment || ''))); });
   const avatars = d.users.filter(u => u.avatar);
+  // «Аватарки» (замечание владельца 13.11): сетка круглых фото ~64 px с именем под ним; «Убрать» — при наведении на фото (на телефоне —
+  // по нажатию на фото), затем подтверждение на самой плитке («Да / Нет», без окон браузера)
+  const avaTile = u => {
+    const tile = h('div', { class: 'ava-tile' });
+    const ask = h('div', { class: 'ava-ask' }, h('span', {}, 'Убрать фото?'), h('div', { class: 'ava-ask-btns' },
+      h('button', { type: 'button', class: 'btn btn-sm btn-primary', onclick: async ev => { ev.stopPropagation(); try { await API.post('/api/admin/users/' + u.id + '/avatar/remove'); toast('Фото убрано: ' + u.name); adminScreen(); } catch (e) { toast(e.message, 'bad'); } } }, 'Да'),
+      h('button', { type: 'button', class: 'btn btn-sm', onclick: ev => { ev.stopPropagation(); tile.classList.remove('ask', 'show'); } }, 'Нет')));
+    const photo = h('button', { type: 'button', class: 'ava-photo', 'aria-label': 'Фото: ' + u.name + ' — показать «Убрать»', onclick: () => { if (!tile.classList.contains('ask')) tile.classList.toggle('show'); } },
+      avatarEl({ name: u.name, avatar: '/api/avatars/' + u.avatar }, 'card'),
+      h('span', { class: 'ava-remove', role: 'button', tabindex: '0', onclick: ev => { ev.stopPropagation(); tile.classList.add('ask'); } }, 'Убрать'));
+    tile.append(photo, ask, h('div', { class: 'ava-name' }, u.name));
+    return tile;
+  };
+  const avatarsCard = h('div', { class: 'card ava-card' }, h('b', {}, 'Аватарки', helpBtn('adm_avatars')),
+    avatars.length ? h('div', { class: 'ava-grid mt8' }, avatars.map(avaTile)) : h('div', { class: 'muted small mt8' }, 'Пользовательских аватарок нет'));
   // награды: добавить / изменить / отключить
   const rewardRow = (r, ri) => { const title = h('input', { type: 'text', value: r.title || '', placeholder: 'Название' }); const descr = h('input', { type: 'text', value: r.description || '', placeholder: 'Описание' }); const cost = h('input', { type: 'number', value: r.cost_points || 100, class: 'w70' }); const act = h('input', { type: 'checkbox', checked: r.active !== 0 && r.active !== false });
     const save = h('button', { class: 'btn btn-sm' + (r.id ? '' : ' btn-primary'), onclick: async () => { try { await API.post('/api/admin/rewards', { id: r.id || null, title: title.value, description: descr.value, cost_points: Number(cost.value), active: act.checked }); toast(r.id ? 'Награда сохранена' : 'Награда добавлена'); adminScreen(); } catch (e) { toast(e.message, 'bad'); } }, title: r.id ? 'Сохранить' : 'Добавить' }, r.id ? icon('check') : iconText('plus', 'Добавить'));
@@ -569,8 +584,9 @@ async function adminScreen() {
       h('div', {},
         h('div', { class: 'card' }, h('b', {}, 'Категории, ответственные, срок первого ответа', helpBtn('adm_categories')), h('div', { class: 'hint' }, 'Проблемы идут ответственному; предложения — ответственному за предложения, иначе в отдел развития.', helpBtn('dev_department')),
           h('table', { class: 'tbl cats adm-tbl mt8' }, colgroup([40, null, 200, 200, 150, 52]), h('thead', {}, h('tr', {}, rowNumTh(), thHelp('Категория', 'category'), thHelp('Отвечает за проблемы', 'cat_problems'), thHelp('Отвечает за предложения', 'cat_suggestions'), thHelp('Первый ответ, часов', 'first_response'), thHelp('', null))), h('tbody', {}, catRows))),
-        rewardsCard,
-        h('div', { class: 'card' }, h('b', {}, 'Заявки на награды', helpBtn('adm_claims')), claims.length ? h('table', { class: 'tbl mt8 adm-tbl' }, colgroup([40, null, null, 110, 110, null]), h('thead', {}, h('tr', {}, rowNumTh(), thHelp('Кто', 'claim_who'), thHelp('Награда', 'claim_reward'), thHelp('Статус', 'claim_status'), thHelp('Когда', 'claim_when'), thHelp('', null))), h('tbody', {}, claimRows)) : h('div', { class: 'muted small mt8' }, 'Заявок нет'))),
+        rewardsCard,   // слева: «Категории», «Награды», «Заявки», «Аватарки»; справа — «Настройки», «Битрикс24», «Филиалы и QR», «Объекты» — вровень (13.11)
+        h('div', { class: 'card' }, h('b', {}, 'Заявки на награды', helpBtn('adm_claims')), claims.length ? h('table', { class: 'tbl mt8 adm-tbl' }, colgroup([40, null, null, 110, 110, null]), h('thead', {}, h('tr', {}, rowNumTh(), thHelp('Кто', 'claim_who'), thHelp('Награда', 'claim_reward'), thHelp('Статус', 'claim_status'), thHelp('Когда', 'claim_when'), thHelp('', null))), h('tbody', {}, claimRows)) : h('div', { class: 'muted small mt8' }, 'Заявок нет')),
+        avatarsCard),
       h('div', {},
         h('div', { class: 'card' }, h('b', {}, 'Настройки', helpBtn('adm_settings')), h('div', { class: 'grid2 mt8' }, inputs), dirAdminRow, h('div', { class: 'mt8' }, saveBtn), h('div', { class: 'hint mt8' }, 'Пороги похожести и повторяющихся тем — для режима ИИ; без ключа действуют пороги по ключевым словам.')),
         bitrixCard,
@@ -579,8 +595,7 @@ async function adminScreen() {
             h('div', { class: 'row' }, h('a', { href: b.poster_url, class: 'btn btn-sm', target: '_blank', rel: 'noopener', title: 'Плакат A4 с QR для печати' }, 'Плакат PDF'),
               h('button', { class: 'btn btn-sm', title: 'Скопировать ссылку на форму', onclick: async () => { try { await navigator.clipboard.writeText(b.form_url); toast('Ссылка скопирована: ' + b.form_url); } catch (e) { toast('Скопируйте вручную: ' + b.form_url); } } }, iconText('link', 'Скопировать ссылку')),
               h('a', { href: '/q/' + b.code, class: 'btn btn-sm btn-ghost', target: '_blank', rel: 'noopener', title: 'Открыть форму обращения' }, 'Открыть форму'))))))),
-        geoAdminCard(),
-        h('div', { class: 'card' }, h('b', {}, 'Аватарки', helpBtn('adm_avatars')), avatars.length ? h('div', { class: 'list mt8' }, avatars.map((u, ui) => h('div', { class: 'item noclick' }, h('div', { class: 'row' }, rowNumSpan(ui), avatarEl({ name: u.name, avatar: '/api/avatars/' + u.avatar }), h('span', {}, u.name), h('div', { class: 'spacer' }), h('button', { class: 'btn btn-sm', onclick: async () => { await API.post('/api/admin/users/' + u.id + '/avatar/remove'); toast('Убрана'); adminScreen(); } }, 'Убрать'))))) : h('div', { class: 'muted small mt8' }, 'Пользовательских аватарок нет'))))));
+        geoAdminCard()))));
 }
 
 // ---------- объекты на карте (замечание владельца 13.11): город из QR «Объект» встаёт на карту сам по справочнику (mf/geo.py: областные

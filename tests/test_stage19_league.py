@@ -38,7 +38,7 @@ def test_league_api_me_place_and_help_text(c):
     assert "50 %" in hint and "30 %" in hint and "20 %" in hint   # длинное пояснение — в «?»
     for f in ("panel.js", "app.js"):
         js = (ROOT / "web" / "a" / f).read_text(encoding="utf-8")
-        assert "'Лига', helpBtn('league')" in js and "awardCard(" in js and "По качеству работы" not in js and "Качество работы с обращениями, не их число" not in js
+        assert "'Лига', helpBtn('league')" in js and "leagueInfo(d, " in js and "По качеству работы" not in js and "Качество работы с обращениями, не их число" not in js
 
 
 # ---------- в браузере ----------
@@ -117,9 +117,14 @@ def test_podium_order_2_1_3_center_highest(base, browser, path):
         assert page.locator(".laurel svg path").count() >= 6 * 2 * 3   # венок: ветви и листья линией
         rest = page.evaluate("[...document.querySelectorAll('.lg-rest-row .lg-place')].map(e => e.textContent)")
         assert rest == [str(i) for i in range(4, 4 + len(rest))]
-        assert page.locator("table.league").count() == 0   # метрики — только под «Подробнее»
-        page.click(".lg-more"); page.wait_for_selector("table.league tbody tr")
+        assert page.locator(".lg-detail").count() == 0   # метрики — только под «Подробнее»
+        page.click(".lg-more"); page.wait_for_selector(".lg-detail-row")
         assert page.locator(".lg-more").inner_text() == "Свернуть"
+        rows = page.evaluate("""[...document.querySelectorAll('.lg-detail-row')].map(r => ({ t: r.innerText, over: r.scrollWidth > r.clientWidth + 1,
+          clash: (() => { const c = r.querySelector('.lg-detail-city').getBoundingClientRect(), s = r.querySelector('.lg-detail-score').getBoundingClientRect(); return c.right > s.left; })() }))""")
+        assert len(rows) == len(api["items"]) and not any(x["over"] or x["clash"] for x in rows)   # строки, без наложений и прокрутки
+        assert all("реализовано" in x["t"] and "рассмотрено" in x["t"] and "скорость" in x["t"] for x in rows)
+        assert page.locator(".lg-detail .lg-od .dot-overdue").count() == sum(1 for b in api["items"] if b["overdue"])   # просрочено — с точкой
         assert page.evaluate("getComputedStyle(document.querySelector('.pod-score')).fontWeight") == "600"   # цифры — 600
         assert "Качество работы" not in page.locator("#root").inner_text() and "реализовано 50" not in page.locator("#root").inner_text()
         assert _fits(page) and not errors, errors
@@ -176,10 +181,13 @@ def test_league_widths_no_scroll_tabs_and_award(base, browser, width):
         else:
             l, r = page.locator(".lg-col-branches").bounding_box(), page.locator(".lg-col-top").bounding_box()
             assert (r["x"] >= l["x"] + l["width"] - 1) if width >= 1280 else (r["y"] >= l["y"] + l["height"] - 1)
-        award = page.locator(".award-card")
-        box, split = award.bounding_box(), page.locator(".lg-split").bounding_box()
-        assert box["y"] >= split["y"] + split["height"] - 1 and abs(box["width"] - split["width"]) <= 2   # витрина — ниже, на всю ширину
-        assert "Витрина наград" in award.inner_text() and "состав наград утверждает компания" in award.inner_text()
+        award, rules = page.locator(".award-card"), page.locator(".lg-rules-card")
+        row, split = page.locator(".lg-info-row").bounding_box(), page.locator(".lg-split").bounding_box()
+        assert row["y"] >= split["y"] + split["height"] - 1 and abs(row["width"] - split["width"]) <= 2   # две карточки — ниже, на всю ширину
+        a, r = award.bounding_box(), rules.bounding_box()
+        assert (a["y"] >= r["y"] + r["height"] - 1) if width <= 760 else (abs(a["y"] - r["y"]) <= 1 and a["x"] > r["x"])   # рядом / одна под другой
+        assert "Витрина наград" in award.inner_text() and "состав и цены утверждает компания" in award.inner_text()
+        assert "Как начисляются баллы" in rules.inner_text()
         names = page.evaluate("[...document.querySelectorAll('.emp-card .lg-who b')].map(b => b.scrollWidth <= b.clientWidth + 1)")
         assert all(names)   # имена топ-3 не обрезаются
         assert _fits(page) and not errors, errors
@@ -194,6 +202,63 @@ def test_award_card_opens_rewards(base, browser, uid, path, target):
         page.click(".award-card")
         page.wait_for_url("**" + target)
         page.wait_for_selector("text=Награды")
+        assert not errors, errors
+    finally:
+        ctx.close()
+
+
+def test_show_all_employees_scroll_to_own_row_and_collapse(base, browser):
+    """«Показать всех (N)»: три карточки на месте, с 4-го места — все до последнего (и с нулём баллов): баллы по убыванию, при равенстве —
+    по имени; своя строка подсвечена и прокручена в видимую часть; «Свернуть» возвращает прежний вид."""
+    for uid, width in ((28, 1440), (28, 390)):
+        ctx, page, errors = _open(browser, base, uid, width, "/app#/league")
+        try:
+            if width <= 760:
+                page.click(".lg-seg .seg-btn[data-tab=top]")
+            d = page.evaluate("API.get('/api/panel/league')")
+            every = d["everyone"]
+            assert any(u["points"] == 0 for u in every) and [(-u["points"], u["name"]) for u in every] == sorted((-u["points"], u["name"]) for u in every)
+            before = page.evaluate("[...document.querySelectorAll('.lg-emps .lg-emp')].map(r => r.innerText)")
+            btn = page.locator(".lg-all")
+            assert btn.inner_text() == f"Показать всех ({len(every)})" and page.locator(".lg-me").is_visible()
+            btn.click(); page.wait_for_timeout(400)
+            names = page.evaluate("[...document.querySelectorAll('.lg-emps.all .lg-emp .lg-who')].map(n => n.textContent)")
+            assert names == [u["name"] for u in every[3:]] and page.locator(".emp-card").count() == 3   # все, карточки на месте
+            assert 330 <= page.locator(".lg-emps.all").bounding_box()["height"] <= 400   # область примерно на 7 строк
+            vis = page.evaluate("""(() => { const l = document.querySelector('.lg-emps.all'), r = l.querySelector('.me'); const a = l.getBoundingClientRect(), b = r.getBoundingClientRect();
+              return [r.innerText.includes(ME.name), b.top >= a.top - 1 && b.bottom <= a.bottom + 1]; })()""")
+            assert vis == [True, True] and not page.locator(".lg-me").is_visible()
+            assert btn.inner_text() == "Свернуть"
+            btn.click(); page.wait_for_timeout(300)
+            assert page.evaluate("[...document.querySelectorAll('.lg-emps .lg-emp')].map(r => r.innerText)") == before and page.locator(".lg-emps.all").count() == 0
+            assert page.evaluate("document.documentElement.scrollWidth <= innerWidth") and not errors, errors
+        finally:
+            ctx.close()
+
+
+def test_points_rules_from_settings_rewards_and_points_popover(base, browser):
+    ctx, page, errors = _open(browser, base, 15, 1440, "/panel#/league")   # администратор меняет настройки баллов — в карточке новые
+    try:
+        r = page.request.post(f"{base}/api/admin/settings", data={"settings": {"points": {"accepted": 12, "done": 55, "support": 3, "support_cap": 21}}})
+        assert r.ok, r.text()
+        page.reload(); page.wait_for_selector(".lg-rules-card")
+        t = page.locator(".lg-rules-card").inner_text()
+        assert "+12" in t and "+55" in t and "+3 (до +21 на обращение)" in t and "анонимные — без баллов" in t
+        assert page.locator(".lg-rules-card a", has_text="Подробнее").get_attribute("href") == "/rules"
+        page.request.post(f"{base}/api/admin/settings", data={"settings": {"points": {"accepted": 10, "done": 50, "support": 2, "support_cap": 20}}})
+    finally:
+        ctx.close()
+    ctx, page, errors = _open(browser, base, 17, 1440, "/app#/league")
+    try:
+        d = page.evaluate("API.get('/api/panel/league')")
+        award = page.locator(".award-card")
+        assert page.locator(".award-row").count() == len(d["rewards"]) and f"У вас" in award.inner_text() and str(d["me"]["points"]) in award.inner_text()
+        page.locator(".emp-card .pts-btn").first.click(); page.wait_for_selector(".pts-pop.open .pts-part")
+        pop = page.locator(".pts-pop.open .help-pop").inner_text()
+        top = d["top"][0]
+        parts = page.evaluate(f"API.get('/api/users/{top['id']}/points')")
+        assert "Из чего баллы" in pop and parts["balance"] == top["points"] and sum(x["total"] for x in parts["parts"]) == top["points"]
+        assert page.evaluate("location.hash") == "#/league"   # нажатие на ★ не открывает профиль
         assert not errors, errors
     finally:
         ctx.close()

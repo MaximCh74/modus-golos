@@ -116,13 +116,13 @@ def test_league_desktop_split_and_phone_tabs(base, browser):
     ctx, page, errors = _open(browser, base, 1, 1440, "/panel#/league")
     try:
         page.wait_for_selector(".pod-step")
-        page.click(".lg-more"); page.wait_for_selector("table.league tbody tr")   # метрики — под «Подробнее» (лига по образцу 13.11)
+        page.click(".lg-more"); page.wait_for_selector(".lg-detail-row")   # метрики — под «Подробнее» строками (13.11)
         assert not page.locator(".lg-seg").is_visible()
         left, right = page.locator(".lg-col-branches").bounding_box(), page.locator(".lg-col-top").bounding_box()
         assert right["x"] > left["x"] + left["width"] - 1   # «Филиалы» слева, «Сотрудники» справа
-        num = page.locator("table.league thead th").first.bounding_box()
+        num = page.locator(".lg-detail-row .lg-place").first.bounding_box()
         assert num["width"] <= 40   # «#» — узкая колонка, сразу за ней филиал
-        assert "головной офис" not in page.locator("table.league").inner_text()
+        assert "головной офис" not in page.locator(".lg-detail").inner_text()
         xs = page.evaluate("[...document.querySelectorAll('.lg-emp')].map(r => [r.querySelector('.lg-place').getBoundingClientRect().right, r.querySelector('.lg-who').getBoundingClientRect().left, r.querySelector('.lg-stats').getBoundingClientRect().right])")
         assert len(xs) >= 3 and all(x == xs[0] for x in xs)   # по линейке: место, имя и звёзды на одних вертикалях
         assert _fits(page) and not errors, errors

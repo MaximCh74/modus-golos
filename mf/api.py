@@ -1045,9 +1045,20 @@ async def panel_map(request: Request):
 @router.get("/panel/league")
 async def panel_league(request: Request):
     user = auth.require(request)
-    me = director.my_place(user["id"])
-    me["show"] = user["role"] == "employee" or me["points"] > 0   # строка «Вы — N место» — тем, кто копит баллы
-    return {**director.league(), "top": director.top_employees(), "me": me}
+    everyone = director.everyone()
+    me = director.my_place(user["id"], everyone)
+    me["show"] = user["role"] == "employee" or me["points"] > 0   # строка «Вы — N место» и «У вас ★ N» — тем, кто копит баллы
+    rewards = db.q("SELECT id, title, cost_points FROM rewards WHERE active=1 ORDER BY cost_points, id")
+    return {**director.league(), "top": director.top_employees(), "everyone": everyone, "me": me, "rules": appeals.points_cfg(), "rewards": rewards}
+
+
+@router.get("/users/{user_id}/points")
+async def user_points_parts(user_id: int, request: Request):
+    """«Из чего баллы» сотрудника — для поповера на ★ в лиге (баллы в лиге и так видны всем вошедшим)."""
+    auth.require(request)
+    if not db.one("SELECT 1 FROM users WHERE id=? AND active=1", (user_id,)):
+        raise HTTPException(404, "Сотрудник не найден")
+    return director.points_parts(user_id)
 
 
 @router.get("/rewards")
