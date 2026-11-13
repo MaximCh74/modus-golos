@@ -140,7 +140,7 @@ def test_menu_order_and_start_page(base, browser, uid, menu, start):
         if uid == 1:
             assert page.locator(".sum-top .map-card").count() == 1 and page.locator(".topbar .nav a.active").inner_text() == "Сводка"
             assert page.locator(".topbar .brand").get_attribute("href") == "#/summary"
-            page.goto(base + "/panel#/league"); page.wait_for_selector(".lg-table")   # прямые ссылки работают как раньше
+            page.goto(base + "/panel#/league"); page.wait_for_selector(".pod-step")   # прямые ссылки работают как раньше
             assert page.evaluate("location.hash") == "#/league"
         if uid == 2:
             page.wait_for_selector("table.queue tbody tr")
