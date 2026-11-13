@@ -6,3 +6,5 @@ __pycache__/
 docs/HANDOFF.md
 docs/source/
 docs/HANDOFF_*.md
+.venv/
+dist/

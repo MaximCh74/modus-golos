@@ -1,0 +1,13 @@
+# в образ и в контекст сборки не попадают секреты, рабочая база и лишнее
+.env
+.env.*
+!.env.example
+var/
+.venv/
+.git/
+**/__pycache__/
+.pytest_cache/
+docs/source/
+docs/HANDOFF*.md
+demo/*
+!demo/fixtures/

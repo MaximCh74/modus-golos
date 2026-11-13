@@ -166,6 +166,11 @@ def cleanup_audio() -> int:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     db.conn()
+    if os.environ.get("MF_DEMO_SNAPSHOT") == "1" and not db.one("SELECT 1 FROM users LIMIT 1"):
+        # первый запуск у проверяющего (docker compose, run.sh/run.ps1): пустая база — демо-снапшот, даты сдвинуты на «сегодня»
+        from . import demo
+        if demo.FIXTURE.is_file():
+            log.info("пустая база — поднимаем демо-снапшот: %s", demo.reset())
     seed.ensure()
     cleanup_audio()
     task = asyncio.create_task(overdue_loop())

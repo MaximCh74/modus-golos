@@ -10,6 +10,7 @@ services:
         required: false
     environment:
       MF_DATA_DIR: /data        # база и вложения — в томе, что бы ни стояло в .env
+      MF_DEMO_SNAPSHOT: "1"     # первый запуск: пустая база заполняется демо-снапшотом сама
     volumes:
       - mf_data:/data
     restart: unless-stopped
