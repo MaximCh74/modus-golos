@@ -100,20 +100,20 @@ def _lower_first(t: str) -> str:
 
 def items(f: dict) -> list[dict]:
     """Сводка списком из фактов сервера (замечание владельца 13.11): строки — сегменты [текст, жирный], числа жирным; у строки — ссылка."""
-    out = [{"parts": [["Поступило: ", False], [str(f["new"]), True]], "href": "/panel#/queue?open=1"},
-           {"parts": [["Решено: ", False], [str(f["done"]), True]], "href": "/changes"}]
+    out = [{"key": "new", "parts": [["Поступило: ", False], [str(f["new"]), True]], "href": "/panel#/queue?open=1"},
+           {"key": "done", "parts": [["Решено: ", False], [str(f["done"]), True]], "href": "/changes"}]
     op = [["Открыто: ", False], [str(f["open"]), True]]
     if f["urgent_open"]:
         op += [[", из них мешают работать: ", False], [str(f["urgent_open"]), True]]
-    out.append({"parts": op, "href": "/panel#/queue?open=1" + ("&urgency=now" if f["urgent_open"] else "")})
+    out.append({"key": "open", "parts": op, "href": "/panel#/queue?open=1" + ("&urgency=now" if f["urgent_open"] else "")})
     if f["decisions_pending"]:
         dp = [["Ждут вашего решения: ", False], [str(f["decisions_pending"]), True]]
         if f["decision_max_days"]:
             dp += [[", самое давнее — ", False], [str(f["decision_max_days"]), True], [" " + _word(f["decision_max_days"], ("день", "дня", "дней")), False]]
-        out.append({"parts": dp, "href": "/panel#/decisions"})
+        out.append({"key": "decisions", "parts": dp, "href": "/panel#/decisions"})
     if f["cluster"]:
         c = f["cluster"]; n = len(c["cities"])
-        out.append({"parts": [["Главная тема: ", False], [_lower_first(c["category"] or "без категории") + " — ", False], [str(c["size"]), True],
+        out.append({"key": "theme", "parts": [["Главная тема: ", False], [_lower_first(c["category"] or "без категории") + " — ", False], [str(c["size"]), True],
                               [" " + _word(c["size"], ("обращение", "обращения", "обращений")) + " из ", False], [str(n), True],
                               [" " + _word(n, ("города", "городов", "городов")), False]], "href": f"/panel#/queue?cluster_id={c['id']}"})
     for it in out:

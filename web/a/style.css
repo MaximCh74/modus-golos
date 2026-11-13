@@ -626,6 +626,24 @@ select { appearance: none; -webkit-appearance: none; padding-right: 34px; backgr
 .boss-greet-mark .ai-ic { vertical-align: -2px; }
 .boss-greet-text { margin-top: 4px; font-size: 15px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; cursor: pointer; }
 .boss-greet-text.open { display: block; -webkit-line-clamp: unset; overflow: visible; }   /* нажатие раскрывает приветствие целиком */
+/* приветствие списком (замечание 13.11): свёрнуто по высоте, нажатие раскрывает; строки с числами жирным, «Поступило / Решено / Ждут» — кнопки */
+.boss-greet-text:has(.boss-greet-list) { display: block; -webkit-line-clamp: unset; position: relative; }
+/* телефон: экран /boss — ровно высота окна; приветствие-список занимает свободное место и ужимается (плитки — не меньше двух рядов),
+   что не влезло — гаснет книзу; нажатие раскрывает целиком (.boss.greet-open — страница прокручивается) */
+@media (max-width: 699px) {
+  .boss:not(.greet-open) { height: 100vh; height: 100dvh; min-height: 0; }
+  .boss:not(.greet-open) .boss-greet { flex: 0 1 auto; min-height: 6.2em; overflow: hidden; display: flex; flex-direction: column; }
+  .boss:not(.greet-open) .boss-greet-text:has(.boss-greet-list) { flex: 1 1 auto; min-height: 0; overflow: hidden; }
+  .boss:not(.greet-open) .boss-tiles { flex: 1 1 0; min-height: 184px; }
+  .boss:not(.greet-open) .boss-tile { padding: 8px 14px; min-height: 0; }
+}
+.boss-greet-text:has(.boss-greet-list):not(.open)::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 1.6em; background: linear-gradient(transparent, var(--white)); pointer-events: none; }
+.boss-greet-hi { margin: 0 0 2px; }
+.boss-greet-period { font-weight: var(--w-bold); color: var(--navy); }
+.boss-greet-list { margin: 2px 0 0; padding-left: 18px; font-size: 14px; line-height: 1.4; }
+.boss-greet-list b { color: var(--navy); }
+.boss-greet-list .linkish { cursor: pointer; border-bottom: 1px dashed var(--line); }
+.boss-greet-list .linkish:focus-visible { box-shadow: var(--focus); border-radius: 4px; }
 .boss-speak { min-height: 32px; padding: 4px 8px; }
 .seg { display: grid; grid-template-columns: 1fr 1fr; background: var(--line-soft); border-radius: var(--radius-pill); padding: 3px; }
 .seg-btn { border: 0; background: transparent; font: inherit; font-weight: var(--w-bold); font-size: 14px; color: var(--muted); padding: 8px; border-radius: var(--radius-pill); cursor: pointer; min-height: 40px; transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease); }

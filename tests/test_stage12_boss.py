@@ -44,9 +44,13 @@ def test_home_tiles_lists_and_greeting(c):
     assert all({"id", "number", "text", "status"} <= set(x) for x in h["lists"]["new"])
     assert any(x["kind"] == "appeal" and x["overdue"] for x in h["lists"]["overdue"])
     g = h["greeting"]
-    assert g["engine"] == "template" and g["text"].endswith(".") and ", Сергей Михайлович." in g["text"] and "ждут 2" in g["text"]
+    # приветствие списком из чисел сервера, как сводка в панели (замечание 13.11): «поступило/решено» — за период, как на плитках
+    assert g["engine"] == "template" and g["greeting"].endswith(", Сергей Михайлович.") and g["period"] == "За неделю:"
+    items = {it["key"]: it["text"] for it in g["items"]}
+    assert items["new"] == f"Поступило: {t['new']}" and items["done"] == f"Решено: {t['done']}" and items["decisions"].startswith("Ждут вашего решения: 2")
+    assert g["text"] == " ".join([g["greeting"], g["period"]] + [it["text"] + "." for it in g["items"]])   # озвучка — тот же текст
     today = c.get("/api/boss/home?period=today").json()
-    assert today["tiles"]["new"] <= t["new"] and today["tiles"]["decisions"] == 2 and "Сегодня" in today["greeting"]["text"]
+    assert today["tiles"]["new"] <= t["new"] and today["tiles"]["decisions"] == 2 and today["greeting"]["period"] == "Сегодня:"
     assert c.get("/api/boss/home?period=nonsense").json()["period"] == "week"
 
 
@@ -95,15 +99,15 @@ def test_ai_answer_numbers_are_checked(c, monkeypatch):
     monkeypatch.setattr(llm, "boss_answer", lambda question, what, facts: "У вас 2 срочных тикета.")
     r = c.post("/api/boss/ask", json={"text": "что ждёт моего решения"}).json()
     assert r["engine"] == "template"
-    # приветствие: та же проверка чисел
-    monkeypatch.setattr(llm, "boss_greeting", lambda facts: facts["greeting"] + " За неделю пришло 500 обращений.")
+    # приветствие: ИИ — только фраза без чисел (замечание 13.11); фраза с числами отбрасывается, числа — только из списка сервера
+    monkeypatch.setattr(llm, "director_greeting", lambda facts: (_ for _ in ()).throw(llm.LLMError("в фразе есть числа")))
     db.ex("DELETE FROM settings WHERE key LIKE 'boss_greeting:%'")
     g = c.get("/api/boss/home?period=week").json()["greeting"]
     assert g["engine"] == "template" and "500" not in g["text"]
-    monkeypatch.setattr(llm, "boss_greeting", lambda facts: facts["greeting"] + f" За неделю пришло {facts['new']}, решено {facts['done']}.")
+    monkeypatch.setattr(llm, "director_greeting", lambda facts: "Есть что решить по обращениям.")
     db.ex("DELETE FROM settings WHERE key LIKE 'boss_greeting:%'")
     g = c.get("/api/boss/home?period=week").json()["greeting"]
-    assert g["engine"] == "openai" and g["text"].startswith("Добр")
+    assert g["engine"] == "openai" and g["greeting"].startswith("Добр") and g["greeting"].endswith("Есть что решить по обращениям.")
 
 
 def test_unknown_question_and_unknown_city(c):

@@ -110,48 +110,33 @@ def home(user: dict, period: str | None = None) -> dict:
     return out
 
 
-# ---------- приветствие ИИ по имени-отчеству (1–2 фразы), числа сверяются; без ключа — шаблон; кэш по версии данных ----------
+# ---------- приветствие списком из чисел сервера, как сводка в панели (замечание владельца 13.11): ИИ — только фраза без чисел ----------
 
 def _greeting_facts(h: dict) -> dict:
-    t = h["tiles"]
-    return {"period": h["period_label"], "new": t["new"], "done": t["done"], "decisions": t["decisions"], "overdue": t["overdue"]}
-
-
-def greeting_template(user: dict, h: dict) -> str:
-    t = h["tiles"]
-    p = h["period_label"]
-    parts = [director.greeting(user)]
-    s = f"{p[0].upper() + p[1:]} пришло {director._plural(t['new'], ('обращение', 'обращения', 'обращений'))}, решено {t['done']}"
-    if t["decisions"]:
-        s += f"; вашего решения {'ждёт' if t['decisions'] == 1 else 'ждут'} {t['decisions']}"
-    parts.append(s + ".")
-    if t["overdue"]:
-        parts.append(f"Просрочено: {t['overdue']}.")
-    return " ".join(parts)
+    """Факты сводки (открыто, мешают, решения, тема — «сейчас»), а «поступило» и «решено» — за период экрана, как на плитках."""
+    return {**director.facts(7), "new": h["tiles"]["new"], "done": h["tiles"]["done"]}
 
 
 def greeting(user: dict, h: dict) -> dict:
     key = f"boss_greeting:{user['id']}:{h['period']}"
     v = director.version() + ":" + (db.now() + _offset()).strftime("%Y-%m-%d-%H")[:13]   # меняется с событиями и раз в час (время суток в приветствии)
     cached = db.setting(key)
-    if cached and cached.get("version") == v:
+    if cached and cached.get("version") == v and "items" in cached:
         return cached
-    text, engine = None, "template"
-    if llm.available():
-        facts = {**_greeting_facts(h), "greeting": director.greeting(user)}
-        allowed = llm.numeric_values(facts)
-        try:
-            cand = llm.boss_greeting(facts)
-            if llm.numbers_in_answer(cand) <= allowed and not llm.negates_nonzero(cand, {"overdue": facts["overdue"], "decisions_pending": facts["decisions"]}) \
-                    and not llm.has_forbidden(cand) and cand.startswith(director.greeting(user)[:12]):
-                text, engine = cand, "openai"
-            else:
-                log.warning("приветствие: числа или термины не прошли проверку: %s", cand)
-        except llm.LLMError as e:
-            log.warning("приветствие: %s", e)
-    out = {"text": text or greeting_template(user, h), "engine": engine, "version": v}
+    f = _greeting_facts(h)
+    its = director.items(f)
+    phrase = director.ai_phrase(f)
+    greet = director.greeting(user) + (" " + phrase if phrase else "")
+    period = h["period_label"][0].upper() + h["period_label"][1:] + ":"   # «За неделю:» / «Сегодня:»
+    out = {"greeting": greet, "period": period, "items": its, "text": " ".join([greet, period] + [it["text"] + "." for it in its]),
+           "engine": "openai" if phrase else "template", "version": v}
     db.set_setting(key, out)
     return out
+
+
+def greeting_audio(user: dict, period: str | None = None) -> tuple[bytes, str]:
+    """Озвучка приветствия — тот же текст, что на экране (кэш по тексту)."""
+    return director.tts_cached(home(user, period)["greeting"]["text"])
 
 
 # ---------- вопросы ----------

@@ -21,7 +21,7 @@
   // ---------- каркас экрана ----------
   // приветствие — до трёх строк; если длиннее, нажатие раскрывает целиком (замечание владельца 12.11)
   const greetText = h('div', { class: 'boss-greet-text', role: 'button', tabindex: '0', title: 'Показать полностью', 'aria-expanded': 'false' }, 'Загружаем…');
-  const toggleGreet = () => { const open = greetText.classList.toggle('open'); greetText.setAttribute('aria-expanded', open ? 'true' : 'false'); };
+  const toggleGreet = () => { const open = greetText.classList.toggle('open'); greetText.setAttribute('aria-expanded', open ? 'true' : 'false'); const bx = greetText.closest('.boss'); if (bx) bx.classList.toggle('greet-open', open); };
   greetText.addEventListener('click', toggleGreet);
   greetText.addEventListener('keydown', ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); toggleGreet(); } });
   const greetMark = h('span', { class: 'boss-greet-mark' });
@@ -58,8 +58,19 @@
     if (seq !== loadSeq) return;
     S.home = home;
     for (const [k] of TILES) { tiles[k].textContent = String(S.home.tiles[k]); tiles[k].parentElement.classList.toggle('zero', !S.home.tiles[k]); }
-    greetText.textContent = S.home.greeting.text;
-    greetMark.replaceChildren(aiMark(S.home.greeting.engine === 'openai', 'приветствие ИИ, числа сверены с сервером', 'шаблон без ИИ'));
+    // приветствие списком из чисел сервера, как сводка в панели (замечание 13.11); строка «Поступило / Решено / Ждут решения» — список внутри /boss
+    const g = S.home.greeting;
+    if (g.items) {
+      const LIST = { new: 'new', done: 'done', decisions: 'decisions' };
+      greetText.replaceChildren(h('p', { class: 'boss-greet-hi' }, g.greeting), h('div', { class: 'boss-greet-period' }, g.period),
+        h('ul', { class: 'boss-greet-list' }, g.items.map(it => {
+          const kids = it.parts.map(([t, b]) => b ? h('b', {}, t) : t);
+          if (!LIST[it.key]) return h('li', {}, h('span', {}, kids));
+          const go = ev => { ev.stopPropagation(); openList(LIST[it.key]); };   // строчный элемент, а не кнопка: маркер списка — у первой строки
+          return h('li', {}, h('span', { class: 'linkish', role: 'button', tabindex: '0', onclick: go, onkeydown: ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); go(ev); } } }, kids));
+        })));
+    } else greetText.textContent = g.text;
+    greetMark.replaceChildren(aiMark(g.engine === 'openai', 'приветствие ИИ, числа — из фактов сервера', 'без ИИ'));
   }
   function setPeriod(p) {
     S.period = p;
@@ -67,7 +78,7 @@
     for (const b of seg.children) b.classList.toggle('on', b.dataset.period === p);
     load();
   }
-  speakGreet.addEventListener('click', () => speakText(speakGreet, '/api/panel/director-summary/audio', S.home ? S.home.greeting.text : ''));
+  speakGreet.addEventListener('click', () => speakText(speakGreet, '/api/boss/greeting/audio?period=' + S.period, S.home ? S.home.greeting.text : ''));   // тот же текст списком
   await load();
   API.sse(ev => { if (['appeal_created', 'appeal_updated', 'escalated', 'idea_pending', 'tasks_overdue', 'meeting_sent'].includes(ev.type)) load(); });
 

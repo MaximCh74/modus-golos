@@ -885,6 +885,20 @@ async def boss_ask(body: AskBody, request: Request):
     return await asyncio.to_thread(boss.ask, body.text, user, body.period)
 
 
+@router.get("/boss/greeting/audio")
+async def boss_greeting_audio(request: Request, period: str = "week"):
+    """Озвучка приветствия /boss — тот же текст списком, что на экране (OpenAI TTS с кэшем); без ключа — 503, фронт читает голосом браузера."""
+    user = auth.require(request, "director")
+    if not llm.available():
+        raise HTTPException(503, "Озвучка через OpenAI недоступна без ключа")
+    import asyncio
+    try:
+        audio, src = await asyncio.to_thread(boss.greeting_audio, user, period)
+    except Exception as e:   # noqa: BLE001
+        raise HTTPException(503, f"Озвучка недоступна: {e}"[:200])
+    return Response(audio, media_type="audio/mpeg", headers={"X-TTS-Source": src, "Cache-Control": "no-store"})
+
+
 @router.get("/boss/answer/{answer_id}/audio")
 async def boss_answer_audio(answer_id: str, request: Request):
     """Нейтральный голос (OpenAI TTS с кэшем), не клонирование; без ключа — 503, фронт читает голосом браузера или молчит."""
