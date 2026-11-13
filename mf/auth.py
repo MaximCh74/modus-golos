@@ -82,6 +82,33 @@ def require_full(request: Request, *roles: str) -> dict:
     return user
 
 
+def director_admin() -> bool:
+    """Директор видит «Администрирование» как администратор (замечание владельца 13.11, п. 4): по умолчанию да, выключается в настройках."""
+    return bool(db.setting("director_admin", True))
+
+
+def admin_roles() -> tuple[str, ...]:
+    return ("admin", "director") if director_admin() else ("admin",)
+
+
+def can_admin(user: dict | None) -> bool:
+    return bool(user) and user["role"] in admin_roles()
+
+
+def require_admin(request: Request) -> dict:
+    """Раздел «Администрирование»: администратор и (если не скрыто настройкой) директор."""
+    user = require(request)
+    if user["role"] == "director" and not director_admin():
+        raise HTTPException(403, "Администрирование скрыто от директора в настройках — вернуть может администратор")
+    return require(request, *admin_roles())
+
+
+def require_admin_full(request: Request) -> dict:
+    """То же, но демо-сессиям снаружи — 403 (опасные действия только с ноутбука ведущего, F-03)."""
+    require_admin(request)
+    return require_full(request, *admin_roles())
+
+
 def login(user_id: int, demo: bool = False) -> str:
     if not user_by_id(user_id):
         raise HTTPException(404, "Пользователь не найден")

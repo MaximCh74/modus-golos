@@ -316,6 +316,7 @@ async def me(request: Request):
     t = meetings.my_tasks_counts(user["id"])   # «Мои поручения» со счётчиком невыполненных (пункт 1 очереди 12.11)
     out["tasks_open"], out["tasks_overdue"] = t["open"], t["overdue"]
     out["demo"] = bool(user.get("demo_restricted"))   # демо-вход снаружи: часть действий администратора закрыта (F-03)
+    out["can_admin"] = auth.can_admin(user)   # «Администрирование»: администратор и директор, если не скрыто настройкой (13.11, п. 4)
     return out
 
 
@@ -474,7 +475,7 @@ async def avatar_file(name: str):
 @router.post("/admin/users/{user_id}/avatar/remove")
 async def remove_avatar(user_id: int, request: Request):
     """Администратор убирает неуместную аватарку."""
-    auth.require_full(request, "admin", "director")
+    auth.require_admin_full(request)
     old = db.one("SELECT avatar FROM users WHERE id=?", (user_id,))
     if old and old["avatar"]:
         (config.AVATAR_DIR / old["avatar"]).unlink(missing_ok=True)
@@ -1071,14 +1072,14 @@ class ClaimDecision(BaseModel):
 
 @router.get("/admin/reward-claims")
 async def reward_claims(request: Request):
-    auth.require(request, "admin", "director")
+    auth.require_admin(request)
     return db.q("""SELECT c.*, r.title, r.cost_points, u.name AS user_name FROM reward_claims c JOIN rewards r ON r.id=c.reward_id JOIN users u ON u.id=c.user_id
                    ORDER BY CASE c.status WHEN 'requested' THEN 0 ELSE 1 END, c.id DESC LIMIT 100""")
 
 
 @router.post("/admin/reward-claims/{claim_id}/decide")
 async def decide_claim(claim_id: int, body: ClaimDecision, request: Request):
-    user = auth.require(request, "admin", "director")
+    user = auth.require_admin(request)
     c = db.one("SELECT c.*, r.title, r.cost_points FROM reward_claims c JOIN rewards r ON r.id=c.reward_id WHERE c.id=?", (claim_id,))
     if not c or c["status"] != "requested":
         raise HTTPException(409, "Заявка не найдена или уже решена")
@@ -1095,14 +1096,14 @@ async def decide_claim(claim_id: int, body: ClaimDecision, request: Request):
 
 
 SETTING_KEYS = ("points", "director_wait_days", "news_days", "similar_threshold", "cluster_threshold", "league_weights", "dev_department_head_id", "tz_offset_hours", "invite_days",
-                "ai_daily_limit")
+                "ai_daily_limit", "director_admin")
 
 
 @router.get("/admin/settings")
 async def admin_settings(request: Request):
-    auth.require(request, "admin", "director")
+    auth.require_admin(request)
     from .ai import budget
-    return {"settings": {**{k: db.setting(k) for k in SETTING_KEYS}, "ai_daily_limit": budget.limit()}, "ai_usage": budget.usage(),
+    return {"settings": {**{k: db.setting(k) for k in SETTING_KEYS}, "ai_daily_limit": budget.limit(), "director_admin": auth.director_admin()}, "ai_usage": budget.usage(),
             "categories": db.q("""SELECT c.id, c.name, c.responsible_user_id, c.suggestion_responsible_user_id, c.sla_first_response_hours AS sla,
                                   u.name AS responsible, s.name AS suggestion_responsible, (SELECT COUNT(*) FROM appeals a WHERE a.category_id=c.id) AS appeals
                                   FROM categories c LEFT JOIN users u ON u.id=c.responsible_user_id LEFT JOIN users s ON s.id=c.suggestion_responsible_user_id ORDER BY c.id"""),
@@ -1119,7 +1120,7 @@ async def admin_settings(request: Request):
 @router.get("/admin/branches/posters.pdf")
 async def admin_posters_all(request: Request):
     """Все QR-плакаты филиалов одним PDF (A4 на филиал) — из «Администрирование → Филиалы и QR»."""
-    auth.require(request, "admin", "director")
+    auth.require_admin(request)
     import asyncio
     pdf = await asyncio.to_thread(posters.posters_pdf, posters.branches_for_posters(), base_url(request))
     return Response(pdf, media_type="application/pdf", headers={"Content-Disposition": "inline; filename=\"modus_golos_qr_posters.pdf\""})
@@ -1127,7 +1128,7 @@ async def admin_posters_all(request: Request):
 
 @router.get("/admin/branches/{code}/poster.pdf")
 async def admin_poster_one(code: str, request: Request):
-    auth.require(request, "admin", "director")
+    auth.require_admin(request)
     rows = posters.branches_for_posters(code)
     if not rows:
         raise HTTPException(404, "Филиал не найден")
@@ -1151,7 +1152,7 @@ class GeoPointBody(BaseModel):
 @router.get("/admin/geo")
 async def admin_geo(request: Request):
     """Объекты «без метки» (город из QR не найден в справочнике) и точки, поставленные вручную."""
-    auth.require(request, "admin", "director")
+    auth.require_admin(request)
     from . import geo
     md = director.map_data()
     return {"unplaced": md["unplaced"], "points": [{"key": k, **v} for k, v in geo.manual_points().items()],
@@ -1160,7 +1161,7 @@ async def admin_geo(request: Request):
 
 @router.post("/admin/geo/points")
 async def admin_geo_point(body: GeoPointBody, request: Request):
-    auth.require_full(request, "admin", "director")
+    auth.require_admin_full(request)
     from . import geo
     if body.lat is None or body.lng is None:
         raise HTTPException(422, "Нужны координаты точки")
@@ -1172,7 +1173,7 @@ async def admin_geo_point(body: GeoPointBody, request: Request):
 
 @router.post("/admin/geo/points/remove")
 async def admin_geo_point_remove(body: GeoPointBody, request: Request):
-    auth.require_full(request, "admin", "director")
+    auth.require_admin_full(request)
     from . import geo
     geo.remove_point(body.city)
     return {"ok": True}
@@ -1180,11 +1181,15 @@ async def admin_geo_point_remove(body: GeoPointBody, request: Request):
 
 @router.post("/admin/settings")
 async def admin_settings_save(body: SettingsBody, request: Request):
-    auth.require(request, "admin", "director")
+    auth.require_admin(request)
+    if "director_admin" in body.settings:   # кто видит администрирование — решение не для демо-входа снаружи (F-03): только с ноутбука
+        body.settings["director_admin"] = bool(body.settings["director_admin"])
+        if body.settings["director_admin"] != auth.director_admin():
+            auth.require_admin_full(request)
     for k, v in body.settings.items():
         if k in SETTING_KEYS:
             db.set_setting(k, v)
-    return {"ok": True, "settings": {k: db.setting(k) for k in SETTING_KEYS}}
+    return {"ok": True, "settings": {**{k: db.setting(k) for k in SETTING_KEYS}, "director_admin": auth.director_admin()}}
 
 
 class CategoryBody(BaseModel):
@@ -1196,7 +1201,7 @@ class CategoryBody(BaseModel):
 
 @router.post("/admin/categories/{category_id}")
 async def admin_category(category_id: int, body: CategoryBody, request: Request):
-    auth.require(request, "admin", "director")
+    auth.require_admin(request)
     if not db.one("SELECT 1 FROM categories WHERE id=?", (category_id,)):
         raise HTTPException(404, "Категория не найдена")
     d = body.model_dump(exclude_unset=True)
@@ -1230,7 +1235,7 @@ class RewardBody(BaseModel):
 @router.post("/admin/rewards")
 async def admin_reward(body: RewardBody, request: Request):
     """Витрину наград заполняет компания: добавить, изменить, отключить."""
-    auth.require(request, "admin", "director")
+    auth.require_admin(request)
     title = body.title.strip()
     if not title or body.cost_points <= 0:
         raise HTTPException(422, "Название и положительная стоимость обязательны")
@@ -1266,7 +1271,7 @@ USER_FIELDS = "id, name, role, position, branch_id, department_id, manager_id, a
 async def admin_user(body: UserBody, request: Request):
     """Сотрудники: добавить, изменить, отключить. Этап 8 §4: телефон (ручное добавление рабочих, склейка с Битриксом по номеру),
     телефон и почта не могут принадлежать двум людям, отключение гасит сессии и приглашения, история остаётся."""
-    user = auth.require_full(request, "admin", "director")
+    user = auth.require_admin_full(request)
     name = " ".join(body.name.split())
     if len(name) < 3 or body.role not in auth.ROLES:
         raise HTTPException(422, "Имя и роль обязательны")
@@ -1309,13 +1314,13 @@ class ActiveBody(BaseModel):
 @router.post("/admin/users/{user_id:int}/active")
 async def admin_user_active(user_id: int, body: ActiveBody, request: Request):
     """Отключить (сессии и приглашения гаснут, обращения и история остаются) или включить обратно."""
-    user = auth.require_full(request, "admin", "director")
+    user = auth.require_admin_full(request)
     return staff.set_active(user_id, body.active, user)
 
 
 @router.get("/admin/users/template.csv")
 async def admin_users_template(request: Request):
-    auth.require(request, "admin", "director")
+    auth.require_admin(request)
     return Response(staff.template_csv(), media_type="text/csv; charset=utf-8",
                     headers={"Content-Disposition": "attachment; filename=\"modus_golos_staff_template.csv\"; filename*=UTF-8''%D1%81%D0%BE%D1%82%D1%80%D1%83%D0%B4%D0%BD%D0%B8%D0%BA%D0%B8_%D1%88%D0%B0%D0%B1%D0%BB%D0%BE%D0%BD.csv"})
 
@@ -1323,7 +1328,7 @@ async def admin_users_template(request: Request):
 @router.post("/admin/users/import")
 async def admin_users_import(request: Request, file: UploadFile = File(...), invite: str = Form("1")):
     """Импорт из CSV или Excel по шаблону: ошибочная строка — в отчёт, остальные заводятся; новым — приглашения (invite=1)."""
-    user = auth.require_full(request, "admin", "director")
+    user = auth.require_admin_full(request)
     data = await file.read(5 * 1024 * 1024 + 1)
     if not data:
         raise HTTPException(422, "Файл пустой")
@@ -1357,14 +1362,14 @@ def _invite_out(inv: dict, request: Request) -> dict:
 @router.post("/admin/invites")
 async def admin_invite_issue(body: InviteBody, request: Request):
     """Выдать личное приглашение (или выдать заново: прежняя ссылка сразу перестаёт работать, прежнее устройство выходит)."""
-    user = auth.require_full(request, "admin", "director")
+    user = auth.require_admin_full(request)
     return _invite_out(staff.issue(body.user_id, user["id"]), request)
 
 
 @router.get("/admin/invites/cards.pdf")
 async def admin_invite_cards(request: Request, ids: str = "", all: str = ""):
     """Карточки-приглашения для печати: ?ids=1,2,3 (например, весь импорт) или ?all=1 — все действующие."""
-    auth.require(request, "admin", "director")
+    auth.require_admin(request)
     if parse_bool(all):
         rows = [staff.get(r["id"]) for r in db.q("SELECT id FROM invites WHERE used_at IS NULL AND revoked_at IS NULL AND expires_at > ? ORDER BY id", (db.now_iso(),))]
     else:
@@ -1383,7 +1388,7 @@ async def admin_invite_cards(request: Request, ids: str = "", all: str = ""):
 
 @router.get("/admin/invites/{invite_id:int}")
 async def admin_invite_get(invite_id: int, request: Request):
-    auth.require(request, "admin", "director")
+    auth.require_admin(request)
     inv = staff.get(invite_id)
     if not inv:
         raise HTTPException(404, "Приглашение не найдено")
@@ -1392,13 +1397,13 @@ async def admin_invite_get(invite_id: int, request: Request):
 
 @router.post("/admin/invites/{invite_id:int}/revoke")
 async def admin_invite_revoke(invite_id: int, request: Request):
-    auth.require_full(request, "admin", "director")
+    auth.require_admin_full(request)
     return _invite_out(staff.revoke(invite_id), request)
 
 
 @router.get("/admin/invites/{invite_id:int}/qr.svg")
 async def admin_invite_qr(invite_id: int, request: Request):
-    auth.require(request, "admin", "director")
+    auth.require_admin(request)
     inv = staff.get(invite_id)
     if not inv:
         raise HTTPException(404, "Приглашение не найдено")
@@ -1440,7 +1445,7 @@ async def public_invite_accept(token: str, request: Request, response: Response)
 @router.post("/admin/bitrix/sync")
 async def admin_bitrix_sync(request: Request):
     """Этап 8 §3: сотрудники и отделы из Битрикс24 → наши пользователи (кнопка у администратора; автоматически — раз в сутки)."""
-    auth.require_full(request, "admin", "director")
+    auth.require_admin_full(request)
     if not bitrix.notify_available():
         raise HTTPException(503, "Битрикс24 не подключён или приложение ещё не установлено (нет токенов портала)")
     import asyncio
@@ -1452,14 +1457,14 @@ async def admin_bitrix_sync(request: Request):
 
 @router.post("/admin/demo-snapshot")
 async def admin_demo_snapshot(request: Request):
-    auth.require_full(request, "admin", "director")
+    auth.require_admin_full(request)
     return demo.snapshot()
 
 
 @router.post("/admin/demo-reset")
 async def admin_demo_reset(request: Request):
     """Вернуть базу в демо-состояние за секунды, без вызовов ИИ. Сессии сбрасываются — войти заново."""
-    auth.require_full(request, "admin", "director")
+    auth.require_admin_full(request)
     r = demo.reset()
     realtime.publish_all({"type": "demo_reset"})
     return r
@@ -1468,7 +1473,7 @@ async def admin_demo_reset(request: Request):
 @router.get("/admin/preflight")
 async def admin_preflight(request: Request, stt_test: str = "1"):
     """Проверка «за час до выхода»: ключ, STT на GPU, база в демо-состоянии. Внешний туннель и батарею проверяет tools/preflight.sh."""
-    auth.require_full(request, "admin", "director")   # тратит вызовы ИИ и GPU — только с ноутбука или из настоящего входа
+    auth.require_admin_full(request)   # тратит вызовы ИИ и GPU — только с ноутбука или из настоящего входа
     import asyncio
     out = {"checks": []}
     # ключ OpenAI — короткий вызов

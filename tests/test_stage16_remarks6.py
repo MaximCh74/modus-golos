@@ -129,3 +129,29 @@ def test_league_city_and_shared_layout(c):
     css = (ROOT / "web" / "a" / "style.css").read_text(encoding="utf-8")
     assert re.search(r"\.lg-place \{[^}]*text-align: right;[^}]*tabular-nums", css)   # «#» по правому краю, моноширинные цифры
     assert re.search(r"\.lg-emp \{ display: grid; grid-template-columns: 28px ", css)   # место фиксированной ширины
+
+
+# ---------- п. 4: директор видит «Администрирование» ----------
+
+def test_director_admin_by_default_toggle_only_from_laptop(c):
+    login(c, 1)   # директор через демо-вход «снаружи» (TestClient без адреса петли)
+    me = c.get("/api/me").json()
+    assert me["can_admin"] is True and me["demo"] is True
+    assert c.get("/api/admin/settings").json()["settings"]["director_admin"] is True
+    assert c.post("/api/admin/settings", json={"settings": {"director_admin": False}}).status_code == 403   # скрыть — только с ноутбука
+    assert c.post("/api/admin/settings", json={"settings": {"director_admin": True}}).status_code == 200    # без изменения — можно
+    assert c.post("/api/admin/demo-reset").status_code == 403 and c.post("/api/admin/invites", json={"user_id": 6}).status_code == 403   # F-03 сохранён
+    with TestClient(app, client=("127.0.0.1", 50001)) as local:
+        login(local, 1)
+        assert local.post("/api/admin/settings", json={"settings": {"director_admin": False}}).status_code == 200
+        assert local.get("/api/me").json()["can_admin"] is False
+        assert local.get("/api/admin/settings").status_code == 403 and local.post("/api/admin/settings", json={"settings": {"director_admin": True}}).status_code == 403
+        login(local, 15)   # вернуть может администратор
+        assert local.get("/api/me").json()["can_admin"] is True
+        assert local.post("/api/admin/settings", json={"settings": {"director_admin": True}}).status_code == 200
+        login(local, 1)
+        assert local.get("/api/me").json()["can_admin"] is True and local.get("/api/admin/settings").status_code == 200
+    login(c, 2)   # ответственному раздел не положен
+    assert c.get("/api/me").json()["can_admin"] is False and c.get("/api/admin/settings").status_code == 403
+    js = (ROOT / "web" / "a" / "panel.js").read_text(encoding="utf-8")
+    assert "Директору этот раздел можно скрыть в настройках" in js and "'Директор видит администрирование'" in js and "if (ME.can_admin) nav.push" in js

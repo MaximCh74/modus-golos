@@ -89,6 +89,7 @@ b, strong { font-weight: var(--w-bold); }
 .lbl { display: flex; align-items: center; gap: 12px; color: var(--navy); font-weight: var(--w-bold); font-size: var(--fs-small); margin: 4px 0 2px; }   /* красного текста нет — красная только черта */
 .lbl::before { content: ''; width: 28px; height: 2px; background: var(--red); flex: none; }
 .h1 { font-size: var(--fs-h1); font-weight: var(--w-bold); color: var(--navy); margin: 6px 0 var(--s2); line-height: 1.15; letter-spacing: -.01em; }
+.admin-note { margin: -8px 0 var(--s2); }   /* «Директору этот раздел можно скрыть в настройках» (13.11, п. 4) */
 .h2 { font-size: var(--fs-h2); font-weight: var(--w-bold); color: var(--navy); margin: var(--s2) 0 var(--s1); }
 .big { font-size: 32px; font-weight: var(--w-bold); line-height: 1; color: var(--navy); }
 .display { font-size: var(--fs-display); font-weight: var(--w-bold); color: var(--navy); line-height: 1.08; letter-spacing: -.02em; margin: 0; }

@@ -43,7 +43,7 @@ function renderTop() {
   nav.push(['#/meetings', 'Совещания']);
   if (ME.role !== 'responsible') nav.push(['#/decisions', 'На решение']);
   nav.push(['#/league', 'Лига']);
-  if (ME.role === 'admin' || ME.role === 'director') nav.push(['#/admin', 'Администрирование']);
+  if (ME.can_admin) nav.push(['#/admin', 'Администрирование']);   // директор — как администратор, если не скрыто настройкой (13.11, п. 4)
   const isActive = href => hash.startsWith(href) || (href === '#/queue' && hash.startsWith('#/appeal'));
   // телефон (до 480 px, замечание владельца 12.11): разделы, «Приложение» и пользователь — за кнопкой меню, шапка в одну строку
   const panel = h('div', { class: 'nav-panel', id: 'nav-panel', role: 'menu' },
@@ -91,7 +91,7 @@ async function route() {
     if (p[0] === 'meetings' && p[1]) { S.view = 'meetings'; return await meetingCard(Number(p[1]), { backHref: '#/meetings', cardPrefix: '#/meetings/' }); }
     if (p[0] === 'meetings' || p[0].startsWith('meetings?')) { S.view = 'meetings'; return await meetingsList(); }
     if (p[0] === 'decisions') { S.view = 'decisions'; return await decisionsScreen({ backHref: '#/queue' }); }
-    if (p[0] === 'admin') { S.view = 'admin'; return await adminScreen(); }
+    if (p[0] === 'admin') { if (!ME.can_admin) { location.hash = '#/queue'; return; } S.view = 'admin'; return await adminScreen(); }
     if (p[0] === 'league') { S.view = 'league'; return await leaguePanel(); }
     S.view = 'queue'; if (S.selected && !location.hash.startsWith('#/appeal/')) S.selected = null; return await queue();
   } catch (e) { root.replaceChildren(h('div', { class: 'wrap' }, h('div', { class: 'card card-bad' }, e.message))); }
@@ -496,10 +496,19 @@ async function adminScreen() {
     num('similar_threshold.embeddings', 'Похожие обращения: сходство от', (st.similar_threshold || {}).embeddings, 'от 0 до 1', '0.05', 'similar_threshold'), num('cluster_threshold.embeddings', 'Повторяющиеся темы: сходство от', (st.cluster_threshold || {}).embeddings, 'от 0 до 1', '0.05', 'cluster_threshold'),
     num('invite_days', 'Личное приглашение действует', st.invite_days, 'дней', null, 'set_invite_days'),
     num('ai_daily_limit', 'Вызовов ИИ в сутки, не больше', st.ai_daily_limit, d.ai_usage ? 'сегодня ' + d.ai_usage.calls : 'вызовов', null, 'set_ai_daily_limit')];
+  // «Директор видит администрирование» (13.11, п. 4): по умолчанию включено; менять — только с ноутбука ведущего (демо-вход снаружи — нет)
+  const dirAdmin = h('input', { type: 'checkbox', checked: st.director_admin !== false });
+  const dirAdminRow = h('label', { class: 'check mt8' }, dirAdmin, 'Директор видит администрирование', helpBtn('set_director_admin'));
   const saveBtn = h('button', { class: 'btn btn-sm btn-primary', onclick: async () => {
     const out = {};
     for (const box of inputs) { const i = box.querySelector('input'); if (i.value === '') continue; const v = Number(i.value); const [k, sub] = i.dataset.key.split('.'); if (sub) { out[k] = out[k] || { ...(st[k] || {}) }; out[k][sub] = v; } else out[k] = v; }
-    try { await API.post('/api/admin/settings', { settings: out }); toast('Настройки сохранены'); adminScreen(); } catch (e) { toast(e.message, 'bad'); }
+    out.director_admin = dirAdmin.checked;
+    try {
+      await API.post('/api/admin/settings', { settings: out }); toast('Настройки сохранены');
+      ME = await API.me(); renderTop();
+      if (!ME.can_admin) { location.hash = '#/summary'; return; }   // директор скрыл раздел от себя — вернуть может администратор
+      adminScreen();
+    } catch (e) { toast(e.message, 'bad'); }
   } }, 'Сохранить настройки');
   const staff = d.users.filter(u => u.role !== 'employee' && u.active);
   const userSel = (val) => pick({ placeholder: 'вакансия', value: val || '', options: staff.map(u => ({ value: u.id, label: u.name, hint: u.position || u.role })) });
@@ -527,6 +536,7 @@ async function adminScreen() {
       h('div', { class: 'row mt8' }, h('button', { class: 'btn btn-sm btn-primary', disabled: !bx.tokens, onclick: async ev => { ev.target.disabled = true; try { const r = await API.post('/api/admin/bitrix/sync'); toast('Синхронизация: в портале ' + r.portal_users + ', новых ' + r.created + ', обновлено ' + r.updated + ', деактивировано ' + r.deactivated); adminScreen(); } catch (e) { toast(e.message, 'bad'); ev.target.disabled = false; } } }, iconText('refresh', 'Синхронизировать сотрудников')), h('span', { class: 'hint' }, 'сотрудники и отделы из портала; автоматически — раз в сутки')))
       : h('div', { class: 'small mt8' }, bx.webhook ? 'Только входящий вебхук: уведомления дублируются в чат, входа через Битрикс24 нет.' : 'Не подключён: нет настроек в .env. Инструкция — docs/BITRIX24.md. Без настроек ничего не имитируется.'));
   root.replaceChildren(h('div', { class: 'wrap wrap-wide' }, h('div', { class: 'h1' }, 'Администрирование'),
+    ME.role === 'director' ? h('div', { class: 'small muted admin-note' }, 'Директору этот раздел можно скрыть в настройках') : null,
     ME.demo ? h('div', { class: 'card card-warn small' }, h('b', {}, 'Демо-вход. '), 'Смотреть можно всё; добавлять и править сотрудников, выдавать приглашения, синхронизировать Битрикс24 и сбрасывать демо-базу — только с ноутбука ведущего или после входа через Битрикс24.') : null,
     staffSection(d, adminScreen),
     h('div', { class: 'split' },
@@ -536,7 +546,7 @@ async function adminScreen() {
         rewardsCard,
         h('div', { class: 'card' }, h('b', {}, 'Заявки на награды'), claims.length ? h('table', { class: 'tbl mt8' }, h('thead', {}, h('tr', {}, ['Кто', 'Награда', 'Статус', 'Когда', ''].map(t => h('th', {}, t)))), h('tbody', {}, claimRows)) : h('div', { class: 'muted small mt8' }, 'Заявок нет'))),
       h('div', {},
-        h('div', { class: 'card' }, h('b', {}, 'Настройки'), h('div', { class: 'grid2 mt8' }, inputs), h('div', { class: 'mt8' }, saveBtn), h('div', { class: 'hint mt8' }, 'Пороги похожести и повторяющихся тем — для режима ИИ; без ключа действуют пороги по ключевым словам.')),
+        h('div', { class: 'card' }, h('b', {}, 'Настройки'), h('div', { class: 'grid2 mt8' }, inputs), dirAdminRow, h('div', { class: 'mt8' }, saveBtn), h('div', { class: 'hint mt8' }, 'Пороги похожести и повторяющихся тем — для режима ИИ; без ключа действуют пороги по ключевым словам.')),
         bitrixCard,
         h('div', { class: 'card' }, h('div', { class: 'row' }, h('b', {}, 'Филиалы и QR'), h('div', { class: 'spacer' }), h('a', { href: '/api/admin/branches/posters.pdf', class: 'btn btn-sm btn-primary', target: '_blank', rel: 'noopener' }, iconText('printer', 'Все плакаты PDF'))),
           h('div', { class: 'list mt8' }, d.branches.map(b => h('div', { class: 'item branch-item noclick' }, h('div', { class: 'row' }, h('img', { src: b.qr_svg, alt: 'QR ' + b.name, class: 'qr-thumb' }), h('div', { class: 'spacer' }, h('b', {}, b.name), h('div', { class: 'small muted' }, b.kind_label)),

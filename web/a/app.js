@@ -307,7 +307,7 @@ async function profileScreen(uid) {
   // этап 9 (пункт 4): нули не показываем, одна тихая кнопка у своего профиля, админские действия — в меню «…»
   const file = h('input', { type: 'file', accept: 'image/*', class: 'visually-hidden', tabindex: '-1' });
   file.addEventListener('change', async () => { if (!file.files[0]) return; const fd = new FormData(); fd.set('file', file.files[0]); try { await API.postForm('/api/me/avatar', fd); toast('Аватарка обновлена'); profileScreen(uid); } catch (e) { toast(e.message, 'bad'); } });
-  const adminMenu = (ME.role === 'admin' || ME.role === 'director') && u.avatar && !mine ? menuButton([['Убрать аватарку', async () => { await API.post('/api/admin/users/' + uid + '/avatar/remove'); toast('Аватарка убрана'); profileScreen(uid); }]]) : null;
+  const adminMenu = ME.can_admin && u.avatar && !mine ? menuButton([['Убрать аватарку', async () => { await API.post('/api/admin/users/' + uid + '/avatar/remove'); toast('Аватарка убрана'); profileScreen(uid); }]]) : null;
   const stats = [[u.points, 'баллов', 'points'], [u.implemented.length, 'внедрено', null], [u.thanks, '«спасибо»', null], [u.supported, 'поддержал коллег', null]].filter(x => (x[0] || x[2] === 'points') && !(x[2] === 'points' && mine && !showPoints()));
   root.replaceChildren(h('div', { class: 'wrap' }, h('a', { href: '#/', class: 'small ict' }, icon('arrow-left', { size: 14 }), 'Назад'),
     h('div', { class: 'card' }, h('div', { class: 'profile-head' }, avatarEl(u, 'lg'), h('div', { class: 'spacer' }, h('div', { class: 'h1' }, u.name), h('div', { class: 'small muted' }, [u.position, u.city || brCity(u.branch), u.department].filter(Boolean).join(' · ')),
