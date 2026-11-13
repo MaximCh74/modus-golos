@@ -22,25 +22,44 @@ function mapView(data, opts) {
   const F = opts.frame || MAP;
   const img = h('img', { src: F.src, alt: 'Карта городов', class: 'map-bg' });
   const scene = h('div', { class: 'map-scene' }, img);   // всё, что едет вместе с картой при наезде: подложка, слои, карточка города
-  const box = h('div', { class: 'map' + (opts.crop ? ' cropped' : '') + (opts.motion ? ' live' : '') }, scene);
+  const box = h('div', { class: 'map' + (opts.crop ? ' cropped' : '') + (opts.motion ? ' live' : '') + (opts.fill ? ' fill' : '') }, scene);
   box.style.setProperty('--map-ratio', String(F.aspect));   // пропорции блока = пропорции рамки, без искажения
   // обрезка: контейнер шире кадра → картинка масштабируется по ширине, видна полоса высотой visible (доля), начиная с top
-  let visible = 1, top = 0;
+  // fill (сводка директора, ТЗ владельца 13.11): блок карты тянется на высоту правой колонки — картинка обрезается по краям (object-fit:
+  // cover), окно — по центру разброса меток; колонка ниже — обрезка сверху и снизу. Только от 1200 px, ниже — обычные пропорции рамки
+  let visible = 1, top = 0, visX = 1, left = 0;
   const cropActive = () => opts.crop && !window.matchMedia('(max-width: 768px)').matches;
+  const fillActive = () => opts.fill && window.matchMedia('(min-width: 900px)').matches;   // телефон — пропорции рамки
+  let wrapEl = null, legendEl = null;
+  const spanMid = vals => vals.length ? (Math.min(...vals) + Math.max(...vals)) / 2 : 0.5;
   function layout() {
+    visX = 1; left = 0;
     if (cropActive()) {
       visible = F.aspect / opts.crop.aspect; top = Math.min(opts.crop.top || 0, 1 - visible);
       box.style.setProperty('--map-aspect', String(opts.crop.aspect));
       img.style.setProperty('--map-pos-y', (visible < 1 ? top / (1 - visible) * 100 : 50) + '%');
-    } else { visible = 1; top = 0; }
+    } else if (fillActive() && wrapEl && box.clientWidth && wrapEl.clientHeight) {
+      // доступная высота — у обёртки (она тянется на высоту колонки), а не у самой карты: так нет качелей «растянул — сжал»
+      const W = box.clientWidth, H = wrapEl.clientHeight - (legendEl ? legendEl.offsetHeight + 8 : 0);
+      const ba = W / Math.max(1, H);
+      const pts = [...(data.branches || []), ...(staff ? data.sites || [] : [])].filter(p => mapInside(p.lat, p.lng, F)).map(p => mapXY(p.lat, p.lng, F));
+      const xs = pts.map(p => p[0] / 100), need = xs.length ? Math.min(1, Math.max(...xs) - Math.min(...xs) + 0.06) : 0;   // поля — по полбулавки
+      const tooTall = ba / F.aspect < need - 0.01;   // окно уже разброса меток — карту не тянем, метки дороже ровного края (допуск — округление)
+      box.classList.toggle('nofill', tooTall);
+      if (tooTall) { visible = 1; top = 0; img.style.removeProperty('--map-pos-x'); img.style.removeProperty('--map-pos-y'); return; }
+      if (ba > F.aspect) { visible = F.aspect / ba; top = Math.max(0, Math.min(1 - visible, spanMid(pts.map(p => p[1] / 100)) - visible / 2)); }
+      else { visible = 1; top = 0; visX = ba / F.aspect; left = Math.max(0, Math.min(1 - visX, spanMid(pts.map(p => p[0] / 100)) - visX / 2)); }
+      img.style.setProperty('--map-pos-x', (visX < 1 ? left / (1 - visX) * 100 : 50) + '%');
+      img.style.setProperty('--map-pos-y', (visible < 1 ? top / (1 - visible) * 100 : 50) + '%');
+    } else { visible = 1; top = 0; img.style.removeProperty('--map-pos-x'); if (opts.fill) img.style.removeProperty('--map-pos-y'); }
   }
   layout();
-  const place = (el, lat, lng, clamp) => {   // → [x, y] в процентах контейнера; за пределами полосы — класс off (подписи стран — к краю)
-    const [x, yi] = mapXY(lat, lng, F);
-    let y = (yi - top * 100) / visible;
-    if (clamp) y = Math.max(6, Math.min(92, y));
+  const place = (el, lat, lng, clamp) => {   // → [x, y] в процентах контейнера; за пределами окна — класс off (подписи стран — к краю)
+    const [xi, yi] = mapXY(lat, lng, F);
+    let x = (xi - left * 100) / visX, y = (yi - top * 100) / visible;
+    if (clamp) { y = Math.max(6, Math.min(92, y)); x = Math.max(10, Math.min(90, x)); }
     el.style.left = x + '%'; el.style.top = y + '%';
-    el.classList.toggle('off', !clamp && (y < 3 || y > 99));
+    el.classList.toggle('off', !clamp && (y < 3 || y > 99 || x < 1 || x > 99));
     el.dataset.x = x.toFixed(2); el.dataset.y = y.toFixed(2);
     return [x, y];
   };
@@ -145,8 +164,8 @@ function mapView(data, opts) {
   scene.append(layerCountries, layerSites, layerBranches);
   // пересчёт при любом изменении размеров: карта вставлена или изменилась, подпись стала шире (догрузился шрифт — так «Павлодар»
   // и обрезался у владельца), окно повернули; один раз за кадр
-  let fitQueued = false;
-  const refit = () => { if (fitQueued) return; fitQueued = true; requestAnimationFrame(() => { fitQueued = false; fitLabels(); }); };
+  let fitQueued = false;   // в режиме fill размер блока меняет и окно карты — пересчёт меток целиком
+  const refit = () => { if (fitQueued) return; fitQueued = true; requestAnimationFrame(() => { fitQueued = false; if (opts.fill) relayout(); else fitLabels(); }); };
   if (window.ResizeObserver) {
     const ro = new ResizeObserver(refit);
     ro.observe(box);
@@ -154,9 +173,10 @@ function mapView(data, opts) {
   }
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => fitLabels());   // шрифт догрузился — подписи шире
   window.addEventListener('resize', refit);
-  const wrap = h('div', { class: 'mapwrap' }, box);
+  const wrap = h('div', { class: 'mapwrap' + (opts.fill ? ' fill' : '') }, box);
+  wrapEl = wrap;
   if (opts.legend) {
-    wrap.append(h('div', { class: 'row small muted mt8 legend' },
+    wrap.append(legendEl = h('div', { class: 'row small muted mt8 legend' },
       staff ? h('span', { class: 'ict' }, icon('map-pin', { size: 16, fill: true, cls: 'lg-pin m-ok' }), 'просрочек нет') : null,
       staff ? h('span', { class: 'ict' }, icon('map-pin', { size: 16, fill: true, cls: 'lg-pin m-late' }), 'есть просрочки') : h('span', { class: 'ict' }, icon('map-pin', { size: 16, fill: true, cls: 'lg-pin' }), 'офис / производство'),
       staff && (data.unplaced || []).length ? h('span', {}, 'без метки: ' + data.unplaced.map(s => s.city + ' (' + s.total + ')').join(', ') + ' — точку ставит администратор') : null,
@@ -168,5 +188,13 @@ function mapView(data, opts) {
   wrap.select = branchId => { for (const m of layerBranches.children) m.classList.toggle('sel', branchId !== null && String(m.dataset.branch) === String(branchId)); };
   wrap.pos = branchId => { const m = layerBranches.querySelector('[data-branch="' + branchId + '"]'); return m ? { x: Number(m.dataset.x), y: Number(m.dataset.y) } : null; };
   wrap.relayout = relayout;
+  // fill: наибольшая высота блока карты, при которой все метки ещё в окне (для сводки: длиннее — прокрутка внутри сводки)
+  wrap.fillLimit = () => {
+    const xs = [...(data.branches || []), ...(staff ? data.sites || [] : [])].filter(p => mapInside(p.lat, p.lng, F)).map(p => mapXY(p.lat, p.lng, F)[0] / 100);
+    const need = xs.length ? Math.min(1, Math.max(...xs) - Math.min(...xs) + 0.06) : 1;
+    return box.clientWidth / (F.aspect * need);
+  };
+  // насколько доступная высота (обёртка тянется на высоту колонки) больше этой наибольшей: > 0 — колонку надо укоротить
+  wrap.fillExcess = () => wrapEl.clientHeight - (legendEl ? legendEl.offsetHeight + 8 : 0) - wrap.fillLimit();
   return wrap;
 }

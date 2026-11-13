@@ -5,6 +5,8 @@
 from __future__ import annotations
 
 import re
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from . import db
 
@@ -160,3 +162,22 @@ def remove_point(name: str) -> None:
     pts = manual_points()
     pts.pop(norm(name), None)
     db.set_setting(POINTS_KEY, pts)
+
+
+def company_tz() -> str:
+    """Пояс головного офиса (демо — Омск, Asia/Omsk) — серверное «местное время» компании: границы «Сегодня», даты на карточках."""
+    row = db.one("SELECT city, timezone FROM branches WHERE is_hq=1 ORDER BY id LIMIT 1")
+    return (row["timezone"] or timezone_for(row["city"])) if row else DEFAULT_TZ
+
+
+def user_tz(user: dict | None) -> str:
+    """Пояс города пользователя (филиал); нет филиала или объект — пояс головного офиса."""
+    row = db.one("SELECT city, timezone, kind FROM branches WHERE id=?", (user.get("branch_id"),)) if user and user.get("branch_id") else None
+    if row and row["kind"] != "field":
+        return row["timezone"] or timezone_for(row["city"])
+    return company_tz()
+
+
+def local(dt: datetime, tz: str | None = None) -> datetime:
+    """UTC → местное время по зоне IANA (по умолчанию — головной офис): переходы и смещения — из базы часовых поясов, не из кода."""
+    return dt.astimezone(ZoneInfo(tz or company_tz()))

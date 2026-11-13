@@ -430,70 +430,79 @@ async function summary() {
   const [d, ds, md] = await Promise.all([API.get('/api/panel/summary?days=30'), API.get('/api/panel/director-summary').catch(() => null), API.get('/api/panel/map').catch(() => null)]);
   const l = (ds && ds.lines) || {};
   const sumBlock = ds ? summaryBlockPanel(ds) : null;
-  MAPVIEW = md ? mapView(md, { staff: true, legend: true, frame: MAP_DIRECTOR, onBranch: b => { S.filters = { branch_id: b.id }; S.tab = 'open'; location.hash = '#/queue'; }, onSite: s => { S.filters = { site: s.city }; S.tab = 'open'; location.hash = '#/queue'; } }) : null;
+  MAPVIEW = md ? mapView(md, { staff: true, legend: true, frame: MAP_DIRECTOR, fill: true, onBranch: b => { S.filters = { branch_id: b.id }; S.tab = 'open'; location.hash = '#/queue'; }, onSite: s => { S.filters = { site: s.city }; S.tab = 'open'; location.hash = '#/queue'; } }) : null;
   const mapCard = h('div', { class: 'card map-card' }, h('div', { class: 'row' }, h('b', {}, 'Карта'), h('span', { class: 'hint' }, 'клик по городу — очередь филиала')), MAPVIEW || h('div', { class: 'muted small' }, 'карта недоступна'));
   const pct = x => x === null || x === undefined ? '—' : Math.round(x * 100) + ' %';
   const attention = h('div', { class: 'card attention' }, attentionLine([[d.overdue, '#/queue?overdue=1', 'просрочено'], [d.unassigned, '#/queue?unassigned=1', 'без ответственного'], [l.decisions_over_threshold, '#/decisions', 'ждут решения'],
     [l.no_news, '#/queue?status=in_progress', 'без новостей'], [l.urgent_open, '#/queue?open=1&urgency=now', 'мешают работать'], [l.tasks_overdue, '#/meetings?overdue=1', 'поручения просрочены']]));
-  const kpis = h('div', { class: 'kpis' },
+  // правая колонка (ТЗ владельца 13.11, второе): сводка → четыре плитки сеткой 2×2 → часы по городам → «По статусам» полосой; под ними
+  // «Команда»; все карточки одного вида — белые, одна тень, без цветных кромок, заголовок — короткая красная черта (.lbl)
+  const kpis = h('div', { class: 'kpis kpis-2x2' },
     h('div', { class: 'kpi' }, h('b', {}, String(d.open)), h('span', {}, 'открытых обращений', helpBtn('kpi_open'))),
     h('div', { class: 'kpi' }, h('b', {}, pct(d.considered_share)), h('span', {}, 'доля рассмотренных', helpBtn('kpi_considered'))),
     h('div', { class: 'kpi' }, h('b', {}, fmtHours(d.avg_first_response_hours)), h('span', {}, 'среднее время первого ответа', helpBtn('kpi_first_response'))),
     h('div', { class: 'kpi' }, h('b', {}, String(d.done_period)), h('span', {}, 'реализовано за 30 дней', helpBtn('kpi_done_period'))));
-  // «По типам / По статусам» — чипы крупнее (×1,25), под ними часы по городам филиалов (ТЗ владельца 13.11, п. 3)
   const clock = cityClock(md, { userId: ME.id });
-  const byType = h('div', { class: 'card stats-card' }, h('div', { class: 'sum-chips' },
-    h('div', {}, h('b', {}, 'По типам'), h('div', { class: 'row mt8' }, Object.entries(d.by_type).filter(([, n]) => n).map(([t, n]) => h('span', { class: 'badge tag-type' }, TYPES[t] + ': ' + n)))),
-    h('div', {}, h('b', {}, 'По статусам'), h('div', { class: 'row mt8' }, STATUS_GROUPS.map(g => [g, g.value.split(',').reduce((n, s) => n + (d.by_status[s] || 0), 0)]).filter(([, n]) => n)
-      .map(([g, n]) => h('span', { class: 'badge ' + g.cls }, g.label + ': ' + n))))),
-    clock ? h('div', { class: 'clock-wrap' }, clock) : null);
-  const branches = h('div', { class: 'card' }, h('b', {}, 'Филиалы', helpBtn('by_branch')), h('div', { class: 'hint' }, 'Количество обращений филиал не ранжирует — лига по качеству во вкладке «Лига».'),
+  const clockCard = clock ? h('div', { class: 'card clock-card' }, clock) : null;
+  const statusCard = h('div', { class: 'card status-card' }, h('div', { class: 'lbl' }, 'По статусам'),
+    h('div', { class: 'status-strip' }, STATUS_GROUPS.map(g => [g, g.value.split(',').reduce((n, s) => n + (d.by_status[s] || 0), 0)]).filter(([, n]) => n)
+      .map(([g, n]) => h('span', { class: 'badge ' + g.cls }, g.label + ': ' + n))));
+  const byType = h('div', { class: 'card types-card' }, h('div', { class: 'lbl' }, 'По типам'),   // чипы ×1,25, как было
+    h('div', { class: 'row mt8 big-chips' }, Object.entries(d.by_type).filter(([, n]) => n).map(([t, n]) => h('span', { class: 'badge tag-type' }, TYPES[t] + ': ' + n))));
+  const branches = h('div', { class: 'card' }, h('div', { class: 'row' }, h('div', { class: 'lbl' }, 'Филиалы'), helpBtn('by_branch')), h('div', { class: 'hint' }, 'Количество обращений филиал не ранжирует — лига по качеству во вкладке «Лига».'),
     h('table', { class: 'tbl mt8 by-branch' }, h('thead', {}, h('tr', {}, ['Филиал', 'Всего', 'Открыто', 'Просрочено', 'Рассмотрено', 'Первый ответ', 'Реализовано', 'Главная тема'].map(t => h('th', {}, t)))),
       h('tbody', {}, d.by_branch.map(b => h('tr', { onclick: () => { S.filters = b.site ? { site: b.site } : { branch_id: b.id }; S.tab = 'open'; location.hash = '#/queue'; } },
         h('td', {}, b.kind === 'field' ? (b.site ? b.site + ' · объект' : 'объект без города') : b.city || brCity(b.name)), h('td', {}, b.total), h('td', {}, b.open), h('td', {}, b.overdue ? h('span', {}, h('span', { class: 'dot-overdue' }), String(b.overdue)) : ''),
         h('td', {}, pct(b.considered_share)), h('td', {}, fmtHours(b.avg_first_response_hours)), h('td', {}, b.done_total), h('td', { class: 'small' }, b.top_category || '—'))))));
-  const clustersBox = h('div', { class: 'card' }, h('b', {}, 'Повторяющиеся темы'), h('div', { class: 'hint' }, 'Считаем…'));
+  const clustersBox = h('div', { class: 'card' }, h('div', { class: 'lbl' }, 'Повторяющиеся темы'), h('div', { class: 'hint' }, 'Считаем…'));
   API.get('/api/panel/clusters').then(c => {
-    clustersBox.replaceChildren(h('div', { class: 'row' }, h('b', {}, 'Повторяющиеся темы', helpBtn('repeated_topics'))),
+    clustersBox.replaceChildren(h('div', { class: 'row' }, h('div', { class: 'lbl' }, 'Повторяющиеся темы'), helpBtn('repeated_topics')),
       h('div', { class: 'hint' }, 'Группы из двух и более открытых обращений об одном и том же. Открытых всего: ' + c.open_total + '.'),
       c.clusters.length ? h('div', { class: 'mt8' }, c.clusters.map(k => h('div', { class: 'cluster' },
         h('div', { class: 'row' }, h('b', {}, plural(k.size, 'обращение', 'обращения', 'обращений')), k.category ? tag('tag-type', k.category) : null, k.supports ? h('span', { class: 'small muted' }, iconText('thumbs-up', String(k.supports))) : null, h('div', { class: 'spacer' }), h('span', { class: 'small muted' }, k.branches.join(' · '))),
         h('div', { class: 'small' }, k.label),
         h('div', { class: 'small nums mt8' }, k.items.map(i => h('a', { href: '#/appeal/' + i.id }, i.number)))))) : h('div', { class: 'muted small mt8' }, 'Повторов не найдено'));
-  }).catch(e => clustersBox.replaceChildren(h('b', {}, 'Повторяющиеся темы'), h('div', { class: 'card-bad small' }, e.message)));
-  const cats = h('div', { class: 'card' }, h('b', {}, 'Открытые обращения по категориям'),
-    h('div', { class: 'list mt8' }, d.top_categories.filter(c => c.open).map(c => h('div', { class: 'item', onclick: () => { const id = (DICTS.categories.find(x => x.name === c.category) || {}).id; S.filters = { category_id: id }; S.tab = 'open'; location.hash = '#/queue'; } }, h('div', { class: 'row' }, c.category, h('div', { class: 'spacer' }), h('b', {}, String(c.open)))))));
+  }).catch(e => clustersBox.replaceChildren(h('div', { class: 'lbl' }, 'Повторяющиеся темы'), h('div', { class: 'card-bad small' }, e.message)));
   const more = ME.role !== 'responsible' ? menuButton([
     ['Проверить просрочки сейчас', async () => { const r = await API.post('/api/panel/check-overdue'); toast(r.escalated.length ? 'Эскалировано: ' + r.escalated.join(', ') : 'Новых просрочек нет'); summary(); }],
     ds && ds.engine === 'openai' ? ['Показать сводку шаблоном без ИИ', async () => { const t = await API.get('/api/panel/director-summary?engine=template'); const box = document.querySelector('.summary-ai'); if (box) box.replaceWith(summaryBlockPanel(t)); }] : null]) : null;
-  const command = ME.role === 'director' ? commandPanel({ decisionsHref: '#/decisions', compact: true }) : null;   // команды — только директору (F-21)
-  // раскладка (ТЗ владельца 13.11, п. 2): на всю ширину; сверху карта (~60 %) и справа сводка с командой, ниже на всю ширину —
-  // «Требуют внимания», плитки, «По типам / По статусам» с часами, «Филиалы»; до 1200 px колонки друг под другом (CSS .sum-top)
-  const side = h('div', { class: 'sum-side' }, sumBlock, command);
+  const command = ME.role === 'director' ? commandPanel({ decisionsHref: '#/decisions' }) : null;   // команды — только директору (F-21)
+  // раскладка: сверху карта (~60 %) и правая колонка той же высоты — выше колонка, значит, карта растягивается (mapView fill);
+  // под ними «Команда» строкой на всю ширину (в колонке она тянула бы карту вдвое и сжимала её до обрезанных меток, а под колонкой
+  // одной слева оставалась бы пустота); ниже на всю ширину — «Требуют внимания», «По типам», «Филиалы», «Повторяющиеся темы»
+  const side = h('div', { class: 'sum-side' }, sumBlock, kpis, clockCard, statusCard);
   root.replaceChildren(h('div', { class: 'wrap wrap-full sum-page' }, h('div', { class: 'row sum-head' }, h('div', { class: 'h1' }, 'Сводка'), h('div', { class: 'spacer' }), more),
-    h('div', { class: 'sum-top' }, mapCard, side), attention, kpis, byType, branches, clustersBox, cats));
-  fitSummarySide(mapCard, side);
+    h('div', { class: 'sum-top' }, mapCard, side), command, attention, byType, branches, clustersBox));
+  if (MAPVIEW) capSummary(mapCard, side);
 }
 
-// правая колонка — по высоте карты: текст сводки длиннее — прокрутка внутри карточки, карта не растягивается (ТЗ 13.11, п. 2)
-const SUM_WIDE = window.matchMedia('(min-width: 1200px)');
-let SUM_FIT = null;
-SUM_WIDE.addEventListener('change', () => { if (SUM_FIT) SUM_FIT(); });
-function fitSummarySide(mapCard, side) {
+// колонка рядом с картой (от 1440 px) выше, чем карта может растянуться без потери меток (длинная сводка ИИ), — прокрутка внутри
+// «Сводки для директора» ровно на излишек; всё влезает — без прокрутки (ТЗ владельца 13.11)
+const SUM_SIDE = window.matchMedia('(min-width: 1440px)');
+let SUM_CAP = null;
+SUM_SIDE.addEventListener('change', () => { if (SUM_CAP) SUM_CAP(); });
+function capSummary(mapCard, side) {
+  let busy = false;
   const fit = () => {
-    const card = side.querySelector('.summary-ai');   // карточку могут подменить («шаблоном без ИИ») — ищем каждый раз
-    if (!card) return;
-    const fade = () => card.classList.toggle('more-down', card.scrollHeight - card.scrollTop - card.clientHeight > 4);   // текст продолжается ниже
-    if (!card.dataset.fade) { card.dataset.fade = '1'; card.addEventListener('scroll', fade, { passive: true }); }
-    if (!SUM_WIDE.matches) { card.style.maxHeight = ''; fade(); return; }
-    const rest = [...side.children].filter(x => x !== card).reduce((n, x) => n + x.getBoundingClientRect().height, 0);
-    const gap = parseFloat(getComputedStyle(side).rowGap) || 0;
-    card.style.maxHeight = Math.max(220, Math.floor(mapCard.getBoundingClientRect().height - rest - gap * (side.children.length - 1))) + 'px';
-    fade();
+    const card = side.querySelector('.summary-ai');
+    if (!card || busy || !side.isConnected) return;
+    busy = true;
+    card.style.maxHeight = ''; card.classList.remove('capped', 'more-down');
+    if (SUM_SIDE.matches) {
+      const extra = MAPVIEW.fillExcess();   // замер — без ограничения, колонка во всю свою высоту
+      if (extra > 1) {
+        card.style.maxHeight = Math.max(180, Math.floor(card.getBoundingClientRect().height - extra - 2)) + 'px';
+        card.classList.add('capped');
+        const fade = () => card.classList.toggle('more-down', card.scrollHeight - card.scrollTop - card.clientHeight > 4);
+        if (!card.dataset.fade) { card.dataset.fade = '1'; card.addEventListener('scroll', fade, { passive: true }); }
+        fade();
+      }
+    }
+    busy = false;
   };
-  if (window.ResizeObserver) { const ro = new ResizeObserver(fit); ro.observe(mapCard); ro.observe(side); for (const x of side.children) ro.observe(x); }
-  SUM_FIT = fit;
-  fit();
+  if (window.ResizeObserver) new ResizeObserver(() => requestAnimationFrame(fit)).observe(mapCard);
+  SUM_CAP = fit;
+  requestAnimationFrame(fit);
 }
 
 function summaryBlockPanel(d) {

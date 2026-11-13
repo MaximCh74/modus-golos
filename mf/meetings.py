@@ -12,7 +12,7 @@ from pathlib import Path
 
 from fastapi import HTTPException
 
-from . import appeals, db, realtime
+from . import appeals, db, geo, realtime
 from .ai import fallback, llm, names, stt
 from . import config
 from .integrations import bitrix
@@ -177,7 +177,7 @@ def list_for(user: dict, overdue_only: bool = False) -> list[dict]:
 
 def create(user: dict, title: str | None, *, transcript: str | None = None, audio_path: Path | None = None,
            duration_sec: int | None = None) -> int:
-    title = (title or "").strip() or f"Планёрка {db.now().strftime('%d.%m.%Y')}"
+    title = (title or "").strip() or f"Планёрка {geo.local(db.now()).strftime('%d.%m.%Y')}"   # дата — по местному времени, не по UTC
     mid = db.ex("""INSERT INTO meetings(title, created_by, branch_id, recorded_at, duration_sec, transcript, status, stage, audio_path, created_at)
                    VALUES(?,?,?,?,?,?,'processing',?,?,?)""",
                 (title, user["id"], user["branch_id"], db.now_iso(), duration_sec, (transcript or "").strip() or None,

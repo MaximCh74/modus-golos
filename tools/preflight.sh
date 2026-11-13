@@ -8,6 +8,7 @@ URL="${MF_LOCAL_URL:-http://127.0.0.1:8070}"
 PUB="${MF_PUBLIC_URL:-$(grep -E '^MF_PUBLIC_URL=' .env 2>/dev/null | cut -d= -f2)}"
 ok() { printf "  ОК        %s\n" "$1"; }
 bad() { printf "  ПРОБЛЕМА  %s\n            → %s\n" "$1" "$2"; FAIL=1; }
+warn() { printf "  ВНИМАНИЕ  %s\n            → %s\n" "$1" "$2"; }   # не валит проверку, но показать до выхода
 FAIL=0
 if [ "${1:-}" = "--no-key" ]; then
   echo "Запасной режим без ключа: прогон сценария демо на заскриптованных разборах"
@@ -38,5 +39,9 @@ else bad "сервер не ответил на /api/admin/preflight" "смот�
 rm -f "$CJ"
 free_gb=$(df -BG --output=avail "$(pwd)" | tail -1 | tr -dc '0-9'); if [ "${free_gb:-0}" -ge 5 ]; then ok "свободно на диске: ${free_gb} ГБ"; else bad "мало места: ${free_gb} ГБ" "освободить место"; fi
 if [ -d /sys/class/power_supply/BAT0 ]; then cap=$(cat /sys/class/power_supply/BAT0/capacity 2>/dev/null); st=$(cat /sys/class/power_supply/BAT0/status 2>/dev/null); if [ "${cap:-0}" -ge 40 ] || [ "$st" = "Charging" ] || [ "$st" = "Full" ]; then ok "батарея ${cap}% ($st)"; else bad "батарея ${cap}% ($st)" "подключить зарядку"; fi; fi
+# пояс ноутбука (ТЗ владельца 13.11): панель показывает время в поясе браузера — на проекторе нужен местный пояс (Казахстан +5, Омск +6)
+tzname=$(timedatectl show -p Timezone --value 2>/dev/null || date +%Z); tzoff=$(date +%z)
+case "$tzoff" in +0400|+0500|+0600) ok "часовой пояс ноутбука: $tzname ($tzoff)";;
+  *) warn "часовой пояс ноутбука: $tzname ($tzoff) — время в панели будет по нему, не по Казахстану" "Настройки → Дата и время → Asia/Almaty (+5) или Asia/Omsk (+6); телефоны жюри покажут своё местное";; esac
 if [ $FAIL = 0 ]; then echo "ИТОГ: всё готово"; else echo "ИТОГ: есть проблемы — см. выше"; fi
 exit $FAIL

@@ -48,7 +48,7 @@ def facts(days: int = 7) -> dict:
 
 
 def greeting(user: dict) -> str:
-    hour = (db.now() + timedelta(hours=int(db.setting("tz_offset_hours", 5) or 5))).hour   # Казахстан/Омск: UTC+5…+6
+    hour = geo.local(db.now(), geo.user_tz(user)).hour   # по поясу города пользователя: Омск +6, Тюмень +5, Самара +4, Казахстан +5
     word = "Доброе утро" if 5 <= hour < 12 else "Добрый день" if hour < 18 else "Добрый вечер"
     from . import auth
     return f"{word}, {auth.display_name(user)}."

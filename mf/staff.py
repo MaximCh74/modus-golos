@@ -21,7 +21,7 @@ from pathlib import Path
 
 from fastapi import HTTPException
 
-from . import db
+from . import db, geo
 from .config import ROOT
 
 DEFAULT_INVITE_DAYS = 14
@@ -445,8 +445,7 @@ def local_date(iso: str | None) -> str:
     dt = db.parse(iso)
     if not dt:
         return ""
-    dt = dt + timedelta(hours=int(db.setting("tz_offset_hours", 5) or 5))
-    return dt.strftime("%d.%m.%Y")
+    return geo.local(dt).strftime("%d.%m.%Y")   # дата по поясу головного офиса
 
 
 def cards_pdf(invites: list[dict], base: str) -> bytes:

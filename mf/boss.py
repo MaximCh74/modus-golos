@@ -14,7 +14,7 @@ from datetime import timedelta
 
 from fastapi import HTTPException
 
-from . import appeals, auth, commands, db, director, meetings
+from . import appeals, auth, commands, db, director, geo, meetings
 from .ai import fallback, llm, similar
 
 log = logging.getLogger("mf.boss")
@@ -38,11 +38,12 @@ _ANSWERS: dict[str, dict] = {}
 # ---------- период ----------
 
 def _offset() -> timedelta:
-    return timedelta(hours=int(db.setting("tz_offset_hours", 5) or 5))
+    """Смещение местного времени головного офиса (директор — в Омске, +6) — из зоны IANA на текущий момент, не константой."""
+    return geo.local(db.now()).utcoffset()
 
 
 def period_since(period: str) -> str:
-    """«Сегодня» — с местной полуночи (tz_offset_hours), «неделя» — последние 7 суток, «месяц» — последние 30 суток. ISO в UTC для сравнения с колонками базы."""
+    """«Сегодня» — с местной полуночи (пояс головного офиса), «неделя» — последние 7 суток, «месяц» — последние 30 суток. ISO в UTC для сравнения с колонками базы."""
     now = db.now()
     if period == "today":
         local_midnight = (now + _offset()).replace(hour=0, minute=0, second=0, microsecond=0)

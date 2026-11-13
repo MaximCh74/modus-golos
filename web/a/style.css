@@ -331,7 +331,6 @@ a.pts:hover { text-decoration: none; }
 .ulink { text-decoration: none; color: var(--ink); gap: 8px; }
 .ulink:hover span:last-child { text-decoration: underline; }
 .brief b { color: var(--navy); }
-.summary-ai { border-left: 4px solid var(--navy); }
 .summary-ai p { margin: 6px 0; font-size: 16px; line-height: 1.5; }
 .summary-ai a { color: var(--ink); text-decoration: none; border-bottom: 1px dashed var(--line); }
 .summary-ai a:hover { color: var(--navy); border-bottom-color: var(--navy); }
@@ -364,7 +363,6 @@ tr.muted td { opacity: .6; }
 .ic { vertical-align: -3px; flex: none; }
 .ict { display: inline-flex; align-items: center; gap: 6px; }
 .btn .ic, .btn .ict { pointer-events: none; }
-.command { border-left: 4px solid var(--navy); }
 .command .cmd-text { min-height: 44px; }
 .cmd-rec { padding: 10px 0; border-bottom: 1px dashed var(--line-soft); }
 .cmd-rec:last-of-type { border-bottom: 0; }
@@ -375,7 +373,7 @@ tr.muted td { opacity: .6; }
 .map { position: relative; width: 100%; aspect-ratio: var(--map-ratio, 900 / 579); border-radius: var(--radius-lg); overflow: hidden; border: 1px solid var(--line-soft); background: var(--map-water); }
 .map.cropped { aspect-ratio: var(--map-aspect, 2.05); }
 .map-scene { position: absolute; inset: 0; transform-origin: 50% 50%; }
-.map-bg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; object-fit: cover; object-position: 50% var(--map-pos-y, 50%); }
+.map-bg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; object-fit: cover; object-position: var(--map-pos-x, 50%) var(--map-pos-y, 50%); }
 .map-layer { position: absolute; inset: 0; pointer-events: none; }   /* слои не перехватывают клики: метка объекта под слоем городов кликалась впустую (13.11) */
 .map-layer .marker { pointer-events: auto; }
 /* живая карта на главной (замечание владельца 12.11): очень медленный лёгкий наезд/отъезд всей сцены (метки и карточка едут вместе с
@@ -1013,45 +1011,57 @@ a.award-card:hover { text-decoration: none; border-color: var(--tint-line); }
   .grid2.form-cols { grid-template-columns: 1fr; }
 }
 
-/* «Сводка» директора (ТЗ владельца 13.11, п. 2–4): на всю ширину; сверху карта (~60 %) и справа сводка с командой — по высоте карты,
-   длинный текст сводки прокручивается внутри карточки (max-height ставит fitSummarySide в panel.js); ниже на всю ширину — «Требуют
-   внимания», плитки, «По типам / По статусам» с часами, «Филиалы». До 1200 px колонки встают друг под друга: карта, сводка, остальное */
+/* «Сводка» директора (ТЗ владельца 13.11, второе): на всю ширину; сверху карта (~60 %) и правая колонка той же высоты — сводка, четыре
+   плитки 2×2, часы, «По статусам» полосой, «Команда»; колонка выше карты — карта тянется (mapView fill, окно по меткам). Ниже на всю
+   ширину — «Требуют внимания», «По типам», «Филиалы», «Повторяющиеся темы». Все карточки одного вида: белые, одна тень, без цветных кромок;
+   заголовок — короткая красная черта (.lbl). До 1200 px — друг под другом: карта, колонка, остальное */
 .wrap-full { max-width: 2400px; padding: var(--s3); }
 .sum-head { margin-bottom: var(--s1); }
-.sum-page .kpis { margin-bottom: var(--s2); }
 .sum-top { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: var(--s2); align-items: stretch; margin-bottom: var(--s2); }
-.sum-top > .card, .sum-side > .card { margin-bottom: 0; }
-.sum-top > .map-card { align-self: start; }   /* карта — по своей высоте; правая колонка тянется до неё, а не наоборот */
-.sum-side { display: flex; flex-direction: column; gap: var(--s2); min-width: 0; }
-.sum-side .summary-ai { flex: 1 1 auto; min-height: 0; overflow: auto; overscroll-behavior: contain; }
-.sum-side .summary-ai > .row:first-child { position: sticky; top: calc(-1 * var(--s3)); z-index: 1; margin-top: calc(-1 * var(--s3)); padding: var(--s3) 0 6px; background: var(--card); }
-.sum-side .summary-ai.more-down::after { content: ''; position: sticky; bottom: calc(-1 * var(--s3)); display: block; height: 40px; margin: -40px calc(-1 * var(--s3)) calc(-1 * var(--s3)); background: linear-gradient(to bottom, transparent, var(--card) 85%); pointer-events: none; }
-.sum-side .command { flex: none; }
+.sum-top > .card, .sum-side > .card, .sum-side > .kpis { margin: 0; }
+.sum-side { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.sum-side .card { padding: 18px 20px; }
+.sum-side .summary-ai .sum-list, .sum-side .summary-ai p { font-size: 15px; }
+.sum-top > .map-card { display: flex; flex-direction: column; min-height: 440px; }
+.map-card .mapwrap.fill { display: flex; flex-direction: column; flex: 1 1 0; min-height: 0; margin-top: 8px; }
+.map.fill { flex: 1 1 0; min-height: 0; aspect-ratio: auto; }
+.map.fill.nofill { flex: none; aspect-ratio: var(--map-ratio, 900 / 579); }
+/* сводка длиннее, чем карта может растянуться без потери меток, — прокрутка внутри, шапка на месте, снизу затухание */
+.sum-side .summary-ai.capped { overflow: auto; overscroll-behavior: contain; }
+.sum-side .summary-ai.capped > .row:first-child { position: sticky; top: -18px; z-index: 1; margin-top: -18px; padding: 18px 0 6px; background: var(--card); }
+.sum-side .summary-ai.capped.more-down::after { content: ''; position: sticky; bottom: -18px; display: block; height: 36px; margin: -36px -20px -18px; background: linear-gradient(to bottom, transparent, var(--card) 85%); pointer-events: none; }
+@media (max-width: 1439px) {   /* уже 1440 колонка рядом с картой выходит выше, чем позволяет разброс меток, — друг под другом */
+  .sum-top { grid-template-columns: minmax(0, 1fr); }
+  .sum-top > .map-card { display: block; min-height: 0; }
+  .map-card .mapwrap.fill { display: block; }
+  .map.fill { flex: none; height: min(640px, calc((100vw - 98px) / 1.4)); }   /* широкая карта не выше 640 px: окно по меткам сверху-снизу */
+  .kpis-2x2 { grid-template-columns: repeat(4, minmax(0, 1fr)); }   /* на всю ширину — четыре в ряд */
+}
+@media (max-width: 899px) {
+  .map.fill { height: auto; aspect-ratio: var(--map-ratio, 900 / 579); }
+  .kpis-2x2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 480px) { .wrap-full { padding: var(--s2) 12px; } .sum-side .card { padding: 16px; } }
 .sum-acts { gap: 8px; }
 @media (min-width: 481px) { .sum-acts { flex-wrap: nowrap; } }
-@media (max-width: 1599px) {   /* узкая правая колонка: поле команды на всю строку, микрофон и «Выполнить» под ним */
-  .sum-side .cmd-row { flex-wrap: wrap; }
-  .sum-side .cmd-row > .spacer { flex: 1 1 100%; }
-}
-@media (max-width: 1199px) {
-  .sum-top { grid-template-columns: minmax(0, 1fr); }
-  .sum-side .summary-ai { overflow: visible; }
-  .sum-side .summary-ai > .row:first-child { position: static; margin-top: 0; padding: 0; }
-}
-@media (max-width: 480px) { .wrap-full { padding: var(--s2) 12px; } }
-/* чипы «По типам / По статусам» — в 1,25 раза крупнее обычных (15 px вместо 12, отступы 3/13 вместо 2/10), цвета статусов прежние */
-.sum-chips { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: var(--s2) var(--s4); }
-.sum-chips .row { gap: 8px; }
-.sum-chips .badge { font-size: 15px; padding: 3px 13px; }
-/* часы по городам: крупно ЧЧ:ММ, секунды мельче рядом, разница с устройством; ниже день недели и дата; ниже — города чипами */
-.clock-wrap { margin-top: var(--s3); padding-top: var(--s3); border-top: 1px solid var(--line-soft); }
+
+/* четыре плитки сеткой 2×2, компактно, с «?» */
+.kpis-2x2 { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.kpis-2x2 .kpi { padding: 12px 16px; }
+.kpis-2x2 .kpi b { font-size: 26px; font-weight: var(--w-semi); }
+/* часы: крупно время выбранного города, дата, «±N ч к вашему», ниже чипы городов */
 .clock-face { display: flex; align-items: baseline; gap: 6px var(--s2); flex-wrap: wrap; }
-.clock-time { color: var(--navy); font-size: 52px; line-height: 1; font-weight: var(--w-semi); letter-spacing: -.01em; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.clock-ss { font-size: 24px; color: var(--muted); font-weight: var(--w-body); margin-left: 3px; letter-spacing: 0; }
+.clock-time { color: var(--navy); font-size: 46px; line-height: 1; font-weight: var(--w-semi); letter-spacing: -.01em; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.clock-ss { font-size: 22px; color: var(--muted); font-weight: var(--w-body); margin-left: 3px; letter-spacing: 0; }
 .clock-diff { font-size: var(--fs-small); color: var(--muted); white-space: nowrap; }
-.clock-date { margin-top: 8px; font-size: 17px; color: var(--ink); }
-.clock-cities { margin-top: 14px; }
-@media (max-width: 480px) { .clock-time { font-size: 44px; } .clock-ss { font-size: 20px; } }
+.clock-date { margin-top: 6px; font-size: 16px; color: var(--ink); }
+.clock-cities { margin-top: 12px; gap: 6px; }
+.clock-cities .chip { min-height: 34px; padding: 5px 12px; font-size: 13px; }
+@media (max-width: 480px) { .clock-time { font-size: 42px; } .clock-ss { font-size: 19px; } }
+/* «По статусам» — пять чипов полосой; «По типам» — чипы ×1,25 */
+.status-strip { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; }
+.status-strip .badge { padding: 3px 8px; }
+.big-chips .badge { font-size: 15px; padding: 3px 13px; }
 /* объём (п. 4): только в панели — фон на тон темнее, карточкам двухслойная тень и светлая кромка сверху; вложенным — только кромка */
 html.panel-page, html.panel-page body { background: var(--bg-page); }
 html.panel-page .card:not(.card-elevated), html.panel-page .kpi { border-top-color: var(--white); box-shadow: var(--card-hi), var(--shadow-card); }
