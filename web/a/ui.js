@@ -152,6 +152,8 @@ function plural(n, one, few, many) { const m10 = n % 10, m100 = n % 100; return 
 let _cfgP = null;
 function publicConfig() { return _cfgP || (_cfgP = API.get('/api/public/config').catch(() => ({}))); }
 function versionTag() { const s = h('span', { class: 'ver' }); publicConfig().then(c => { if (c && c.version) s.textContent = 'версия ' + c.version; }); return s; }
+// Филиал на экране — только город (замечания владельца 13.11): «Омск — головной офис» → «Омск»; где сервер дал город — берём его.
+function brCity(name) { return name ? String(name).split(' — ')[0] : name; }
 function qs(name) { return new URLSearchParams(location.search).get(name); }
 // подпись + поле; для стилизованных компонентов (pick, personPicker, filePicker) — div, а не label: иначе клик по пункту списка
 // срабатывал бы ещё раз как клик по кнопке списка

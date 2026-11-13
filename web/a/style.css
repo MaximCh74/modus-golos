@@ -469,6 +469,8 @@ tr.muted td { opacity: .6; }
 .chips-active { margin-bottom: 10px; align-items: center; }
 .chips-active .chip { min-height: 32px; padding: 4px 10px; font-weight: var(--w-body); display: inline-flex; align-items: center; gap: 4px; }
 .tbl.queue { table-layout: fixed; }
+@media (min-width: 1100px) { .tbl.meetings { table-layout: fixed; } }   /* «Итог» — вся свободная ширина, статус и поручения справа (13.11) */
+.tbl.meetings th .help-wrap { margin-left: 2px; }
 .tbl.queue th, .tbl.queue td { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 10px 8px; vertical-align: middle; }
 .tbl.queue td:first-child { min-width: 0; }
 .tbl.queue .num { font-weight: var(--w-bold); color: var(--navy); }

@@ -183,7 +183,7 @@ const FILTER_KEYS = ['branch_id', 'department_id', 'category_id', 'status', 'res
 function filterLabel(k) {
   const v = S.filters[k];
   const name = (list, id) => (list.find(x => String(x.id) === String(id)) || {}).name;
-  if (k === 'branch_id') return (DICTS.branches.find(b => String(b.id) === String(v)) || {}).name || 'Филиал';
+  if (k === 'branch_id') { const b = DICTS.branches.find(x => String(x.id) === String(v)) || {}; return b.city || brCity(b.name) || 'Филиал'; }
   if (k === 'department_id') return name(DICTS.departments, v) || 'Подразделение';
   if (k === 'category_id') return name(DICTS.categories, v) || 'Категория';
   if (k === 'responsible_id') return name(DICTS.users || [], v) || 'Ответственный';
@@ -204,7 +204,7 @@ function filtersDrawer() {
   const reset = h('button', { class: 'btn', onclick: () => { for (const k of FILTER_KEYS) delete S.filters[k]; closeOverlay(); queue(); } }, 'Сбросить всё');
   const content = h('div', {},
     h('div', { class: 'row' }, h('div', { class: 'h2' }, 'Фильтры'), h('div', { class: 'spacer' }), h('button', { class: 'btn btn-sm btn-ghost', title: 'Закрыть', onclick: closeOverlay }, icon('x'))),
-    sel('branch_id', DICTS.branches.map(b => ({ value: b.id, label: b.name })), 'Филиал'),
+    sel('branch_id', DICTS.branches.map(b => ({ value: b.id, label: b.city || brCity(b.name) })), 'Филиал'),
     sel('department_id', DICTS.departments.map(d => ({ value: d.id, label: d.name })), 'Подразделение'),
     sel('category_id', DICTS.categories.map(c => ({ value: c.id, label: c.name })), 'Категория'),
     sel('status', STATUS_GROUPS.map(g => ({ value: g.value, label: g.label })), 'Статус'),
@@ -238,7 +238,7 @@ function queueParams() {
 function extraCell(r, code) {
   if (code === 'type') return h('td', {}, r.type_label);
   if (code === 'category') return h('td', { title: r.category || '' }, r.category || h('span', { class: 'muted' }, '—'));
-  if (code === 'branch') return h('td', {}, r.branch || '—');
+  if (code === 'branch') return h('td', {}, r.city || brCity(r.branch) || '—');
   if (code === 'department') return h('td', {}, r.department || '—');
   if (code === 'news') return h('td', {}, r.news_days === null || r.news_days === undefined ? '—' : r.news_days < 1 ? 'сегодня' : Math.floor(r.news_days) + ' дн назад');
   if (code === 'flags') return h('td', {}, r.overdue ? tag('tag-overdue', 'Просрочено') : null, ' ', r.unassigned ? tag('tag-unassigned', 'Без ответственного') : null, ' ', r.author_urgency === 'now' ? tag('tag-flag', 'мешает сейчас') : null);
@@ -392,11 +392,15 @@ async function meetingsList() {
   const overdueOnly = (location.hash.split('?')[1] || '').includes('overdue=1');
   const list = await API.get('/api/meetings' + (overdueOnly ? '?overdue=1' : ''));
   const st = s => s === 'sent' ? 'st-done' : s === 'review' ? 'st-review' : s === 'failed' ? 'st-rejected' : 'st-new';
-  const tbl = h('table', { class: 'tbl' },
-    h('thead', {}, h('tr', {}, ['Дата', 'Совещание', 'Филиал', 'Ведущий', 'Итог', 'Статус', 'Поручения', 'Идеи'].map(t => h('th', {}, t, t === 'Поручения' ? helpBtn('task') : t === 'Идеи' ? helpBtn('idea') : null)))),
+  // 13.11 (п. 2): «?» у каждой колонки; «Итог» забирает свободную ширину, статус и поручения — компактно справа; филиал — только город
+  const cols = [['Дата', 'meeting_date', 112], ['Совещание', 'meeting_title', 170], ['Филиал', 'meeting_branch', 112], ['Ведущий', 'meeting_host', 150],
+    ['Итог', 'meeting_summary', null], ['Статус', 'meeting_status', 128], ['Поручения', 'task', 150], ['Идеи', 'idea', 104]];
+  const tbl = h('table', { class: 'tbl meetings' },
+    h('colgroup', {}, cols.map(([, , w]) => { const c = document.createElement('col'); if (w) c.style.width = w + 'px'; return c; })),
+    h('thead', {}, h('tr', {}, cols.map(([t, key]) => h('th', {}, t, helpBtn(key))))),
     h('tbody', {}, list.map(m => h('tr', { onclick: () => { location.hash = '#/meetings/' + m.id; } },
       h('td', { class: 'small' }, fmtDate(m.created_at)), h('td', {}, h('b', {}, m.title), ' ', aiBadge(m)),
-      h('td', {}, m.branch || '—'), h('td', {}, m.creator || '—'), h('td', { class: 'small' }, m.summary_line || (m.error ? h('span', { class: 'muted' }, m.error) : '—')),
+      h('td', {}, m.city || m.branch || '—'), h('td', {}, m.creator || '—'), h('td', { class: 'small' }, m.summary_line || (m.error ? h('span', { class: 'muted' }, m.error) : '—')),
       h('td', {}, tag(st(m.status), m.status_label)),
       h('td', {}, m.counts.tasks ? 'выполнено ' + m.counts.tasks_done + ' / ' + m.counts.tasks : '', m.counts.tasks_overdue ? h('span', { class: 'mini' }, h('span', { class: 'dot-overdue' }), 'просрочено ' + m.counts.tasks_overdue) : null, m.counts.flags ? h('span', { class: 'mini' }, 'флагов ' + m.counts.flags) : null),
       h('td', {}, [m.counts.ideas_accepted ? 'принято ' + m.counts.ideas_accepted : null, m.counts.ideas_pending ? 'на решении ' + m.counts.ideas_pending : null, m.counts.ideas_rejected ? 'отклонено ' + m.counts.ideas_rejected : null].filter(Boolean).join(' · '))))));
@@ -431,7 +435,7 @@ async function summary() {
   const branches = h('div', { class: 'card' }, h('b', {}, 'Филиалы', helpBtn('by_branch')), h('div', { class: 'hint' }, 'Количество обращений филиал не ранжирует — лига по качеству во вкладке «Лига».'),
     h('table', { class: 'tbl mt8' }, h('thead', {}, h('tr', {}, ['Филиал', 'Всего', 'Открыто', 'Просрочено', 'Рассмотрено', 'Первый ответ', 'Реализовано', 'Главная тема'].map(t => h('th', {}, t)))),
       h('tbody', {}, d.by_branch.map(b => h('tr', { onclick: () => { S.filters = { branch_id: b.id }; S.tab = 'open'; location.hash = '#/queue'; } },
-        h('td', {}, b.name), h('td', {}, b.total), h('td', {}, b.open), h('td', {}, b.overdue ? h('span', {}, h('span', { class: 'dot-overdue' }), String(b.overdue)) : ''),
+        h('td', {}, b.city || brCity(b.name)), h('td', {}, b.total), h('td', {}, b.open), h('td', {}, b.overdue ? h('span', {}, h('span', { class: 'dot-overdue' }), String(b.overdue)) : ''),
         h('td', {}, pct(b.considered_share)), h('td', {}, fmtHours(b.avg_first_response_hours)), h('td', {}, b.done_total), h('td', { class: 'small' }, b.top_category || '—'))))));
   const clustersBox = h('div', { class: 'card' }, h('b', {}, 'Повторяющиеся темы'), h('div', { class: 'hint' }, 'Считаем…'));
   API.get('/api/panel/clusters').then(c => {

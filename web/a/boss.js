@@ -146,7 +146,7 @@
     const news = (a.events || []).filter(e => ['progress', 'comment', 'status_changed', 'discussed_at_meeting', 'director_decided'].includes(e.kind)).slice(-1)[0];
     sheet(a.number, h('div', { class: 'boss-card' }, backBtn(back),
       h('div', { class: 'row' }, badge(a.status), a.overdue ? h('span', { class: 'dot-overdue', title: 'просрочено' }) : null,
-        h('span', { class: 'small muted' }, [a.type_label, a.category, a.branch].filter(Boolean).join(' · '))),
+        h('span', { class: 'small muted' }, [a.type_label, a.category, brCity(a.branch)].filter(Boolean).join(' · '))),
       h('p', { class: 'boss-answer' }, b ? b.gist : a.text),
       b ? h('details', { class: 'small' }, h('summary', {}, 'Полный текст'), h('p', { class: 'pre' }, a.text)) : null,
       h('div', { class: 'small mt8' }, h('b', {}, 'Отвечает: '), a.responsible || 'не назначен'),
@@ -176,7 +176,7 @@
       if (i.source === 'appeal') act(() => API.post('/api/director/appeals/' + i.appeal_id + '/decide', { decision: 'rejected', comment: reason.value }), 'Отклонено');
       else act(() => API.post('/api/director/ideas/' + i.id + '/reject', { reason: reason.value }), 'Отклонено');
     } }, 'Отклонить');
-    row.append(h('div', { class: 'row' }, i.number ? h('b', {}, i.number) : h('b', {}, 'Идея с совещания'), h('span', { class: 'small muted' }, [i.category, i.branch || i.meeting_title].filter(Boolean).join(' · ')), h('div', { class: 'spacer' }),
+    row.append(h('div', { class: 'row' }, i.number ? h('b', {}, i.number) : h('b', {}, 'Идея с совещания'), h('span', { class: 'small muted' }, [i.category, brCity(i.branch) || i.meeting_title].filter(Boolean).join(' · ')), h('div', { class: 'spacer' }),
       h('span', { class: 'small ' + (i.over_threshold ? 'boss-late' : 'muted') }, 'ждёт ' + i.wait_days + ' дн')),
       h('div', { class: 'small' }, i.text), i.request ? h('div', { class: 'small muted' }, 'Что требуется: ' + i.request) : null, comment, reason,
       h('div', { class: 'row mt8' }, accept, reject));
@@ -252,7 +252,7 @@
     });
     sheet('Подтвердите команду', h('div', {}, q, h('p', { class: 'boss-answer' }, p.title),
       h('div', { class: 'hint' }, 'Отправится только после «Отправить». Получателей посчитал сервер.'),
-      h('div', { class: 'boss-list' }, (p.recipients || []).map(rec => h('div', { class: 'boss-item' }, h('div', { class: 'row' }, h('b', {}, rec.name), h('span', { class: 'small muted' }, [rec.position, rec.branch].filter(Boolean).join(' · '))), h('div', { class: 'small muted' }, rec.message)))),
+      h('div', { class: 'boss-list' }, (p.recipients || []).map(rec => h('div', { class: 'boss-item' }, h('div', { class: 'row' }, h('b', {}, rec.name), h('span', { class: 'small muted' }, [rec.position, brCity(rec.branch)].filter(Boolean).join(' · '))), h('div', { class: 'small muted' }, rec.message)))),
       h('div', { class: 'row mt8' }, sendBtn, h('button', { type: 'button', class: 'btn btn-sm', onclick: closeSheet }, 'Отмена'))),
       { mark: aiMark(r.command.engine === 'openai', 'разбор ИИ', 'по ключевым словам (без ИИ)') });
   }

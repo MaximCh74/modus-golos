@@ -167,6 +167,11 @@ def is_overdue(a: dict) -> bool:
     return created + timedelta(hours=a.get("sla") or DEFAULT_SLA) < db.now()
 
 
+def city_of(a: dict) -> str | None:
+    """Филиал на экране — только город («Омск», без «головной офис»; замечания владельца 13.11); объект командировки — его город."""
+    return a.get("site_city") or a.get("branch_city") or a.get("branch")
+
+
 def overdue_days(a: dict) -> int | None:
     """На сколько дней просрочен первый ответ (замечание владельца 13.11: «просрочено на N дн»): неполный день — как день."""
     if not is_overdue(a):
@@ -702,7 +707,7 @@ def director_queue() -> list[dict]:
         aid = author_id(r["id"])
         au = db.one("SELECT name FROM users WHERE id=?", (aid,)) if aid and not r["is_anonymous"] else None
         out.append({"source": "appeal", "appeal_id": r["id"], "number": r["number"], "text": r["text"], "type": r["type"],
-                    "category": r["category"], "category_id": r["category_id"], "branch": r["branch"], "responsible": r["responsible"],
+                    "category": r["category"], "category_id": r["category_id"], "branch": city_of(r), "responsible": r["responsible"],
                     "author": au["name"] if au else None, "request": r["director_request_text"], "requested_at": r["director_requested_at"],
                     "wait_days": round((db.now() - req).total_seconds() / 86400, 1) if req else None,
                     "director_decision": r["director_decision"], "director_decision_label": DIRECTOR_DECISIONS.get(r["director_decision"]),
@@ -830,7 +835,7 @@ def list_for(user: dict, f: dict) -> list[dict]:
         o = {k: r.get(k) for k in keep}
         o["text"] = short(r["text"], 120)
         o["brief_line"] = line(r, 120)
-        o["city"] = r.get("site_city") or r.get("branch_city")   # «A-026 · Самара» в очереди (замечание 13.11); объект — его город
+        o["city"] = city_of(r)   # «A-026 · Самара» в очереди (замечание 13.11); объект — его город
         o["author_urgency"] = r.get("author_urgency")
         o["author_urgency_label"] = URGENCY.get(r.get("author_urgency") or "")
         o["news_days"] = news_age_days(r) if r["status"] in OPEN else None
@@ -914,7 +919,7 @@ def summary(user: dict, days: int = 30, branch_id: int | None = None) -> dict:
             if r["status"] in OPEN and r["category"]:
                 cats[r["category"]] = cats.get(r["category"], 0) + 1
         top = max(cats.items(), key=lambda kv: kv[1])[0] if cats else None
-        by_branch.append({"id": b["id"], "code": b["code"], "name": b["name"], "lat": b["lat"], "lng": b["lng"], **block(items), "top_category": top})
+        by_branch.append({"id": b["id"], "code": b["code"], "name": b["name"], "city": b["city"], "lat": b["lat"], "lng": b["lng"], **block(items), "top_category": top})
     cat_counts: dict[str, int] = {}
     for r in rows:
         if r["status"] in OPEN and r["category"]:

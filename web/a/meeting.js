@@ -116,7 +116,7 @@ async function meetingCard(id, opts) {
   };
   const groups = {};
   for (const i of m.items) (groups[i.kind] = groups[i.kind] || []).push(i);
-  const meta = [m.creator, m.branch, fmtDate(m.created_at), m.duration_sec ? Math.round(m.duration_sec / 60) + ' мин' : null].filter(Boolean).join(' · ');
+  const meta = [m.creator, brCity(m.branch), fmtDate(m.created_at), m.duration_sec ? Math.round(m.duration_sec / 60) + ' мин' : null].filter(Boolean).join(' · ');
   const head = h('div', { class: 'card' },
     h('div', { class: 'row' }, h('span', { class: 'h1 num' }, m.title), tag('st-' + (m.status === 'sent' ? 'done' : m.status === 'failed' ? 'rejected' : 'review'), m.status_label), aiBadge(m)),
     h('div', { class: 'small muted' }, meta),
@@ -292,7 +292,7 @@ function appealDecisionCard(i, refresh) {
   const accept = h('button', { class: 'btn btn-sm btn-primary', onclick: () => act('accepted', comment.value) }, iconText('check', 'Принять'));
   const rejectBtn = h('button', { class: 'btn btn-sm', onclick: () => { if (reason.classList.contains('hidden')) { reason.classList.remove('hidden'); reason.focus(); rejectBtn.textContent = 'Подтвердить отклонение'; return; } act('rejected', reason.value); } }, 'Отклонить');
   return h('div', { class: 'card ' + (i.over_threshold ? 'card-warn' : '') },
-    h('div', { class: 'row' }, h('a', { href: '#/appeal/' + i.appeal_id }, h('b', {}, i.number)), h('span', { class: 'small muted' }, [i.category, i.branch, i.responsible ? 'ведёт ' + i.responsible : null].filter(Boolean).join(' · ')), h('div', { class: 'spacer' }), waitTag(i)),
+    h('div', { class: 'row' }, h('a', { href: '#/appeal/' + i.appeal_id }, h('b', {}, i.number)), h('span', { class: 'small muted' }, [i.category, brCity(i.branch), i.responsible ? 'ведёт ' + i.responsible : null].filter(Boolean).join(' · ')), h('div', { class: 'spacer' }), waitTag(i)),
     h('p', {}, i.text),
     h('div', { class: 'small' }, h('b', {}, 'Что требуется: '), i.request), i.supports ? h('div', { class: 'small muted' }, iconText('thumbs-up', 'У меня так же: ' + i.supports)) : null,
     comment, reason, h('div', { class: 'row mt8' }, accept, rejectBtn));

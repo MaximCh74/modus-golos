@@ -61,7 +61,7 @@ def _rows() -> list[dict]:
 
 
 def _brief_item(a: dict) -> dict:
-    return {"id": a["id"], "number": a["number"], "text": appeals.line(a, 80), "status": a["status_label"], "status_code": a["status"], "branch": a.get("branch"),
+    return {"id": a["id"], "number": a["number"], "text": appeals.line(a, 80), "status": a["status_label"], "status_code": a["status"], "branch": appeals.city_of(a),
             "responsible": a.get("responsible"), "age_days": int(a["age_hours"] // 24), "overdue": a["overdue"], "type": a["type_label"]}
 
 
@@ -249,7 +249,7 @@ def facts_for(p: dict, period: str) -> dict:
         return {"period": PERIODS[period], "new": len(new), "done": len(done), "open": len(open_rows), "urgent_open": sum(1 for r in open_rows if r.get("author_urgency") == "now"),
                 "decisions_pending": len(_decisions()), "overdue_appeals": sum(1 for r in open_rows if r["overdue"]), "overdue_tasks": len(_overdue_tasks()),
                 "top_category": max(cats.items(), key=lambda kv: kv[1])[0] if cats else None,
-                "cities": sorted({r["branch"] for r in new if r["branch"]}), "link": "/panel#/summary", "link_label": "Сводка"}
+                "cities": sorted({appeals.city_of(r) for r in new if appeals.city_of(r)}), "link": "/panel#/summary", "link_label": "Сводка"}
     if q == "my_decisions":
         d = _decisions()
         return {"count": len(d), "over_threshold": sum(1 for x in d if x["over_threshold"]), "threshold_days": appeals.director_wait_days(),
@@ -301,7 +301,7 @@ def facts_for(p: dict, period: str) -> dict:
             return {"not_found": True, "number": p["number"], "link": "/panel#/queue", "link_label": "Очередь"}
         st = appeals.stage_for(a)
         news = appeals.news_age_days(a) if a["status"] in appeals.OPEN else None
-        return {"number": a["number"], "status": a["status_label"], "stage": st["label"], "type": a["type_label"], "branch": a["branch"], "category": a["category"],
+        return {"number": a["number"], "status": a["status_label"], "stage": st["label"], "type": a["type_label"], "branch": appeals.city_of(a), "category": a["category"],
                 "responsible": a["responsible"] or "не назначен", "gist": appeals.line(a, 160), "age_days": int(a["age_hours"] // 24), "overdue": a["overdue"],
                 "news_days": int(news) if news is not None else None, "supports": a["supports"], "priority": a["priority_label"],
                 "resolution": appeals.short(a.get("resolution_text") or "", 120) or None, "director_decision": a.get("director_decision"),

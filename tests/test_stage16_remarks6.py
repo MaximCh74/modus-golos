@@ -85,3 +85,30 @@ def test_queue_has_no_age_column():
     js = (ROOT / "web" / "a" / "panel.js").read_text(encoding="utf-8")
     assert "'Возраст'" not in js and "q-age" not in js
     assert "'просрочено на ' + r.overdue_days + ' дн'" in js and "overdueDot(r), h('span', { class: 'num' }" in js
+
+
+# ---------- п. 2: совещания ----------
+
+def test_meetings_city_and_help_on_every_column(c):
+    from mf import glossary
+    login(c, 1)
+    c.post("/api/meetings", data={"title": "Планёрка п. 2", "transcript": "Решили обновить справочник. Олег, до пятницы."})
+    rows = c.get("/api/meetings").json()
+    assert rows and all(r["city"] == "Омск" for r in rows if r["branch"] == "Омск — головной офис")
+    js = (ROOT / "web" / "a" / "panel.js").read_text(encoding="utf-8")
+    cols = re.search(r"const cols = (\[\['Дата'.*?\]\]);", js, re.S).group(1)
+    keys = re.findall(r"\['[^']+', '([a-z_]+)'", cols)
+    assert len(keys) == 8 and all(k in glossary.TERMS for k in keys), keys
+    assert "h('th', {}, t, helpBtn(key))" in js and "m.city || m.branch" in js
+    assert "Уточнение" in glossary.TERMS["status"]["hint"] and "На рассмотрении" not in glossary.TERMS["status"]["hint"]   # пять статусов
+
+
+def test_branch_is_city_everywhere(c):
+    login(c, 1)
+    s = c.get("/api/panel/summary?days=30").json()
+    assert {b["city"] for b in s["by_branch"] if b["city"]} >= {"Омск", "Астана", "Павлодар"}
+    from mf import appeals
+    assert appeals.city_of({"branch": "Омск — головной офис", "branch_city": "Омск"}) == "Омск"
+    assert appeals.city_of({"branch": "Объект (командировка)", "branch_city": None, "site_city": "Атырау"}) == "Атырау"
+    for d in c.get("/api/director/ideas").json().get("pending", []):
+        assert " — " not in (d.get("branch") or "")

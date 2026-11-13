@@ -83,7 +83,7 @@ function commandPanel(opts) {
       msg.value = rec.message;
       msg.addEventListener('input', () => { edits[rec.user_id] = msg.value; });
       return h('div', { class: 'cmd-rec' },
-        h('div', { class: 'row' }, h('b', {}, rec.name), h('span', { class: 'small muted' }, [rec.position, rec.branch].filter(Boolean).join(' · ')), h('div', { class: 'spacer' }),
+        h('div', { class: 'row' }, h('b', {}, rec.name), h('span', { class: 'small muted' }, [rec.position, brCity(rec.branch)].filter(Boolean).join(' · ')), h('div', { class: 'spacer' }),
           h('span', { class: 'small muted' }, rec.items.length === 1 ? (rec.items[0].number || 'поручение') : plural(rec.items.length, rec.items[0].kind === 'task' ? 'поручение' : 'обращение', rec.items[0].kind === 'task' ? 'поручения' : 'обращения', rec.items[0].kind === 'task' ? 'поручений' : 'обращений'))),
         h('div', { class: 'small' }, rec.items.map(i => h('div', { class: 'muted' }, (i.number ? i.number + ' — ' : '') + i.title + (i.kind === 'task' ? ' (срок был ' + i.due_label + ')' : i.news_days !== undefined && i.news_days !== null ? ' · без новостей ' + i.news_days + ' дн' : i.overdue ? ' · срок первого ответа прошёл' : '')))),
         msg);

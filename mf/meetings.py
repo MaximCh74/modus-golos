@@ -159,13 +159,13 @@ def list_for(user: dict, overdue_only: bool = False) -> list[dict]:
     where, params = "", ()
     if user["role"] == "responsible":
         where, params = " WHERE m.created_by=?", (user["id"],)
-    rows = db.q("""SELECT m.*, u.name AS creator, b.name AS branch FROM meetings m LEFT JOIN users u ON u.id=m.created_by
+    rows = db.q("""SELECT m.*, u.name AS creator, b.name AS branch, b.city AS city FROM meetings m LEFT JOIN users u ON u.id=m.created_by
                    LEFT JOIN branches b ON b.id=m.branch_id""" + where + " ORDER BY m.id DESC", params)
     out = []
     for m in rows:
         items = _items(m["id"])
         out.append({"id": m["id"], "title": m["title"], "status": m["status"], "status_label": STATUSES.get(m["status"], m["status"]),
-                    "stage": m["stage"], "created_at": m["created_at"], "sent_at": m["sent_at"], "creator": m["creator"], "branch": m["branch"],
+                    "stage": m["stage"], "created_at": m["created_at"], "sent_at": m["sent_at"], "creator": m["creator"], "branch": m["branch"], "city": m["city"],
                     "summary_line": appeals.short(m["summary"] or "", 140) if m["summary"] else None, "demo": bool(m["demo"]),
                     "fallback": m["llm_engine"] == fallback.ENGINE, "error": m["error"], "counts": _counts(items)})
     if overdue_only:

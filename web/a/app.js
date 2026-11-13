@@ -225,7 +225,7 @@ async function appealCard(id) {
     h('div', { class: 'row' }, h('span', { class: 'h1' }, a.number), tag(a.stage.code === 'rejected' ? 'st-rejected' : a.stage.code === 'done' ? 'st-done' : 'st-review', a.stage.label), helpBtn('stages'), a.overdue ? tag('tag-overdue', 'Просрочено') : null,
       a.is_anonymous ? tag('tag-anon', 'анонимно') : null, tag('tag-type', a.type_label)),
     stageTracker(a.stage),
-    h('div', { class: 'small muted' }, [a.category, a.branch, a.site_city ? 'объект: ' + a.site_city : null, a.department].filter(Boolean).join(' · ')),
+    h('div', { class: 'small muted' }, [a.category, brCity(a.branch), a.site_city ? 'объект: ' + a.site_city : null, a.department].filter(Boolean).join(' · ')),
     a.limited ? h('div', { class: 'hint mt8' }, 'Вы отметили «У меня так же»: видны номер, статус и суть. Подробности — у автора и ответственного.')
       : a.is_mine ? null : h('div', { class: 'row small mt8' }, userLink(a.author, 'sm')),
     a.brief && !a.is_mine ? briefBlock(a) : null,
@@ -262,7 +262,7 @@ async function changes() {
     rows.length ? rows.map(r => {
       const tb = (!r.is_mine && !r.thanked_by_me && r.author) ? h('button', { class: 'btn btn-sm', onclick: async ev => { ev.stopPropagation(); tb.disabled = true; try { await API.post('/api/appeals/' + r.id + '/thank'); toast('Спасибо передано ' + r.author.name); changes(); } catch (e) { toast(e.message, 'bad'); tb.disabled = false; } } }, iconText('heart', 'Спасибо')) : null;
       return h('div', { class: 'card', onclick: () => { location.hash = '#/appeal/' + r.id; } },
-        h('div', { class: 'row' }, h('b', {}, r.number), tag('tag-type', r.type_label), h('span', { class: 'small muted' }, [r.category, r.branch].filter(Boolean).join(' · ')), h('div', { class: 'spacer' }), h('span', { class: 'small muted' }, fmtDate(r.closed_at))),
+        h('div', { class: 'row' }, h('b', {}, r.number), tag('tag-type', r.type_label), h('span', { class: 'small muted' }, [r.category, brCity(r.branch)].filter(Boolean).join(' · ')), h('div', { class: 'spacer' }), h('span', { class: 'small muted' }, fmtDate(r.closed_at))),
         h('div', { class: 'row small mt8' }, userLink(r.author, 'sm')),
         h('p', { class: 'small muted' }, r.brief_line || r.text),
         h('div', { class: 'card card-ok small ict' }, icon('arrow-right', { size: 14 }), r.resolution_text),
@@ -310,7 +310,7 @@ async function profileScreen(uid) {
   const adminMenu = (ME.role === 'admin' || ME.role === 'director') && u.avatar && !mine ? menuButton([['Убрать аватарку', async () => { await API.post('/api/admin/users/' + uid + '/avatar/remove'); toast('Аватарка убрана'); profileScreen(uid); }]]) : null;
   const stats = [[u.points, 'баллов', 'points'], [u.implemented.length, 'внедрено', null], [u.thanks, '«спасибо»', null], [u.supported, 'поддержал коллег', null]].filter(x => (x[0] || x[2] === 'points') && !(x[2] === 'points' && mine && !showPoints()));
   root.replaceChildren(h('div', { class: 'wrap' }, h('a', { href: '#/', class: 'small ict' }, icon('arrow-left', { size: 14 }), 'Назад'),
-    h('div', { class: 'card' }, h('div', { class: 'profile-head' }, avatarEl(u, 'lg'), h('div', { class: 'spacer' }, h('div', { class: 'h1' }, u.name), h('div', { class: 'small muted' }, [u.position, u.city || u.branch, u.department].filter(Boolean).join(' · ')),
+    h('div', { class: 'card' }, h('div', { class: 'profile-head' }, avatarEl(u, 'lg'), h('div', { class: 'spacer' }, h('div', { class: 'h1' }, u.name), h('div', { class: 'small muted' }, [u.position, u.city || brCity(u.branch), u.department].filter(Boolean).join(' · ')),
       mine ? h('div', { class: 'row mt8' }, h('button', { class: 'btn btn-sm btn-outline', onclick: () => file.click() }, iconText('user', u.avatar ? 'Сменить аватарку' : 'Загрузить аватарку')), file) : null), adminMenu),
       h('div', { class: 'stats mt16 n' + stats.length }, stats.map(([n, label, help]) => h('div', { class: 'stat' }, h('b', {}, String(n)), h('span', { class: 'small muted' }, label, help ? helpBtn(help) : null))))),
     u.praises && u.praises.length ? h('div', { class: 'lbl mt16' }, 'Благодарности коллег') : null,
