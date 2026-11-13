@@ -155,3 +155,15 @@ def test_director_admin_by_default_toggle_only_from_laptop(c):
     assert c.get("/api/me").json()["can_admin"] is False and c.get("/api/admin/settings").status_code == 403
     js = (ROOT / "web" / "a" / "panel.js").read_text(encoding="utf-8")
     assert "Директору этот раздел можно скрыть в настройках" in js and "'Директор видит администрирование'" in js and "if (ME.can_admin) nav.push" in js
+
+
+# ---------- п. 5: одна главная кнопка у сотрудника ----------
+
+def test_employee_home_single_main_button():
+    js = (ROOT / "web" / "a" / "app.js").read_text(encoding="utf-8")
+    assert "'Есть идея или проблема?'" in js and "href: '#/new', class: 'btn btn-primary btn-big home-cta'" in js
+    for old in ("'Сообщить о проблеме'", "'Предложить улучшение'", "href: '#/new?type=praise', class: 'btn btn-sm' }, 'Сказать спасибо'"):
+        assert old not in js, old
+    assert "[['problem', 'Проблема'], ['suggestion', 'Идея'], ['praise', 'Спасибо']]" in js   # переключатель в форме, как в QR-форме
+    css = (ROOT / "web" / "a" / "style.css").read_text(encoding="utf-8")
+    assert ".type-switch.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }" in css

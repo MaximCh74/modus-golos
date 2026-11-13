@@ -96,21 +96,21 @@ async function home() {
     ME.tasks_open ? h('span', { class: 'count' + (ME.tasks_overdue ? ' late' : '') }, String(ME.tasks_open)) : null, icon('chevron-right', { size: 18, cls: 'chev' }));
   const command = ME.role === 'director' ? commandPanel({ decisionsHref: '#/decisions' }) : null;   // команды — только директору (F-21)
   root.replaceChildren(h('div', { class: 'wrap' }, summary ? summaryBlock(summary, () => route()) : null, command, decisions,
-    h('div', { class: 'grid2' },
-      h('a', { href: '#/new?type=problem', class: 'btn btn-primary btn-big' }, 'Сообщить о проблеме'),
-      h('a', { href: '#/new?type=suggestion', class: 'btn btn-outline btn-big' }, 'Предложить улучшение')),
-    h('div', { class: 'row mt8 mb8' }, h('a', { href: '#/new?type=praise', class: 'btn btn-sm' }, 'Сказать спасибо'), h('div', { class: 'spacer' }),
-      showPoints() ? h('a', { href: '#/points', class: 'chip chip-points' }, iconText('star', 'Мои баллы: '), h('b', {}, String(pts.balance))) : null),   // чип, а не ссылка (замечание владельца 12.11)
+    // одна главная кнопка (замечание владельца 13.11, п. 5): «Проблема / Идея / Спасибо» — переключателем внутри формы, как в QR-форме
+    h('a', { href: '#/new', class: 'btn btn-primary btn-big home-cta', id: 'home-cta' }, iconText('message-circle', 'Есть идея или проблема?', { size: 20 })),
+    showPoints() ? h('div', { class: 'row mt8 mb8' }, h('div', { class: 'spacer' }),
+      h('a', { href: '#/points', class: 'chip chip-points' }, iconText('star', 'Мои баллы: '), h('b', {}, String(pts.balance)))) : null,   // чип, а не ссылка (замечание владельца 12.11)
     tasksCard,
     tabs(null),
     h('div', { class: 'lbl mt16' }, 'Мои обращения'),
-    h('div', { class: 'card list' }, mine.length ? mine.map(item) : h('div', { class: 'muted' }, 'Пока нет обращений — нажмите одну из кнопок выше.'))));
+    h('div', { class: 'card list' }, mine.length ? mine.map(item) : h('div', { class: 'muted' }, 'Пока нет обращений — нажмите «Есть идея или проблема?».'))));
 }
 
 async function newAppeal(startType) {
   let type = startType;
   const types = [['problem', 'Проблема'], ['suggestion', 'Идея'], ['praise', 'Спасибо']];
-  const switchEl = h('div', { class: 'type-switch three' });
+  const switchEl = h('div', { class: 'type-switch three', role: 'tablist', 'aria-label': 'Что у вас' });
+  const title = h('div', { class: 'h1' });
   const btns = {};
   for (const [code, label] of types) {
     btns[code] = h('button', { type: 'button', class: 'btn' + (code === type ? ' on' : ''), onclick: () => setType(code) }, label);
@@ -161,6 +161,7 @@ async function newAppeal(startType) {
   function setType(code) {
     type = code;
     for (const k in btns) btns[k].classList.toggle('on', k === code);
+    title.textContent = code === 'praise' ? 'Сказать спасибо' : 'Новое обращение';
     text.placeholder = code === 'praise' ? 'Кому и за что спасибо — текстом или голосом' : code === 'suggestion' ? 'Что предлагаете и что это даст' : 'Что происходит и что предлагаете';
     for (const el of fullOnly) el.classList.toggle('hidden', code === 'praise');
     for (const el of praiseOnly) el.classList.toggle('hidden', code !== 'praise');
@@ -211,7 +212,7 @@ async function newAppeal(startType) {
     try { const r = await API.postForm('/api/appeals', fd); toast(type === 'praise' ? 'Спасибо передано' : 'Обращение ' + r.number + ' отправлено'); location.hash = '#/appeal/' + r.id; }
     catch (e) { toast(e.message, 'bad'); submit.disabled = false; }
   });
-  root.replaceChildren(h('div', { class: 'wrap' }, h('a', { href: '#/', class: 'small ict' }, icon('arrow-left', { size: 14 }), 'Назад'), h('div', { class: 'h1' }, type === 'praise' ? 'Сказать спасибо' : 'Новое обращение'), form));
+  root.replaceChildren(h('div', { class: 'wrap' }, h('a', { href: '#/', class: 'small ict' }, icon('arrow-left', { size: 14 }), 'Назад'), title, form));
 }
 
 async function appealCard(id) {

@@ -108,6 +108,8 @@ b, strong { font-weight: var(--w-bold); }
 .btn-ghost { border-color: transparent; background: transparent; }
 .btn-ghost:hover { background: var(--bg-soft); }
 .btn-big { width: 100%; padding: 16px; font-size: 17px; border-radius: var(--radius-btn); }
+.home-cta { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 20px 16px; font-size: 18px; }   /* одна главная кнопка сотрудника (13.11, п. 5) */
+.home-cta .ict { gap: 10px; }
 .btn-danger, .btn-ok { color: var(--ink); border-color: var(--line); }   /* отказ и удаление — нейтральные, не красные */
 .btn-sm { padding: 6px 12px; font-size: 13px; min-height: 36px; }
 .btn.on { background: var(--navy); color: var(--white); border-color: var(--navy); }
@@ -212,7 +214,9 @@ input[type=file] { font: inherit; font-size: 14px; }
 
 .type-switch { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
 .type-switch .btn { padding: 18px 10px; font-size: 17px; }
-.type-switch.three { grid-template-columns: 1fr 1fr 1fr; }
+.type-switch.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }   /* «Проблема / Идея / Спасибо» не вылезают за карточку (13.11) */
+.type-switch .btn { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 420px) { .type-switch .btn { padding: 14px 4px; font-size: 15px; } .type-switch { gap: 8px; } }
 .nav { display: flex; gap: 4px; flex-wrap: wrap; }
 .nav a { padding: 6px 12px; border-radius: var(--radius-sm); text-decoration: none; color: var(--ink); font-size: 14px; font-weight: var(--w-bold); }
 .nav a.active { background: var(--tint); color: var(--navy); }
