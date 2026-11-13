@@ -72,7 +72,7 @@ import urllib.request   # noqa: E402
 from pathlib import Path   # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
-MENU = ["Сводка", "Очередь", "Совещания", "На решение", "Лига", "Администрирование"]
+MENU = ["Сводка", "Очередь", "От клиентов", "Совещания", "На решение", "Лига", "Администрирование"]   # «От клиентов» после «Очереди» — директору и администратору (13.11)
 
 
 @pytest.fixture(scope="module")
@@ -130,7 +130,7 @@ def _open(browser, base, uid, width, path, height=None):
 
 @pytest.mark.parametrize("uid,menu,start", [(1, MENU, "#/summary"), (15, MENU, "#/admin"), (2, ["Очередь", "Совещания", "Лига"], "")])
 def test_menu_order_and_start_page(base, browser, uid, menu, start):
-    """Меню: Сводка · Очередь · Совещания · На решение · Лига · Администрирование; директор после входа — на «Сводке», администратор —
+    """Меню: Сводка · Очередь · От клиентов · Совещания · На решение · Лига · Администрирование; директор после входа — на «Сводке», администратор —
     в «Администрировании», ответственный — в очереди, как раньше."""
     ctx, page, errors = _open(browser, base, uid, 1440, "/panel")
     try:

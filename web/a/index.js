@@ -75,15 +75,19 @@
   mapEl.map.addEventListener('click', e => { if (e.target === mapEl.map || e.target === mapEl.scene || e.target.classList.contains('map-bg') || e.target.classList.contains('map-layer')) closeAll(); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeAll(); });
 
-  // карточки под картой (замечание владельца 13.11): фирменный градиент главной кнопки, белый текст, одной высоты, без значков;
-  // «Статистика» — ссылкой в подвале
-  const submit = h('button', { type: 'button', class: 'feat', onclick: () => { if (selected) location.href = selected.form_url; else { toast('Сначала выберите город на карте или в списке'); pills.firstChild.focus(); pills.scrollIntoView({ behavior: 'smooth', block: 'center' }); } } },
+  // карточки под картой (замечания владельца 13.11): фирменный градиент главной кнопки, белый текст, одной высоты, без значков;
+  // сотрудникам и клиентам; «Результаты обращений» и «Статистика» — ссылками в подвале
+  const chooseCity = () => {   // город не выбран: на телефоне — к списку городов, на компьютере — к карте, метки мигают
+    if (isMobile()) { toast('Сначала выберите город на карте или в списке'); pills.firstChild.focus(); pills.scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
+    toast('Сначала выберите город на карте'); mapSlot.scrollIntoView({ behavior: 'smooth', block: 'center' }); for (const b of map.branches) mapEl.flash(b.id);
+  };
+  const submit = h('button', { type: 'button', class: 'feat', onclick: () => { if (selected) location.href = selected.form_url; else chooseCity(); } },
     h('b', {}, 'Подать обращение'), h('span', {}, 'Сотрудникам: идеи, вопросы, проблемы'));
-  const changes = h('a', { href: '/changes', class: 'feat' }, h('b', {}, 'Результаты обращений'), h('span', {}, 'Что уже сделано по вашим идеям'));
-  featsSlot.replaceChildren(submit, changes);
+  const clientsCard = h('a', { href: '/c', class: 'feat' }, h('b', {}, 'Обратная связь для клиентов'), h('span', {}, 'Оставьте отзыв, вопрос или благодарность'));
+  featsSlot.replaceChildren(submit, clientsCard);
   const statsHref = me && me.role !== 'employee' ? '/panel#/summary' : '/login?next=' + encodeURIComponent('/panel#/summary');
   main.append(h('div', { class: 'home-foot' }, h('span', {}, h('a', { href: '/rules' }, 'Как начисляются баллы'), ' — прозрачные правила вместо разовых премий · ',
-    h('a', { href: statsHref, class: 'foot-stats' }, 'Статистика')),
+    h('a', { href: '/changes', class: 'foot-changes' }, 'Результаты обращений'), ' · ', h('a', { href: statsHref, class: 'foot-stats' }, 'Статистика')),
     h('span', {}, 'разработано ', h('b', {}, 'Cyber QALQAN Systems'), ' · данные демонстрационные · ', versionTag())));
-  if (!isMobile() && map.branches.length) select(map.branches[0]);   // на ноутбуке сразу показываем головной офис, как на макете
+  // окно города — только по нажатию (замечание владельца 13.11): при загрузке — просто карта с городами, без карточки
 })();

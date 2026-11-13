@@ -41,10 +41,11 @@ function renderTop() {
   let top = document.getElementById('top');
   if (!top) { top = h('div', { class: 'topbar', id: 'top' }); document.body.prepend(top); }
   const hash = location.hash || startHash();
-  // порядок меню (ТЗ владельца 13.11): Сводка · Очередь · Совещания · На решение · Лига · Администрирование
+  // порядок меню (ТЗ владельца 13.11): Сводка · Очередь · От клиентов · Совещания · На решение · Лига · Администрирование
   const nav = [];
   if (ME.role !== 'responsible') nav.push(['#/summary', 'Сводка']);
   nav.push(['#/queue', 'Очередь']);
+  if (CLIENT_ROLES.includes(ME.role)) nav.push(['#/clients', 'От клиентов']);   // сообщения клиентов (13.11): директор и администратор
   nav.push(['#/meetings', 'Совещания']);
   if (ME.role !== 'responsible') nav.push(['#/decisions', 'На решение']);
   nav.push(['#/league', 'Лига']);
@@ -103,6 +104,7 @@ async function route() {
     if (p[0] === 'decisions') { S.view = 'decisions'; return await decisionsScreen({ backHref: '#/queue' }); }
     if (p[0] === 'admin') { if (!ME.can_admin) { location.hash = '#/queue'; return; } S.view = 'admin'; return await adminScreen(); }
     if (p[0] === 'league') { S.view = 'league'; return await leaguePanel(); }
+    if (p[0] === 'clients') { if (!CLIENT_ROLES.includes(ME.role)) { location.hash = '#/queue'; return; } S.view = 'clients'; return await clientsScreen(); }
     S.view = 'queue'; if (S.selected && !location.hash.startsWith('#/appeal/')) S.selected = null; return await queue();
   } catch (e) { root.replaceChildren(h('div', { class: 'wrap' }, h('div', { class: 'card card-bad' }, e.message))); }
 }
@@ -662,6 +664,43 @@ async function helpScreen(termKey) {
     h('p', { class: 'hint' }, 'Термины системы простым языком, по разделам. Те же слова использует ИИ в сводке и пересказах. Значок «?» рядом с цифрой, настройкой или полем показывает ту же подсказку на месте.'),
     body));
   if (termKey) { const el = document.getElementById('term-' + termKey); if (el) el.scrollIntoView({ block: 'center' }); }
+}
+
+// ---------- «От клиентов» (решение владельца 13.11, минимум): все сообщения клиентов списком, новые сверху; нажатие — полный текст и фото.
+// Без статусов, баллов, лиги и счётчиков. Видят директор и администратор ----------
+const CLIENT_ROLES = ['director', 'admin'];
+function contactLink(v) {
+  v = String(v || '').trim();
+  if (v.includes('@')) return h('a', { href: 'mailto:' + v }, v);
+  const tel = v.replace(/[^\d+]/g, '');
+  return tel.replace(/\D/g, '').length >= 6 ? h('a', { href: 'tel:' + tel }, v) : h('span', {}, v);
+}
+function clientMessage(m) {
+  const close = h('button', { type: 'button', class: 'btn btn-sm btn-ghost', title: 'Закрыть (Esc)', 'aria-label': 'Закрыть', onclick: closeOverlay }, icon('x'));
+  openDrawer(h('div', { class: 'cm-detail' },
+    h('div', { class: 'row' }, h('div', { class: 'h2' }, 'Сообщение клиента'), h('div', { class: 'spacer' }), close),
+    h('div', { class: 'row' }, h('span', { class: 'badge q-tag' }, m.kind_label), h('span', { class: 'small muted' }, fmtDate(m.created_at))),
+    h('div', { class: 'small mt8' }, h('span', { class: 'muted' }, 'Город или объект: '), m.place || 'не указан'),
+    h('p', { class: 'cm-full' }, m.text),
+    m.name || m.contact ? h('div', { class: 'small' }, h('span', { class: 'muted' }, 'Контакт: '), m.name ? m.name + (m.contact ? ', ' : '') : '', m.contact ? contactLink(m.contact) : null)
+      : h('div', { class: 'small muted' }, 'Контакт не оставлен'),
+    m.photo_url ? h('img', { class: 'cm-photo', src: m.photo_url, alt: 'Фото от клиента' }) : null), { label: 'Сообщение клиента', narrow: true });
+}
+async function clientsScreen() {
+  const [data, cfg] = await Promise.all([API.get('/api/panel/client-messages'), publicConfig()]);
+  const form = String((cfg && cfg.public_url) || location.origin).replace(/^https?:\/\//, '') + '/c';
+  const rows = data.items.map(m => h('tr', { onclick: () => clientMessage(m) },
+    h('td', { class: 'cm-date small' }, fmtDate(m.created_at)),
+    h('td', {}, h('span', { class: 'badge q-tag' }, m.kind_label)),
+    h('td', {}, m.place || h('span', { class: 'muted' }, 'не указан')),
+    h('td', {}, h('div', { class: 'cm-text' }, m.text), m.photo_url ? h('div', { class: 'small muted' }, 'с фото') : null),
+    h('td', { class: 'small' }, m.name || m.contact ? [m.name, m.contact].filter(Boolean).join(', ') : h('span', { class: 'muted' }, 'нет'))));
+  root.replaceChildren(h('div', { class: 'wrap wrap-wide' },
+    h('div', { class: 'h1' }, 'От клиентов'),
+    h('p', { class: 'small muted' }, 'Отзывы, вопросы и благодарности клиентов — форма без входа ', h('a', { href: '/c', target: '_blank' }, form), ' (QR на акте сдачи или на шкафу оборудования).'),
+    h('div', { class: 'card' }, data.items.length ? h('table', { class: 'tbl clients' },
+      h('thead', {}, h('tr', {}, ['Дата', 'Тип', 'Город или объект', 'Текст', 'Контакт'].map(t => h('th', {}, t)))), h('tbody', {}, rows))
+      : h('div', { class: 'muted' }, 'Сообщений от клиентов пока нет.'))));
 }
 
 async function notifications() {

@@ -1,7 +1,8 @@
 """Главная (замечания владельца 13.11, после меню пользователя): под картой карточки в фирменном градиенте главной кнопки — белый текст,
-одной высоты, без значков, при наведении лёгкое затемнение и подъём тени, на телефоне одна под другой; в main их две — «Подать обращение»
-и «Результаты обращений»; «Статистика» — ссылкой в подвале рядом с «Как начисляются баллы». Объекты командированных снова на главной
-карте — тем же стилем, что города (метка, город, мелко «объект», без служебных цифр); нажатие — форма «Объект» с подставленным городом."""
+одной высоты, без значков, при наведении лёгкое затемнение и подъём тени, на телефоне одна под другой; их две — «Подать обращение»
+(сотрудникам) и «Обратная связь для клиентов» (форма /c); «Результаты обращений» и «Статистика» — ссылками в подвале рядом с «Как
+начисляются баллы». Объекты командированных снова на главной карте — тем же стилем, что города (метка, город, мелко «объект», без
+служебных цифр); нажатие — форма «Объект» с подставленным городом. Окно города при загрузке не открывается — только по нажатию."""
 import os
 import socket
 import subprocess
@@ -75,14 +76,15 @@ def test_two_gradient_cards_under_map_same_height_white_text(base, browser):
     try:
         cards = page.evaluate(CARDS)
         assert [(c["title"], c["sub"]) for c in cards] == [("Подать обращение", "Сотрудникам: идеи, вопросы, проблемы"),
-                                                         ("Результаты обращений", "Что уже сделано по вашим идеям")]
+                                                         ("Обратная связь для клиентов", "Оставьте отзыв, вопрос или благодарность")]
+        assert page.locator(".feats .feat").nth(1).get_attribute("href") == "/c"
         assert all("linear-gradient" in c["bg"] for c in cards), cards   # фирменный градиент главной кнопки
         assert all(c["color"] == c["sub_color"] == "rgb(255, 255, 255)" for c in cards), cards   # белый текст
         assert all(c["icons"] == 0 for c in cards), cards   # без значков
         assert cards[0]["h"] == cards[1]["h"] and cards[0]["y"] == cards[1]["y"] and cards[0]["w"] == cards[1]["w"], cards   # в ряд, одной высоты
         under = page.evaluate("document.querySelector('.feats').getBoundingClientRect().top >= document.querySelector('.home-map').getBoundingClientRect().bottom")
         assert under   # под картой
-        assert page.locator(".feats").inner_text().count("Статистика") == 0
+        assert "Статистика" not in page.locator(".feats").inner_text() and "Результаты обращений" not in page.locator(".feats").inner_text()
         css = (ROOT / "web" / "a" / "style.css").read_text(encoding="utf-8")
         assert "background: var(--btn-main)" in css.split(".feat {", 1)[1].split("}", 1)[0]   # тот же токен, что у главной кнопки
         assert not errors, errors
@@ -116,13 +118,16 @@ def test_cards_stack_on_phone_no_horizontal_scroll(base, browser):
         ctx.close()
 
 
-def test_statistics_is_a_footer_link_next_to_points_rules(base, browser):
+def test_results_and_statistics_are_footer_links_next_to_points_rules(base, browser):
     ctx, page, errors = _home(browser, base, 1440)
     try:
         links = page.evaluate("[...document.querySelectorAll('.home-foot a')].map(a => [a.innerText, a.getAttribute('href'), a.parentElement === document.querySelector('.home-foot a[href=\"/rules\"]').parentElement])")
         assert ["Как начисляются баллы", "/rules", True] in links
         stats = [x for x in links if x[0] == "Статистика"]
         assert stats and stats[0][2] and "/panel#/summary" in stats[0][1].replace("%23", "#").replace("%2F", "/"), links   # рядом, в той же строке
+        assert ["Результаты обращений", "/changes", True] in links
+        names = [x[0] for x in links]
+        assert names.index("Результаты обращений") + 1 == names.index("Статистика"), names   # «Результаты обращений» — рядом со «Статистикой»
         assert not errors, errors
     finally:
         ctx.close()
@@ -155,5 +160,21 @@ def test_object_form_city_param_is_trimmed_and_only_for_field(base, browser):
         assert v.startswith("Тенгиз") and len(v) == 80
         page.goto(base + "/q/OMSK?city=Атырау"); page.wait_for_selector("form .type-switch")
         assert page.locator("input[name=site_city]").count() == 0   # у филиала поля «Город / объект» нет — параметр ни на что не влияет
+    finally:
+        ctx.close()
+
+
+def test_no_city_window_on_load_submit_asks_to_pick_city(base, browser):
+    """Замечание владельца 13.11: при загрузке — просто карта с городами, окно города не всплывает; «Подать обращение» без выбранного
+    города просит выбрать город на карте и никуда не уводит; окно открывается по нажатию на город."""
+    ctx, page, errors = _home(browser, base, 1440)
+    try:
+        assert page.evaluate("document.querySelector('.citypop').classList.contains('hidden') && !document.querySelector('.map .marker.sel')")
+        page.locator(".feats .feat").first.click(); page.wait_for_timeout(400)
+        assert page.url.rstrip("/") == base and "Сначала выберите город на карте" in page.locator(".toast").last.inner_text()
+        page.locator(".map .marker", has_text="Омск").click(force=True); page.wait_for_timeout(400)
+        assert page.locator(".citypop:not(.hidden) .cc-name b").inner_text() == "Омск"
+        page.locator(".feats .feat").first.click(); page.wait_for_url("**/q/*")
+        assert not errors, errors
     finally:
         ctx.close()
