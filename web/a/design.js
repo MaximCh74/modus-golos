@@ -39,7 +39,12 @@
     h('div', { class: 'cc-theme mt8' }, icon('layers', { size: 18 }), h('span', {}, 'Главная тема: ', h('b', {}, 'Номенклатура и спецификации'))));
   const chips = h('div', { class: 'ds-section' }, h('div', { class: 'h2' }, 'Чипы и статусы'),
     h('div', { class: 'chips' }, h('button', { class: 'chip on' }, 'Прямо сейчас мешает'), h('button', { class: 'chip' }, 'Мешает, но обхожусь'), h('button', { class: 'chip' }, 'Мелочь')),
-    h('div', { class: 'row mt8' }, STATUS_GROUPS.map(g => h('span', { class: 'badge ' + g.cls }, g.label)), h('span', { class: 'badge tag-overdue' }, 'Просрочено'), h('span', { class: 'badge tag-unassigned' }, 'Без ответственного'), h('span', { class: 'badge tag-ai' }, 'пересказ ИИ'), h('span', { class: 'badge tag-demo' }, 'без ИИ')));
+    h('div', { class: 'small muted mt8' }, 'Статусы — вариант А: мягкая заливка, тёмный текст 500 (сейчас везде)'),
+    h('div', { class: 'row mt8 ds-variant-a' }, STATUS_GROUPS.map(g => h('span', { class: 'badge ' + g.cls }, g.label))),
+    h('div', { class: 'small muted mt8' }, 'Статусы — вариант Б: цветная точка, тёмный текст 500, без заливки'),
+    h('div', { class: 'row mt8 st-dots ds-variant-b' }, STATUS_GROUPS.map(g => h('span', { class: 'badge ' + g.cls }, g.label))),
+    h('div', { class: 'small muted mt8' }, 'Не статусы — прозрачные: серо-синий текст 500, тонкая серая рамка; «Просрочено» — красная точка'),
+    h('div', { class: 'row mt8 ds-tags' }, h('span', { class: 'badge tag-overdue' }, 'Просрочено'), h('span', { class: 'badge tag-unassigned' }, 'Без ответственного'), h('span', { class: 'badge tag-ai' }, 'пересказ ИИ'), h('span', { class: 'badge tag-demo' }, 'без ИИ')));
   const tracker = h('div', { class: 'ds-section' }, h('div', { class: 'h2' }, 'Таймлайн стадий (словами собственника)'),
     stageTracker({ code: 'elaboration', label: 'Проработка', index: 1, note: null, steps: [{ code: 'accepted', label: 'Принято', state: 'done' }, { code: 'elaboration', label: 'Проработка', state: 'cur' }, { code: 'decision', label: 'Принятие решения', state: 'future' }, { code: 'implementation', label: 'Реализация', state: 'future' }, { code: 'done', label: 'Готово', state: 'future' }] }));
   const inputs = h('div', { class: 'ds-section' }, h('div', { class: 'h2' }, 'Поля ввода'),
