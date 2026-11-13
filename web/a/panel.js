@@ -64,7 +64,7 @@ function renderTop() {
     toggle, panel);
 }
 document.addEventListener('click', ev => { const p = document.getElementById('nav-panel'); if (p && p.classList.contains('open') && !ev.target.closest('#nav-panel')) { p.classList.remove('open'); const t = document.querySelector('.nav-toggle'); if (t) t.setAttribute('aria-expanded', 'false'); } });
-const PHONE = window.matchMedia('(max-width: 480px)');   // очередь карточками, меню за кнопкой
+const PHONE = window.matchMedia('(max-width: 900px)');   // очередь карточками, таблицы строками, меню за кнопкой — телефон и планшет (13.11)
 PHONE.addEventListener('change', () => { if (S.view === 'queue') loadQueue(); });
 // таблицы на телефоне — строки карточками (CSS); подпись каждой ячейке — из заголовка её колонки (data-label), чтобы числа не теряли смысл
 function labelTables(scope) {

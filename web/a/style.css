@@ -488,6 +488,7 @@ tr.muted td { opacity: .6; }
 .tbl tr.noclick { cursor: default; }
 .tbl.by-branch th { white-space: normal; }   /* сводка «Филиалы»: заголовки переносятся — таблица не шире карточки (13.11) */
 .tbl.by-branch td:first-child { min-width: 90px; }
+@media (max-width: 1099px) { .tbl.meetings th { white-space: normal; } }   /* совещания на 901–1099: заголовки переносятся, без прокрутки */
 /* нумерация строк администрирования (13.11): «1.», «2.» узкой колонкой слева, моноширинные цифры по правому краю */
 .rownum { font-variant-numeric: tabular-nums; font-feature-settings: 'tnum' 1; color: var(--muted); text-align: right; white-space: nowrap; }
 .tbl th.rownum, .tbl td.rownum { min-width: 0; width: 40px; padding-right: 8px; padding-left: 0; text-align: right; }
@@ -869,19 +870,18 @@ select { appearance: none; -webkit-appearance: none; padding-right: 34px; backgr
 .qcard .tic { color: var(--muted-2); }
 .qcard-text { font-size: 14px; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .qcard .row { gap: 8px; flex-wrap: nowrap; min-width: 0; }
-@media (max-width: 480px) {
+/* планшет и телефон (до 900 px, 13.11): разделы панели, «Приложение» и пользователь — за кнопкой меню, шапка в одну строку */
+@media (max-width: 900px) {
   .topbar { gap: 6px; padding: 8px 12px; position: sticky; flex-wrap: nowrap; }
-  .topbar .brand .div, .topbar .brand .wordmark { display: none; }   /* на телефоне в полосе приложения — только логотип */
-  .topbar .btn-sm { padding: 6px 8px; }
   .topbar .nav, .topbar .top-app, .topbar .top-user { display: none; }
   .nav-toggle { display: inline-flex; }
   .nav-panel.open { display: flex; flex-direction: column; position: absolute; top: 100%; left: 0; right: 0; background: var(--white); border-bottom: 1px solid var(--line-soft); box-shadow: var(--shadow-2); padding: 6px 12px 12px; z-index: 20; }
   .nav-panel a { padding: 12px 10px; border-radius: var(--radius-sm); text-decoration: none; color: var(--ink); font-weight: var(--w-bold); font-size: 15px; }
   .nav-panel a.active { background: var(--tint); color: var(--navy); }
   .nav-panel .nav-sep { height: 1px; background: var(--line-soft); margin: 6px 0; }
-  .toolbar .view-btn { display: none; }
-  .cmd-row { flex-wrap: wrap; }
-  .cmd-row > .spacer { flex: 1 1 100%; }   /* поле команды — на всю ширину, кнопки строкой ниже */
+}
+/* планшет и телефон (до 900 px, 13.11): таблицы — строками-карточками, очередь — карточками (PHONE в panel.js) */
+@media (max-width: 900px) {
   /* таблицы (сводка, совещания, лига, администрирование) — строки карточками, без горизонтальной прокрутки */
   .tbl, .tbl tbody, .tbl tr, .tbl td { display: block; width: auto !important; min-width: 0 !important; }
   .tbl thead, .tbl colgroup { display: none; }
@@ -893,6 +893,13 @@ select { appearance: none; -webkit-appearance: none; padding-right: 34px; backgr
   .tbl td:empty { display: none; }
   .tbl td.rownum { display: inline-block; width: auto !important; margin-right: 6px; font-weight: var(--w-body); color: var(--muted); padding: 2px 0; vertical-align: top; }
   .tbl td.rownum + td { display: inline-block; font-weight: var(--w-body); vertical-align: top; }
+}
+@media (max-width: 480px) {
+  .topbar .brand .div, .topbar .brand .wordmark { display: none; }   /* на телефоне в полосе приложения — только логотип */
+  .topbar .btn-sm { padding: 6px 8px; }
+  .toolbar .view-btn { display: none; }
+  .cmd-row { flex-wrap: wrap; }
+  .cmd-row > .spacer { flex: 1 1 100%; }   /* поле команды — на всю ширину, кнопки строкой ниже */
   .tracker .step { font-size: 10px; padding: 22px 1px 0; }
   .grid2 .btn-big { padding: 14px 10px; font-size: 16px; }
   .stats { grid-template-columns: repeat(2, 1fr); }

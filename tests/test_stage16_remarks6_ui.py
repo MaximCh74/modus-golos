@@ -223,3 +223,19 @@ def test_bell_counter_red_and_points_gold_star(base, browser):
         assert _fits(page) and not errors, errors
     finally:
         ctx.close()
+
+
+# ---------- планшет 481–900 px (13.11): шапка панели за «☰», таблицы строками — без горизонтальной прокрутки ----------
+
+@pytest.mark.parametrize("width", [520, 600, 760, 820])
+def test_panel_tablet_no_horizontal_scroll(base, browser, width):
+    ctx, page, errors = _open(browser, base, 1, width, "/panel#/queue")
+    try:
+        page.wait_for_selector(".qcard")   # очередь карточками и на планшете
+        assert page.locator(".nav-toggle").is_visible() and not page.locator(".topbar .nav").is_visible()
+        for path in ("/panel#/queue", "/panel#/summary", "/panel#/meetings", "/panel#/decisions", "/panel#/league", "/panel#/admin"):
+            page.goto(base + path); page.wait_for_timeout(900)
+            assert _fits(page), (width, path, page.evaluate("document.documentElement.scrollWidth"))
+        assert not errors, errors
+    finally:
+        ctx.close()
