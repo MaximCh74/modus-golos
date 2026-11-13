@@ -912,7 +912,7 @@ select { appearance: none; -webkit-appearance: none; padding-right: 34px; backgr
 
 /* «Сводка» директора (ТЗ владельца 13.11, п. 2–4): на всю ширину; сверху карта (~60 %) и справа сводка с командой — по высоте карты,
    длинный текст сводки прокручивается внутри карточки (max-height ставит fitSummarySide в panel.js); ниже на всю ширину — «Требуют
-   внимания», плитки, «По типам / По статусам» с часами, «Филиалы». До 1200 px колонки встают друг под друга: карта → сводка → остальное */
+   внимания», плитки, «По типам / По статусам» с часами, «Филиалы». До 1200 px колонки встают друг под друга: карта, сводка, остальное */
 .wrap-full { max-width: 2400px; padding: var(--s3); }
 .sum-head { margin-bottom: var(--s1); }
 .sum-page .kpis { margin-bottom: var(--s2); }
@@ -936,7 +936,7 @@ select { appearance: none; -webkit-appearance: none; padding-right: 34px; backgr
   .sum-side .summary-ai > .row:first-child { position: static; margin-top: 0; padding: 0; }
 }
 @media (max-width: 480px) { .wrap-full { padding: var(--s2) 12px; } }
-/* чипы «По типам / По статусам» — в 1,25 раза крупнее обычных (12 → 15 px, отступы 2/10 → 3/13), цвета статусов прежние */
+/* чипы «По типам / По статусам» — в 1,25 раза крупнее обычных (15 px вместо 12, отступы 3/13 вместо 2/10), цвета статусов прежние */
 .sum-chips { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: var(--s2) var(--s4); }
 .sum-chips .row { gap: 8px; }
 .sum-chips .badge { font-size: 15px; padding: 3px 13px; }
