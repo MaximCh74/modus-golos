@@ -793,8 +793,28 @@ def view(a: dict, user: dict | None = None, public: bool = False) -> dict:
     return out
 
 
+def labels_for(r: dict) -> list[str]:
+    """Метки строки очереди (ТЗ владельца 13.11): из данных обращения, по важности — на экране две, остальные «+N». Приоритет высокий —
+    «срочно», низкий — «не срочно» (у «Спасибо» приоритета нет); автор ответил «прямо сейчас мешает» — «мешает сейчас»; в группе
+    похожих («Повторяющиеся темы») — «повтор»; создано из стенограммы совещания — «со стенограммы»; поддержки — «поддержали N»; анонимно."""
+    out = []
+    if r.get("type") != "praise" and r.get("priority") in ("high", "low"):
+        out.append("срочно" if r["priority"] == "high" else "не срочно")
+    if r.get("author_urgency") == "now":
+        out.append("мешает сейчас")
+    if r.get("cluster_id"):
+        out.append("повтор")
+    if r.get("meeting_id") or r.get("source") == "meeting":
+        out.append("со стенограммы")
+    if r.get("supports"):
+        out.append(f"поддержали {r['supports']}")
+    if r.get("is_anonymous"):
+        out.append("анонимно")
+    return out
+
+
 def list_for(user: dict, f: dict) -> list[dict]:
-    """Очередь панели с фильтрами и ролевой областью видимости."""
+    """Очередь панели с фильтрами и ролевой областью видимости. history — все обращения подряд с первого, любые статусы."""
     where, params = [], []
     if user["role"] == "responsible":
         where.append("(a.responsible_id=? OR a.department_id=? OR a.responsible_id IN (SELECT id FROM users WHERE manager_id=?) "
@@ -822,11 +842,13 @@ def list_for(user: dict, f: dict) -> list[dict]:
     if f.get("cluster_id"):
         where.append("a.cluster_id=?"); params.append(int(f["cluster_id"]))
     order = "a.created_at DESC"
-    if f.get("sort") == "priority":
+    if f.get("history"):   # вкладка «История»: с первого (A-001 сверху), без сортировки «срочные сверху»
+        order = "a.id ASC"
+    elif f.get("sort") == "priority":
         order = "CASE a.priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END, a.created_at DESC"
     sql = BASE_SELECT + (" WHERE " + " AND ".join(where) if where else "") + " ORDER BY " + order
     rows = [decorate(r) for r in db.q(sql, params)]
-    if not f.get("sort"):   # по умолчанию — срочные сверху: просроченные (дольше — выше), «мешает сейчас», высокий приоритет, затем новые
+    if not f.get("sort") and not f.get("history"):   # по умолчанию — срочные сверху: просроченные (дольше — выше), «мешает сейчас», высокий приоритет, затем новые
         rows.sort(key=lambda r: (-(r["overdue_days"] or 0), r.get("author_urgency") != "now", r["priority"] != "high"))
     if f.get("overdue"):
         rows = [r for r in rows if r["overdue"]]
@@ -844,6 +866,7 @@ def list_for(user: dict, f: dict) -> list[dict]:
         o["author_urgency"] = r.get("author_urgency")
         o["author_urgency_label"] = URGENCY.get(r.get("author_urgency") or "")
         o["news_days"] = news_age_days(r) if r["status"] in OPEN else None
+        o["labels"] = labels_for(r)
         out.append(o)
     return out
 

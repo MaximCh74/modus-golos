@@ -113,17 +113,15 @@ function placeholder(title, text) {
 
 // ---------- очередь (этап 9: четыре колонки, вкладки, фильтры в боковой панели, карточка справа или поверх таблицы) ----------
 
-const QUEUE_TABS = [['attention', 'Требуют внимания'], ['open', 'Все открытые'], ['mine', 'Мои'], ['closed', 'Закрытые']];
-const EXTRA_COLS = [['type', 'Тип', 110], ['category', 'Категория', 170], ['branch', 'Филиал', 130], ['department', 'Подразделение', 140], ['news', 'Новость автору', 120], ['flags', 'Метки', 150], ['supports', 'Поддержка', 90]];
+// очередь — единый вид для всех ролей (ТЗ владельца 13.11): колонки постоянные, кнопки «Вид» и выбора колонок нет; «История» — все подряд
+const QUEUE_TABS = [['attention', 'Требуют внимания'], ['open', 'Все открытые'], ['mine', 'Мои'], ['closed', 'Закрытые'], ['history', 'История']];
+const QUEUE_COLS = [['Обращение', null], ['Статус', 150], ['Ответственный', 190], ['Подразделение', 180], ['Метки', 230]];
 const CLOSED_STATUSES = ['done', 'closed', 'rejected'];
 const OPEN_STATUSES = ['new', 'review', 'clarify', 'in_progress'];
 const FILTER_LABELS = { branch_id: 'Филиал', site: 'Объект', department_id: 'Подразделение', category_id: 'Категория', status: 'Статус', responsible_id: 'Ответственный', days: 'Срок', sort: 'Сортировка', urgency: 'Мешают сейчас', cluster_id: 'Тема', overdue: 'Просроченные', unassigned: 'Без ответственного' };
 S.tab = S.tab || 'attention';
 let OVERLAY = null;   // выезжающая панель поверх таблицы: карточка (когда ширины не хватает) или фильтры
 
-function colsKey() { return 'mf.queue.cols.' + (ME ? ME.id : 0); }
-function loadCols() { try { return new Set(JSON.parse(localStorage.getItem(colsKey()) || '[]')); } catch (e) { return new Set(); } }
-function saveCols(set) { try { localStorage.setItem(colsKey(), JSON.stringify([...set])); } catch (e) { /* приватный режим — не сохраняем */ } }
 // карточка справа — только когда ширины хватает на таблицу и карточку; иначе (≤1440, во фрейме Битрикса, планшет) — поверх таблицы
 function sideCard() { return !COMPACT && window.matchMedia('(min-width: 1441px)').matches; }
 
@@ -163,6 +161,7 @@ function shortName(name) { const p = String(name || '').split(' '); return name 
 
 function tabFromFilters() {
   const f = S.filters;
+  if (f.history) return 'history';
   if (f.closed || (f.status && CLOSED_STATUSES.includes(f.status))) return 'closed';
   if (f.mine) return 'mine';
   if (f.attention) return 'attention';
@@ -173,11 +172,10 @@ function tabFromFilters() {
 async function queue() {
   const q = h('input', { type: 'search', class: 'search', placeholder: 'Номер или текст', value: S.filters.q || '', 'aria-label': 'Поиск' });
   q.addEventListener('input', () => { S.filters.q = q.value; clearTimeout(reloadTimer); reloadTimer = setTimeout(loadQueue, 300); });
-  const tabs = h('div', { class: 'tabs q' }, QUEUE_TABS.map(([code, label]) => h('a', { href: '#', class: S.tab === code ? 'active' : '', onclick: ev => { ev.preventDefault(); S.tab = code; delete S.filters.closed; delete S.filters.mine; delete S.filters.attention; delete S.filters.open; if (code !== 'closed' && S.filters.status && CLOSED_STATUSES.includes(S.filters.status)) delete S.filters.status; queue(); } }, label)));
+  const tabs = h('div', { class: 'tabs q' }, QUEUE_TABS.map(([code, label]) => h('a', { href: '#', class: S.tab === code ? 'active' : '', onclick: ev => { ev.preventDefault(); S.tab = code; delete S.filters.closed; delete S.filters.mine; delete S.filters.attention; delete S.filters.open; delete S.filters.history; if (code !== 'closed' && S.filters.status && CLOSED_STATUSES.includes(S.filters.status)) delete S.filters.status; queue(); } }, label)));
   const active = FILTER_KEYS.filter(k => S.filters[k]);
   const filtersBtn = h('button', { class: 'btn btn-sm' + (active.length ? ' on' : ''), onclick: () => filtersDrawer() }, iconText('filter', 'Фильтры' + (active.length ? ' · ' + active.length : '')));
-  const viewBtn = h('button', { class: 'btn btn-sm view-btn', onclick: () => viewMenu(viewBtn) }, 'Вид');
-  const toolbar = h('div', { class: 'toolbar' }, q, tabs, h('div', { class: 'spacer' }), filtersBtn, viewBtn);
+  const toolbar = h('div', { class: 'toolbar' }, q, tabs, h('div', { class: 'spacer' }), filtersBtn);
   const chips = h('div', { class: 'chips chips-active' }, active.map(k => h('button', { type: 'button', class: 'chip', title: 'Убрать фильтр', onclick: () => { delete S.filters[k]; queue(); } }, filterLabel(k), ' ', icon('x', { size: 12 }))),
     active.length > 1 ? h('button', { type: 'button', class: 'btn btn-sm btn-ghost', onclick: () => { for (const k of active) delete S.filters[k]; queue(); } }, 'Сбросить всё') : null);
   const counts = h('div', { id: 'queue-counts', class: 'small muted mb8' });
@@ -227,61 +225,51 @@ function filtersDrawer() {
   openDrawer(content, { narrow: true, label: 'Фильтры' });
 }
 
-function viewMenu(anchor) {
-  const cols = loadCols();
-  const list = h('div', { class: 'card card-elevated view-menu' }, h('div', { class: 'row' }, h('b', {}, 'Колонки'), h('div', { class: 'spacer' }), h('button', { class: 'btn btn-sm btn-ghost', onclick: () => list.remove() }, icon('x'))),
-    h('div', { class: 'hint' }, 'По умолчанию четыре: обращение, статус, ответственный, возраст. Остальное — в карточке. Выбор запоминается.'),
-    h('div', { class: 'col mt8' }, EXTRA_COLS.map(([code, label]) => { const c = h('input', { type: 'checkbox', checked: cols.has(code) }); c.addEventListener('change', () => { if (c.checked) cols.add(code); else cols.delete(code); saveCols(cols); loadQueue(); }); return h('label', { class: 'check' }, c, label); })));
-  const old = document.querySelector('.view-menu'); if (old) { old.remove(); return; }
-  anchor.parentElement.append(list);
-}
-
 function queueParams() {
   const qp = new URLSearchParams();
-  for (const [k, v] of Object.entries(S.filters)) if (v && !['open', 'closed', 'mine', 'attention'].includes(k)) qp.set(k, v === true ? '1' : v);
+  for (const [k, v] of Object.entries(S.filters)) if (v && !['open', 'closed', 'mine', 'attention', 'history'].includes(k)) qp.set(k, v === true ? '1' : v);
   if (S.tab === 'attention') qp.set('attention', '1');
   if (S.tab === 'open') qp.set('open', '1');
   if (S.tab === 'mine') { qp.set('open', '1'); qp.set('responsible_id', ME.id); }
   if (S.tab === 'closed') qp.set('closed', '1');
+  if (S.tab === 'history') qp.set('history', '1');
   return qp;
-}
-
-function extraCell(r, code) {
-  if (code === 'type') return h('td', {}, r.type_label);
-  if (code === 'category') return h('td', { title: r.category || '' }, r.category || h('span', { class: 'muted' }, '—'));
-  if (code === 'branch') return h('td', {}, r.city || brCity(r.branch) || '—');
-  if (code === 'department') return h('td', {}, r.department || '—');
-  if (code === 'news') return h('td', {}, r.news_days === null || r.news_days === undefined ? '—' : r.news_days < 1 ? 'сегодня' : Math.floor(r.news_days) + ' дн назад');
-  if (code === 'flags') return h('td', {}, r.overdue ? tag('tag-overdue', 'Просрочено') : null, ' ', r.unassigned ? tag('tag-unassigned', 'Без ответственного') : null, ' ', r.author_urgency === 'now' ? tag('tag-flag', 'мешает сейчас') : null);
-  return h('td', {}, r.supports ? String(r.supports) : '');
 }
 
 // просрочка (замечание владельца 13.11): в списке — красная точка у номера, в карточке — «просрочено на N дн»
 function overdueText(r) { return r.overdue_days ? 'просрочено на ' + r.overdue_days + ' дн' : 'просрочено'; }
 function overdueDot(r) { return r.overdue ? h('span', { class: 'dot-overdue', title: overdueText(r) }) : null; }
 
-function queueRow(r, cols) {
-  const tIcon = r.type === 'problem' ? 'alert-circle' : r.type === 'suggestion' ? 'lightbulb' : 'heart';
+// метки строки (ТЗ владельца 13.11): из данных обращения (сервер, appeals.labels_for) — прозрачные чипы, как все «не статусы»;
+// две на виду, остальные — «+N» с подсказкой, какие
+function labelChips(list) {
+  list = list || [];
+  if (!list.length) return null;
+  const rest = list.slice(2);
+  return h('span', { class: 'q-labels' }, list.slice(0, 2).map(t => h('span', { class: 'badge q-tag' }, t)),
+    rest.length ? h('span', { class: 'badge q-tag q-more', title: rest.join(', ') }, '+' + rest.length) : null);
+}
+// ячейка «Обращение»: точка просрочки, номер · город · текст; значков типа, приоритета и поддержки нет — их смысл в метках;
+// во вкладке «История» под номером мелко дата создания
+function queueRow(r) {
   const text = r.brief_line || r.text || '';
-  const first = h('td', { class: 'q-main', title: r.number + ' · ' + r.type_label + ' · ' + text },
-    icon(tIcon, { size: 14, cls: 'tic', title: r.type_label }), overdueDot(r), h('span', { class: 'num' }, r.number), r.city ? h('span', { class: 'q-city' }, ' · ' + r.city) : null,
-    r.priority === 'high' ? h('span', { class: 'mini', title: 'Высокий приоритет' }, icon('alert', { size: 11 })) : null,
-    r.supports ? h('span', { class: 'mini', title: '«У меня так же»: ' + r.supports }, icon('thumbs-up', { size: 11 }), String(r.supports)) : null,
-    h('span', { class: 'brief' }, ' · ' + text));
-  const tds = [first, h('td', {}, badge(r.status)),
-    h('td', { class: 'q-resp fit-box', title: r.responsible || 'не назначен' }, r.responsible ? h('span', { class: 'ulink' }, avatarEl({ name: r.responsible }, 'sm'), ' ', fitName(r.responsible)) : h('span', { class: 'muted' }, '—'))];
-  for (const c of EXTRA_COLS) if (cols.has(c[0])) tds.push(extraCell(r, c[0]));
-  return h('tr', { class: S.selected === r.id ? 'sel' : '', onclick: () => { location.hash = '#/appeal/' + r.id; } }, ...tds);
+  const first = h('td', { class: 'q-main', title: r.number + ' · ' + text },
+    h('span', { class: 'q-line' }, overdueDot(r), h('span', { class: 'num' }, r.number), r.city ? h('span', { class: 'q-city' }, ' · ' + r.city) : null, h('span', { class: 'brief' }, ' · ' + text)),
+    S.tab === 'history' ? h('div', { class: 'q-date' }, fmtStamp(r.created_at)) : null);
+  return h('tr', { class: S.selected === r.id ? 'sel' : '', onclick: () => { location.hash = '#/appeal/' + r.id; } }, first, h('td', {}, badge(r.status)),
+    h('td', { class: 'q-resp fit-box', title: r.responsible || 'не назначен' }, r.responsible ? h('span', { class: 'ulink' }, avatarEl({ name: r.responsible }, 'sm'), ' ', fitName(r.responsible)) : h('span', { class: 'muted' }, '—')),
+    h('td', { class: 'q-dept', title: r.department || '' }, r.department || h('span', { class: 'muted' }, '—')),
+    h('td', { class: 'q-labels-td' }, labelChips(r.labels)));
 }
 
+// телефон: карточки как раньше, метки — под текстом
 function queueCard(r) {
-  const tIcon = r.type === 'problem' ? 'alert-circle' : r.type === 'suggestion' ? 'lightbulb' : 'heart';
   return h('button', { type: 'button', class: 'qcard' + (S.selected === r.id ? ' sel' : ''), onclick: () => { location.hash = '#/appeal/' + r.id; } },
-    h('div', { class: 'row' }, icon(tIcon, { size: 14, cls: 'tic', title: r.type_label }), overdueDot(r), h('b', { class: 'num' }, r.number), r.city ? h('span', { class: 'q-city' }, '· ' + r.city) : null,
-      r.priority === 'high' ? h('span', { class: 'mini', title: 'Высокий приоритет' }, icon('alert', { size: 11 })) : null,
-      h('div', { class: 'spacer' })),
+    h('div', { class: 'row' }, overdueDot(r), h('b', { class: 'num' }, r.number), r.city ? h('span', { class: 'q-city' }, '· ' + r.city) : null, h('div', { class: 'spacer' }),
+      S.tab === 'history' ? h('span', { class: 'q-date' }, fmtStamp(r.created_at)) : null),
     h('div', { class: 'qcard-text' }, r.brief_line || r.text || ''),
-    h('div', { class: 'row small' }, badge(r.status), r.overdue ? h('span', { class: 'muted od-text' }, overdueText(r)) : null, h('span', { class: 'muted one-line fit-box', title: r.responsible ? 'ответственный: ' + r.responsible : '' }, r.responsible ? fitName(r.responsible, 'отв. ') : 'без ответственного')));   // автора в списке нет — он в открытой карточке
+    r.labels && r.labels.length ? h('div', { class: 'qcard-labels' }, labelChips(r.labels)) : null,
+    h('div', { class: 'row small' }, badge(r.status), r.overdue ? h('span', { class: 'muted od-text' }, overdueText(r)) : null, h('span', { class: 'muted one-line fit-box', title: r.responsible ? 'ответственный: ' + r.responsible : '' }, r.responsible ? fitName(r.responsible, 'отв. ') : 'без ответственного')));
 }
 
 async function loadQueue(flashId) {
@@ -289,17 +277,14 @@ async function loadQueue(flashId) {
   S.rows = rows;
   const table = document.getElementById('queue-table');
   if (!table) return;
-  const cols = loadCols();
   const overdue = rows.filter(r => r.overdue).length, unassigned = rows.filter(r => r.unassigned).length;
   const counts = document.getElementById('queue-counts');
   if (counts) counts.replaceChildren(plural(rows.length, 'обращение', 'обращения', 'обращений') + (overdue ? ' · просрочено ' + overdue : '') + (unassigned ? ' · без ответственного ' + unassigned : ''), helpBtn(S.tab === 'attention' ? 'attention' : 'queue'));
-  const heads = ['Обращение', 'Статус', 'Ответственный'].concat(EXTRA_COLS.filter(c => cols.has(c[0])).map(c => c[1]));   // «Возраст» убран (13.11)
-  const widths = [null, 176, 190].concat(EXTRA_COLS.filter(c => cols.has(c[0])).map(c => c[2]));
-  const tbl = h('table', { class: 'tbl queue' },
-    h('colgroup', {}, widths.map(w => { const c = document.createElement('col'); if (w) c.style.width = w + 'px'; return c; })),
-    h('thead', {}, h('tr', {}, heads.map(t => h('th', {}, t)))),
-    h('tbody', {}, rows.map(r => { const tr = queueRow(r, cols); if (flashId === r.id) tr.classList.add('flash'); return tr; })));
-  const empty = { attention: 'Ничего не требует внимания — посмотрите «Все открытые».', open: 'Открытых обращений нет.', mine: 'На вас сейчас ничего не назначено.', closed: 'Закрытых обращений нет.' };
+  const tbl = h('table', { class: 'tbl queue' + (S.tab === 'history' ? ' history' : '') },
+    h('colgroup', {}, QUEUE_COLS.map(([, w]) => { const c = document.createElement('col'); if (w) c.style.width = w + 'px'; return c; })),
+    h('thead', {}, h('tr', {}, QUEUE_COLS.map(([t]) => h('th', {}, t)))),
+    h('tbody', {}, rows.map(r => { const tr = queueRow(r); if (flashId === r.id) tr.classList.add('flash'); return tr; })));
+  const empty = { attention: 'Ничего не требует внимания — посмотрите «Все открытые».', open: 'Открытых обращений нет.', mine: 'На вас сейчас ничего не назначено.', closed: 'Закрытых обращений нет.', history: 'Обращений пока нет.' };
   if (!rows.length) { table.replaceChildren(h('div', { class: 'card' }, h('div', { class: 'muted' }, empty[S.tab] || 'Ничего не найдено'))); return; }
   // телефон: карточки вместо таблицы — номер, «Коротко», статус, ответственный, «просрочено на N дн» (замечания владельца 12.11, 13.11)
   if (PHONE.matches) { table.replaceChildren(h('div', { class: 'qcards' }, rows.map(r => { const c = queueCard(r); if (flashId === r.id) c.classList.add('flash'); return c; }))); fitNames(table); return; }

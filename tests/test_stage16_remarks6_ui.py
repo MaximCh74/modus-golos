@@ -81,7 +81,7 @@ def test_queue_without_age_dot_at_number(base, browser):
     try:
         page.wait_for_selector("table.queue tbody tr")
         heads = page.locator("table.queue thead th").all_inner_texts()
-        assert [t.strip().lower() for t in heads] == ["обращение", "статус", "ответственный"]
+        assert [t.strip().lower() for t in heads] == ["обращение", "статус", "ответственный", "подразделение", "метки"]   # единый вид (13.11)
         first = page.locator("table.queue tbody tr").first.locator("td.q-main")
         assert first.locator(".dot-overdue + .num").count() == 1   # срочные сверху: первая строка просрочена, точка — у номера
         assert _fits(page) and not errors, errors

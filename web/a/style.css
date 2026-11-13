@@ -635,7 +635,16 @@ select { appearance: none; -webkit-appearance: none; padding-right: 34px; backgr
 .staff-tbl .menu-wrap { display: inline-block; }
 .staff-drawer .h1.num { margin: 0; font-size: 22px; }
 .tbl.queue td { overflow: visible; }
-.tbl.queue td.q-main, .tbl.queue td.q-resp { overflow: hidden; }
+.tbl.queue td.q-main, .tbl.queue td.q-resp, .tbl.queue td.q-dept, .tbl.queue td.q-labels-td { overflow: hidden; }
+/* очередь — единый вид (ТЗ владельца 13.11): метки — прозрачные чипы, как все «не статусы»; две на виду, остальное «+N»;
+   во вкладке «История» под номером мелко дата создания */
+.q-labels { display: inline-flex; gap: 4px; flex-wrap: nowrap; vertical-align: middle; max-width: 100%; }
+.q-tag { background: transparent; color: var(--muted); box-shadow: inset 0 0 0 1px var(--line); border: 0; font-weight: var(--w-body); }
+.q-more { padding-left: 7px; padding-right: 7px; }
+.q-line { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.q-date { font-size: var(--fs-micro); color: var(--muted); margin-top: 1px; white-space: nowrap; }
+.tbl.queue td.q-dept { color: var(--ink); }
+.qcard-labels .q-labels { flex-wrap: wrap; }
 
 /* главная кнопка нового стиля (пункт 3): .btn-main — до выбора Марка живёт рядом с .btn-primary; текст и иконка всегда на синей части
    (красный только в правом нижнем углу); hover — красная зона плавно растёт (слой ::before, 200 мс); active — темнее, тень меньше;

@@ -561,7 +561,7 @@ async def panel_list(request: Request):
     f.update({"status": p.get("status") or None, "type": p.get("type") or None, "q": (p.get("q") or "").strip() or None,
               "overdue": parse_bool(p.get("overdue", "")), "unassigned": parse_bool(p.get("unassigned", "")), "open": parse_bool(p.get("open", "")),
               "urgency": p.get("urgency") or None, "cluster_id": p.get("cluster_id") or None, "sort": p.get("sort") or None,
-              "attention": parse_bool(p.get("attention", "")), "closed": parse_bool(p.get("closed", "")),
+              "attention": parse_bool(p.get("attention", "")), "closed": parse_bool(p.get("closed", "")), "history": parse_bool(p.get("history", "")),
               "site": (p.get("site") or "").strip() or None})   # объект командированных: город объекта (клик по метке и строке «Атырау · объект»)
     return appeals.list_for(user, f)
 
