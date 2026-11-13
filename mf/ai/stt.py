@@ -45,7 +45,10 @@ def preload_cuda_libs() -> list[str]:
     for pkg, order in (("nvidia.cublas", ("libcublasLt", "libcublas", "libnvblas")),
                        ("nvidia.cudnn", ("libcudnn_graph", "libcudnn_engines_precompiled", "libcudnn_engines_runtime_compiled",
                                          "libcudnn_heuristic", "libcudnn_ops", "libcudnn_adv", "libcudnn_cnn", "libcudnn"))):
-        spec = importlib.util.find_spec(pkg)
+        try:
+            spec = importlib.util.find_spec(pkg)
+        except ModuleNotFoundError:   # нет пакета nvidia (Docker без GPU, ноутбук без CUDA-колёс) — грузить нечего
+            continue
         if not spec or not spec.submodule_search_locations:
             continue
         lib = Path(list(spec.submodule_search_locations)[0]) / "lib"

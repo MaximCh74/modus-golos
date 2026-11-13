@@ -1,6 +1,7 @@
 FROM python:3.12-slim
 WORKDIR /app
-ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 MF_DATA_DIR=/data MF_DEMO_SNAPSHOT=1
+# голос без видеокарты — через OpenAI (нужен ключ в .env); локальная модель в образ не входит
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 MF_DATA_DIR=/data MF_DEMO_SNAPSHOT=1 MF_STT=openai MF_STT_WARMUP=0
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY mf ./mf

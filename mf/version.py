@@ -33,7 +33,13 @@ def commit() -> str:
             else:
                 m = re.search(r"^([0-9a-f]{40}) " + re.escape(ref) + r"$", (git / "packed-refs").read_text(encoding="utf-8"), re.M)
                 sha = m.group(1) if m else ""
-        return sha[:7] if re.fullmatch(r"[0-9a-f]{7,40}", sha) else "dev"
+        if re.fullmatch(r"[0-9a-f]{7,40}", sha):
+            return sha[:7]
+    except OSError:
+        pass
+    try:   # копия без .git (git archive, архив для проверки, Docker из неё): хэш подставлен в mf/VERSION через export-subst
+        v = (ROOT / "mf" / "VERSION").read_text(encoding="utf-8").strip()
+        return v if re.fullmatch(r"[0-9a-f]{7,12}", v) else "dev"
     except OSError:
         return "dev"
 
